@@ -1,6 +1,8 @@
-# Permitlify
+# MatchMiner
 
-Permitlify is a Permit Intelligence Platform SaaS that delivers daily, AI-scored building-permit leads so sales teams know exactly who to call before the competition.
+MatchMiner is a Tennis Intelligence Platform SaaS that delivers daily, AI-scored tennis insights mined and ranked from across the web.
+
+> Note: the artifact directory/slug is still `permitlify` (the app started as "Permitlify" before the rebrand). The user-facing brand is **MatchMiner**. Renaming the slug/directory would break the workflow and paths, so only the title, wordmark, domain text, and logo were changed.
 
 ## Run & Operate
 
@@ -38,8 +40,9 @@ Permitlify is a Permit Intelligence Platform SaaS that delivers daily, AI-scored
 
 ## Product
 
-- **Login** (`/`) — two-column page: dark sales/marketing panel (headline, proof points, trust badges) left, white sign-in form (email/password, Google social login) right. Complete.
-- Planned (mockups supplied): dashboard, profile, settings, permit report.
+- **Login** (`/`) — two-column page: dark sales/marketing panel (headline, proof points, trust badges) left, white sign-in form (email/password, Google social login) right. MatchMiner-branded (tennis-ball logo, wordmark, domain). Complete.
+  - Caveat: the left-panel sales copy and proof cards are still permit-themed from the original concept; rewrite for tennis when updating body content.
+- Planned (mockups supplied): dashboard, profile, settings, report.
 
 ## User preferences
 

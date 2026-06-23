@@ -21,12 +21,12 @@ export default function Login() {
           <div className="logo">
             <LogoMark height={38} />
             <span className="logo-name">
-              <span style={{ color: "#f1f5f9" }}>Permit</span>
-              <span style={{ color: "#49C85B" }}>lify</span>
+              <span style={{ color: "#f1f5f9" }}>Match</span>
+              <span style={{ color: "#49C85B" }}>Miner</span>
             </span>
           </div>
           <div className="sales">
-            <div className="eyebrow">Permit Intelligence Platform</div>
+            <div className="eyebrow">Tennis Intelligence Platform</div>
             <h2 className="headline">
               Fresh leads,
               <br />
@@ -119,7 +119,7 @@ export default function Login() {
             </div>
           </div>
         </div>
-        <div className="copyright">© 2026 Permitlify.com</div>
+        <div className="copyright">© 2026 MatchMiner.com</div>
       </div>
 
       {/* RIGHT — sign in form */}
@@ -128,8 +128,8 @@ export default function Login() {
           <div className="mob-logo">
             <LogoMark height={36} />
             <span className="mob-name">
-              <span style={{ color: "#1C2F74" }}>Permit</span>
-              <span style={{ color: "#49C85B" }}>lify</span>
+              <span style={{ color: "#1C2F74" }}>Match</span>
+              <span style={{ color: "#49C85B" }}>Miner</span>
             </span>
           </div>
           <h1 className="form-title">Welcome back</h1>
