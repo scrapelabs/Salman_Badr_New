@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#1d4ed8">
+<title>Permitlify — PW26-12642</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --pr:#1d4ed8;--pr2:#3b82f6;--pr3:#1e3a8a;
+  --pd:rgba(29,78,216,.09);--pg:rgba(29,78,216,.18);
+  --ac:#059669;--ac2:#10b981;--ad:rgba(5,150,105,.09);
+  --grad:linear-gradient(135deg,#1d4ed8 0%,#059669 100%);
+  --gr:#22c55e;--gd:rgba(34,197,94,.1);
+  --ye:#d97706;--yd:rgba(217,119,6,.1);
+  --re:#dc2626;--rd:rgba(220,38,38,.08);
+  --bl-st:#3b82f6;--bd:rgba(59,130,246,.1);
+  --bg:#f0f4f8;--sur:#ffffff;--sur2:#f8fafc;
+  --b1:rgba(0,0,0,.06);--b2:rgba(0,0,0,.10);
+  --tx:#0f172a;--tx2:#475569;--tx3:#94a3b8;
+  --rbg:rgba(0,0,0,.05);
+  --sh:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --sh2:0 4px 16px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.04);
+  --sh-pr:0 4px 14px rgba(29,78,216,.25);
+}
+html,body{-webkit-font-smoothing:antialiased;}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;min-height:100vh;padding:40px 20px 100px;overflow-x:hidden;}
+.wrap{max-width:840px;margin:0 auto;position:relative;}
+
+/* ── HEADER ───────────────────────────────────────────── */
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--b1);animation:up .4s ease both;}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.lico svg{width:20px;height:20px;}
+.lname{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:18px;color:var(--tx);letter-spacing:-.4px;}
+.lname span{color:#49C85B;}
+.badges{display:flex;gap:8px;}
+.badge{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 11px;border-radius:20px;font-weight:500;}
+.b-pr{background:var(--pd);color:var(--pr);border:1px solid rgba(29,78,216,.2);}
+.b-gr{background:var(--gd);color:var(--gr);border:1px solid rgba(34,197,94,.22);}
+
+/* ── HERO ─────────────────────────────────────────────── */
+.hero{background:var(--sur);border:1px solid var(--b2);border-radius:20px;overflow:hidden;margin-bottom:18px;box-shadow:var(--sh2);animation:up .45s ease both;}
+.hbar{height:4px;background:var(--grad);}
+.hbody{padding:28px 30px 26px;}
+.htop{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+.pid{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--tx3);margin-bottom:7px;letter-spacing:.4px;}
+.ptitle{font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800;color:var(--tx);letter-spacing:-.6px;margin-bottom:4px;}
+.psub{font-size:14px;color:var(--tx2);}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px;}
+.tag{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 11px;border-radius:6px;font-weight:500;}
+
+/* ── SCORE RING ────────────────────────────────────────── */
+.swrap{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;}
+.sring{position:relative;width:110px;height:110px;}
+.sring svg{width:110px;height:110px;transform:rotate(-90deg);overflow:visible;}
+.sring .track{fill:none;stroke:var(--rbg);stroke-width:8;}
+.sring .arc{fill:none;stroke:url(#scoreGrad);stroke-width:8;stroke-linecap:round;stroke-dasharray:257.61;stroke-dashoffset:257.61;transition:stroke-dashoffset 1.6s cubic-bezier(.34,1.56,.64,1);}
+.snum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
+.snum .n{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;font-weight:800;color:var(--tx);line-height:1;letter-spacing:-1.5px;}
+.snum .g{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--pr);font-weight:500;letter-spacing:1px;}
+.slbl2{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);letter-spacing:.6px;text-align:center;}
+
+/* ── VERDICT ──────────────────────────────────────────── */
+.verdict{margin-top:22px;padding:13px 18px;background:var(--gd);border:1px solid rgba(34,197,94,.2);border-radius:12px;display:flex;align-items:flex-start;gap:12px;}
+.vdot{width:9px;height:9px;background:var(--gr);border-radius:50%;flex-shrink:0;margin-top:3px;box-shadow:0 0 10px var(--gr);animation:pulse 2.2s ease-in-out infinite;}
+.vtxt{font-size:13px;color:#15803d;line-height:1.6;}
+.vtxt strong{font-weight:600;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+
+/* ── BUTTONS ──────────────────────────────────────────── */
+.actions{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;}
+.btn{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;}
+.btn svg{width:15px;height:15px;}
+.btn-p{background:var(--grad);color:#fff;box-shadow:var(--sh-pr);}
+.btn-p:hover{opacity:.9;transform:translateY(-2px);box-shadow:0 7px 22px rgba(29,78,216,.35);}
+.btn-s{background:var(--sur2);color:var(--tx2);border:1px solid var(--b2);box-shadow:var(--sh);}
+.btn-s:hover{border-color:var(--pr);color:var(--pr);transform:translateY(-1px);box-shadow:var(--sh2);}
+.btn-s:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin .8s linear infinite;}
+
+/* ── GRID ─────────────────────────────────────────────── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;animation:up .5s .1s ease both;}
+@media(max-width:580px){.grid2{grid-template-columns:1fr;}}
+.card{background:var(--sur);border:1px solid var(--b1);border-radius:14px;padding:20px 22px;box-shadow:var(--sh);}
+.ctitle{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.ctitle::before{content:'';width:3px;height:12px;background:var(--grad);border-radius:2px;}
+.irow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--b1);gap:12px;}
+.irow:last-child{border-bottom:none;padding-bottom:0;}
+.ilbl{font-size:12px;color:var(--tx3);flex-shrink:0;}
+.ival{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--tx);text-align:right;}
+.ival.hi{color:var(--pr);font-weight:600;}
+.ival.ok{color:var(--gr);}
+.ival.wa{color:var(--ye);}
+
+/* ── FACTORS ──────────────────────────────────────────── */
+.slbl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;margin-top:6px;}
+.fcard{background:var(--sur);border:1px solid var(--b1);border-radius:14px;margin-bottom:16px;box-shadow:var(--sh);animation:up .5s .2s ease both;overflow:hidden;}
+.fcard-head{background:var(--pd);border-bottom:1px solid rgba(29,78,216,.12);padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.fcard-head-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--pr);text-transform:uppercase;letter-spacing:.8px;display:flex;align-items:center;gap:8px;}
+.fcard-head-title::before{content:'';width:3px;height:13px;background:var(--grad);border-radius:2px;display:block;}
+.fcard-head-score{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;background:var(--grad);color:#fff;padding:5px 14px;border-radius:20px;white-space:nowrap;}
+.fcard-body{padding:4px 22px 14px;}
+.frow{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--b1);}
+.frow:last-child{border-bottom:none;}
+.fname{font-size:13px;color:var(--tx2);min-width:160px;flex-shrink:0;}
+.fbar{flex:1;height:9px;background:var(--rbg);border-radius:5px;overflow:visible;border:1.5px solid var(--b2);position:relative;}
+.ffill{height:100%;border-radius:4px;width:0;transition:width 1.3s cubic-bezier(.34,1.56,.64,1);}
+.fgr{background:var(--gr);}
+.fpr{background:var(--pr);}
+.fye{background:var(--ye);}
+.fscore{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;min-width:32px;text-align:right;}
+.fwt{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);min-width:30px;text-align:right;}
+
+/* ── CONTACT ──────────────────────────────────────────── */
+.ccard{background:var(--sur);border:1px solid var(--b2);border-radius:14px;padding:22px 24px;margin-bottom:16px;box-shadow:var(--sh);animation:up .5s .3s ease both;}
+.ctop{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.cav{width:46px;height:46px;background:var(--grad);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:var(--sh-pr);}
+.cname{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:700;color:var(--tx);}
+.cco{font-size:13px;color:var(--tx2);margin-top:2px;}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:500px){.cgrid{grid-template-columns:1fr;}}
+.ci{display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--sur2);border:1px solid var(--b1);border-radius:10px;cursor:pointer;transition:all .2s;}
+.ci:hover{border-color:var(--pr);background:var(--pd);transform:translateY(-1px);}
+.ci svg{width:16px;height:16px;color:var(--pr);flex-shrink:0;}
+.cil{font-size:10px;color:var(--tx3);font-family:'JetBrains Mono',monospace;display:block;}
+.civ{font-size:13px;color:var(--tx);font-family:'JetBrains Mono',monospace;font-weight:500;display:block;margin-top:2px;}
+
+/* ── LOCKED ───────────────────────────────────────────── */
+.lock-card{background:var(--sur);border:1px solid rgba(29,78,216,.18);border-radius:14px;overflow:hidden;box-shadow:var(--sh2);}
+.lock-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;background:linear-gradient(135deg,#0f172a,#1e3a8a);border-bottom:1px solid rgba(29,78,216,.15);}
+.lock-ico{width:30px;height:30px;background:rgba(29,78,216,.2);border:1px solid rgba(29,78,216,.35);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.lock-t{font-size:13px;font-weight:600;color:#f1f5f9;}
+.lock-s{font-size:11px;color:#64748b;margin-top:2px;font-family:'JetBrains Mono',monospace;}
+.lrows{padding:0 20px;}
+.lr{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--b1);gap:16px;}
+.lr:last-child{border-bottom:none;}
+.lr-lbl{font-size:13px;color:var(--tx2);}
+.blk{font-family:'JetBrains Mono',monospace;color:var(--tx3);letter-spacing:3px;font-size:12px;}
+.lr-r{display:flex;align-items:center;gap:8px;color:var(--tx3);flex-shrink:0;}
+.shim{width:68px;height:14px;border-radius:4px;background:var(--sur2);overflow:hidden;position:relative;}
+.shim::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:shim 1.8s ease-in-out infinite;}
+@keyframes shim{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.lock-footer{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-top:1px solid rgba(29,78,216,.1);flex-wrap:wrap;gap:12px;}
+.lock-price{font-size:12px;color:var(--tx3);}
+.btn-unlock{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;background:var(--pd);color:var(--pr);border:1px solid rgba(29,78,216,.25);border-radius:8px;padding:8px 18px;cursor:pointer;transition:all .2s;}
+.btn-unlock:hover{background:var(--pg);transform:translateY(-1px);}
+
+/* ── BLURRED FEED ─────────────────────────────────────── */
+.feed-wrap{position:relative;margin-top:12px;}
+.feed-fade{position:absolute;bottom:0;left:0;right:0;height:320px;background:linear-gradient(to bottom,transparent,var(--bg) 80%);z-index:10;pointer-events:none;border-radius:0 0 14px 14px;}
+.feed-cta-box{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:20;text-align:center;width:300px;}
+.feed-cta-inner{background:var(--sur);border:1px solid var(--b2);border-radius:18px;padding:24px 20px;box-shadow:0 16px 48px rgba(0,0,0,.14);}
+.btn-lg{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;background:var(--grad);color:#fff;border:none;border-radius:11px;padding:13px 20px;cursor:pointer;width:100%;box-shadow:var(--sh-pr);transition:all .2s;}
+.btn-lg:hover{opacity:.9;transform:translateY(-2px);box-shadow:0 8px 24px rgba(29,78,216,.35);}
+.feed-blur{filter:blur(5px);user-select:none;pointer-events:none;}
+.fcard-b{background:var(--sur);border:1px solid var(--b1);border-radius:14px;padding:18px 20px;box-shadow:var(--sh);}
+.fcard-b+.fcard-b{margin-top:10px;}
+.fcard-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.fcard-info{flex:1;}
+.fpid{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);margin-bottom:5px;}
+.ftitle{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:700;color:var(--tx);margin-bottom:3px;}
+.faddr{font-size:13px;color:var(--tx2);}
+.ftags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.ftag{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 9px;border-radius:5px;font-weight:500;}
+.ftag.pr{background:var(--pd);color:var(--pr);border:1px solid rgba(29,78,216,.18);}
+.ftag.gr{background:var(--gd);color:var(--gr);border:1px solid rgba(34,197,94,.2);}
+.ftag.ac{background:var(--ad);color:var(--ac);border:1px solid rgba(5,150,105,.2);}
+.ftag.bl{background:var(--bd);color:var(--bl-st);border:1px solid rgba(59,130,246,.2);}
+.fring{width:54px;height:54px;border-radius:50%;border:4px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;}
+.fring .fn{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;line-height:1;}
+.fring .fg{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:500;}
+.fcontacts{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--b1);flex-wrap:wrap;}
+.fci{background:var(--sur2);border:1px solid var(--b1);border-radius:8px;padding:8px 12px;flex:1;min-width:80px;}
+
+/* ── MODAL ────────────────────────────────────────────── */
+.modal{display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.6);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;}
+.modal.open{display:flex;}
+.modal-box{background:var(--sur);border:1px solid var(--b2);border-radius:22px;width:100%;max-width:600px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.25);max-height:92vh;overflow-y:auto;}
+.modal-top{background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:22px 24px;border-bottom:1px solid rgba(29,78,216,.15);display:flex;align-items:flex-start;justify-content:space-between;}
+.modal-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#94a3b8;width:30px;height:30px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;}
+.modal-close:hover{background:rgba(255,255,255,.18);}
+.modal-trial{display:flex;align-items:center;gap:10px;background:var(--gd);border-bottom:1px solid rgba(34,197,94,.12);padding:12px 24px;font-size:12px;font-weight:500;color:#16a34a;}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:18px;}
+@media(max-width:520px){.plans{grid-template-columns:1fr;}}
+.plan{background:var(--sur2);border:1.5px solid var(--b1);border-radius:13px;padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;transition:all .2s;}
+.plan:hover{border-color:rgba(29,78,216,.2);box-shadow:var(--sh);}
+.plan.featured{border-color:rgba(29,78,216,.35);}
+.plan-badge{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:var(--grad);color:#fff;font-size:9px;font-weight:700;padding:3px 12px;border-radius:0 0 8px 8px;letter-spacing:.5px;white-space:nowrap;}
+.plan-name{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:800;color:var(--tx);}
+.plan-desc{font-size:11px;color:var(--tx3);margin-top:2px;}
+.plan-price{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.plan-price span{font-size:12px;font-weight:400;-webkit-text-fill-color:var(--tx3);color:var(--tx3);}
+.plan-feats{list-style:none;display:flex;flex-direction:column;gap:6px;flex:1;}
+.plan-feats li{font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:7px;}
+.pbtn{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;border-radius:10px;padding:11px;cursor:pointer;transition:all .2s;border:none;margin-top:auto;}
+.pbtn.pri{background:var(--grad);color:#fff;box-shadow:var(--sh-pr);}
+.pbtn.pri:hover{opacity:.9;transform:translateY(-1px);}
+.pbtn.sec{background:var(--sur);color:var(--tx2);border:1.5px solid var(--b2);}
+.pbtn.sec:hover{border-color:var(--pr);color:var(--pr);}
+.modal-note{text-align:center;font-size:11px;color:var(--tx3);padding:0 20px 18px;}
+
+/* ── STICKY BANNER ────────────────────────────────────── */
+.sticky{position:fixed;bottom:0;left:0;right:0;z-index:8000;background:var(--sur);border-top:1px solid rgba(29,78,216,.2);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:0 -8px 32px rgba(0,0,0,.1);}
+.sticky-l{display:flex;align-items:center;gap:12px;flex:1;min-width:180px;}
+.sticky-dot{width:8px;height:8px;background:var(--pr);border-radius:50%;flex-shrink:0;box-shadow:0 0 10px rgba(29,78,216,.5);animation:pulse 2s ease-in-out infinite;}
+.sticky-title{font-size:13px;font-weight:500;color:var(--tx);}
+.sticky-sub{font-size:11px;color:var(--tx3);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+.sticky-r{display:flex;align-items:center;gap:8px;}
+.sticky-x{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:16px;padding:4px 8px;border-radius:6px;}
+.sticky-x:hover{color:var(--tx);background:var(--sur2);}
+.sticky-cta{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;background:var(--grad);color:#fff;border:none;border-radius:9px;padding:10px 20px;cursor:pointer;box-shadow:var(--sh-pr);transition:all .2s;white-space:nowrap;}
+.sticky-cta:hover{opacity:.9;transform:translateY(-1px);}
+
+/* ── FOOTER ───────────────────────────────────────────── */
+.footer{margin-top:28px;padding-top:20px;border-top:1px solid var(--b1);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+.ftxt{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--tx3);}
+.fbrand{font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:800;color:var(--tx3);}
+.fbrand span{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+
+@keyframes up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <a class="logo" href="dailypermit_dashboard.html">
+      <div class="lico"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="10" height="14" rx="1.5" fill="white" opacity=".92"/><rect x="5" y="5" width="6" height="1.2" rx=".6" fill="rgba(255,255,255,.4)"/><rect x="5" y="7.5" width="4.5" height="1.2" rx=".6" fill="rgba(255,255,255,.4)"/><rect x="5" y="10" width="5.5" height="1.2" rx=".6" fill="rgba(255,255,255,.4)"/><circle cx="15" cy="15" r="4" fill="rgba(255,255,255,.9)"/><rect x="14.4" y="13" width="1.2" height="2.8" rx=".6" fill="#059669"/><rect x="13" y="14.4" width="4" height="1.2" rx=".6" fill="#059669"/></svg></div>
+      <span class="lname">Permit<span>Daily</span></span>
+    </a>
+    <div class="badges">
+      <span class="badge b-gr">&#9679;&nbsp;Live</span>
+      <span class="badge b-pr">Fort Worth TX</span>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hbar"></div>
+    <div class="hbody">
+      <div class="htop">
+        <div style="flex:1;min-width:200px">
+          <div class="pid">PERMIT &nbsp;&middot;&nbsp; PW26-12642 &nbsp;&middot;&nbsp; ISSUED 04/13/2026</div>
+          <div class="ptitle">Encroachment Permit</div>
+          <div class="psub">Allen / Coran &nbsp;&middot;&nbsp; Public Right of Way</div>
+          <div class="tags">
+            <span class="tag" style="background:var(--pd);color:var(--pr);border:1px solid rgba(29,78,216,.18)">Right-of-Way Work</span>
+            <span class="tag" style="background:var(--gd);color:var(--gr);border:1px solid rgba(34,197,94,.2)">Approved</span>
+            <span class="tag" style="background:var(--bd);color:var(--bl-st);border:1px solid rgba(59,130,246,.2)">EP RTC 506</span>
+          </div>
+        </div>
+        <div class="swrap">
+          <div class="sring">
+            <svg viewBox="0 0 110 110">
+              <defs>
+                <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#1d4ed8"/>
+                  <stop offset="100%" stop-color="#059669"/>
+                </linearGradient>
+              </defs>
+              <circle class="track" cx="55" cy="55" r="41"/>
+              <circle class="arc" id="arc" cx="55" cy="55" r="41"/>
+            </svg>
+            <div class="snum"><span class="n" id="sn">0</span><span class="g">A&minus;</span></div>
+          </div>
+          <div class="slbl2">Lead Score</div>
+        </div>
+      </div>
+      <div class="verdict">
+        <div class="vdot"></div>
+        <div class="vtxt"><strong>Hot lead &mdash; call today.</strong> Active permit just issued. Direct phone &amp; email in permit. High conversion for paving, civil and general contractors.</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-p" id="bCall"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 12 19.79 19.79 0 01.12 3.38 2 2 0 012.1 1.21L5.07 1a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.08 8.9a16 16 0 006 6l1.26-1.26a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 15.92z"/></svg>Call Now</button>
+        <button class="btn btn-s" id="bEmail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Send Email</button>
+        <button class="btn btn-s" id="bPDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INFO GRID -->
+  <div class="grid2">
+    <div class="card"><div class="ctitle">Permit Details</div>
+      <div class="irow"><span class="ilbl">Record #</span><span class="ival hi">PW26-12642</span></div>
+      <div class="irow"><span class="ilbl">Type</span><span class="ival">Encroachment</span></div>
+      <div class="irow"><span class="ilbl">Status</span><span class="ival ok">Approved</span></div>
+      <div class="irow"><span class="ilbl">Issued</span><span class="ival">Apr 13, 2026</span></div>
+      <div class="irow"><span class="ilbl">Expires</span><span class="ival wa">Jun 01, 2026</span></div>
+      <div class="irow"><span class="ilbl">Project Cost</span><span class="ival">$0.00</span></div>
+    </div>
+    <div class="card"><div class="ctitle">Location &amp; Project</div>
+      <div class="irow"><span class="ilbl">Project</span><span class="ival">Allen / Coran</span></div>
+      <div class="irow"><span class="ilbl">Owner</span><span class="ival">Public ROW</span></div>
+      <div class="irow"><span class="ilbl">Permit Type</span><span class="ival">EP RTC 506</span></div>
+      <div class="irow"><span class="ilbl">Contact Pref.</span><span class="ival">Business Phone</span></div>
+      <div class="irow"><span class="ilbl">RTC Transit</span><span class="ival">No</span></div>
+      <div class="irow"><span class="ilbl">Jurisdiction</span><span class="ival">Fort Worth, TX</span></div>
+    </div>
+  </div>
+
+  <!-- FACTORS -->
+  <div class="slbl">Score breakdown</div>
+  <div class="fcard">
+    <div class="fcard-head">
+      <div class="fcard-head-title">Lead Score Factors</div>
+      <div class="fcard-head-score">Score: 84 &nbsp;A&minus;</div>
+    </div>
+    <div class="fcard-body">
+      <div class="frow"><span class="fname">Contact info present</span><div class="fbar"><div class="ffill fgr" data-w="100"></div></div><span class="fscore" style="color:var(--gr)">100</span><span class="fwt">25%</span></div>
+      <div class="frow"><span class="fname">Permit status</span><div class="fbar"><div class="ffill fgr" data-w="100"></div></div><span class="fscore" style="color:var(--gr)">100</span><span class="fwt">20%</span></div>
+      <div class="frow"><span class="fname">Work type match</span><div class="fbar"><div class="ffill fpr" data-w="78"></div></div><span class="fscore" style="color:var(--pr)">78</span><span class="fwt">20%</span></div>
+      <div class="frow"><span class="fname">Permit freshness</span><div class="fbar"><div class="ffill fgr" data-w="95"></div></div><span class="fscore" style="color:var(--gr)">95</span><span class="fwt">20%</span></div>
+      <div class="frow"><span class="fname">Job value signal</span><div class="fbar"><div class="ffill fye" data-w="48"></div></div><span class="fscore" style="color:var(--ye)">48</span><span class="fwt">15%</span></div>
+    </div>
+  </div>
+
+  <!-- CONTACT -->
+  <div class="slbl">Contact information</div>
+  <div class="ccard">
+    <div class="ctop">
+      <div class="cav">AC</div>
+      <div><div class="cname">Allen / Coran</div><div class="cco">Public Right of Way &nbsp;&middot;&nbsp; Fort Worth, TX</div></div>
+    </div>
+    <div class="cgrid">
+      <div class="ci" id="ciP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 12 19.79 19.79 0 01.12 3.38 2 2 0 012.1 1.21L5.07 1a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.08 8.9a16 16 0 006 6l1.26-1.26a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 15.92z"/></svg><div><span class="cil">Phone</span><span class="civ">(714) 330-1763</span></div></div>
+      <div class="ci" id="ciM"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><div><span class="cil">Email</span><span class="civ">contact@bgeinc.com</span></div></div>
+      <div class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg><div><span class="cil">Location</span><span class="civ">Fort Worth, TX</span></div></div>
+      <div class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><div><span class="cil">Pref. Contact</span><span class="civ">Business Phone</span></div></div>
+    </div>
+  </div>
+
+  <!-- LOCKED SECTION -->
+  <div class="slbl" style="margin-top:8px">What Permitlify is holding back</div>
+  <div class="lock-card">
+    <div class="lock-hdr">
+      <div class="lock-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+      <div><div class="lock-t">This data was found but requires a subscription to view</div><div class="lock-s">11 fields available &nbsp;&middot;&nbsp; 12 more permits today</div></div>
+    </div>
+    <div class="lrows">
+      <div class="lr"><span class="lr-lbl">Contractor direct mobile &nbsp;<span class="blk">███ ████ ████</span></span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+      <div class="lr"><span class="lr-lbl">Verified email &nbsp;<span class="blk">████████@███.com</span></span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+      <div class="lr"><span class="lr-lbl">Full work site address &nbsp;<span class="blk">████████████████</span></span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+      <div class="lr"><span class="lr-lbl">Estimated job value &nbsp;<span class="blk">$██,███ – $██,███</span></span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+      <div class="lr"><span class="lr-lbl">Permit history (24 months)</span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+      <div class="lr"><span class="lr-lbl">AI outreach call script for this lead</span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+      <div class="lr" style="border:none"><span class="lr-lbl">12 more permits filed today in Fort Worth</span><div class="lr-r"><div class="shim"></div><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+    </div>
+    <div class="lock-footer">
+      <div class="lock-price">Yelp charges <s>$300+/lead</s>. We charge <strong style="color:var(--pr)">$79/month</strong> unlimited.</div>
+      <button class="btn-unlock" onclick="openModal()">Unlock all fields &rarr;</button>
+    </div>
+  </div>
+
+  <!-- BLURRED FEED -->
+  <div class="slbl" style="margin-top:24px">Today's full permit feed — Fort Worth TX</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:13px;color:var(--tx2)">Showing <strong style="color:var(--tx)">1</strong> of <strong style="color:var(--pr)">13</strong> permits filed today</div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--pd);color:var(--pr);border:1px solid rgba(29,78,216,.18);padding:3px 12px;border-radius:20px">&#128274; 12 locked</span>
+  </div>
+  <div class="feed-wrap">
+    <div class="feed-fade"></div>
+    <div class="feed-cta-box">
+      <div class="feed-cta-inner">
+        <div style="font-size:22px;margin-bottom:6px">&#128274;</div>
+        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:800;color:var(--tx);margin-bottom:4px">12 more permits locked</div>
+        <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Roofing &middot; HVAC &middot; New builds &middot; Plumbing</div>
+        <button class="btn-lg" onclick="openModal()">Start Free Trial &mdash; $79/mo</button>
+        <div style="font-size:11px;color:var(--tx3);margin-top:10px">3 days free &middot; No credit card &middot; Cancel anytime</div>
+      </div>
+    </div>
+    <div class="feed-blur">
+      <div class="fcard-b">
+        <div class="fcard-top">
+          <div class="fcard-info"><div class="fpid">PW26-12643 &middot; 45 min ago</div><div class="ftitle">Residential Roofing Permit</div><div class="faddr">████████ St &middot; Fort Worth 76104</div><div class="ftags"><span class="ftag pr">Roofing</span><span class="ftag gr">Approved</span></div></div>
+          <div class="fring" style="border-color:var(--gr)"><span class="fn" style="color:var(--tx)">96</span><span class="fg" style="color:var(--gr)">A+</span></div>
+        </div>
+        <div class="fcontacts"><div class="fci"><span class="cil">Phone</span><span class="civ">████-████</span></div><div class="fci"><span class="cil">Email</span><span class="civ">████@███.com</span></div><div class="fci"><span class="cil">Address</span><span class="civ">████████ St</span></div></div>
+      </div>
+      <div class="fcard-b">
+        <div class="fcard-top">
+          <div class="fcard-info"><div class="fpid">PW26-12644 &middot; 1.5 hrs ago</div><div class="ftitle">HVAC System Replacement</div><div class="faddr">████████ Ave &middot; Fort Worth 76109</div><div class="ftags"><span class="ftag ac">HVAC</span><span class="ftag gr">Approved</span></div></div>
+          <div class="fring" style="border-color:var(--pr)"><span class="fn" style="color:var(--tx)">82</span><span class="fg" style="color:var(--pr)">A&minus;</span></div>
+        </div>
+        <div class="fcontacts"><div class="fci"><span class="cil">Phone</span><span class="civ">████-████</span></div><div class="fci"><span class="cil">Email</span><span class="civ">████@███.com</span></div><div class="fci"><span class="cil">Address</span><span class="civ">████████ Ave</span></div></div>
+      </div>
+      <div class="fcard-b">
+        <div class="fcard-top">
+          <div class="fcard-info"><div class="fpid">PW26-12645 &middot; 2 hrs ago</div><div class="ftitle">New Residential Construction</div><div class="faddr">████████ Blvd &middot; Fort Worth 76102</div><div class="ftags"><span class="ftag bl">New Build</span><span class="ftag gr">Approved</span></div></div>
+          <div class="fring" style="border-color:var(--gr)"><span class="fn" style="color:var(--tx)">91</span><span class="fg" style="color:var(--gr)">A</span></div>
+        </div>
+        <div class="fcontacts"><div class="fci"><span class="cil">Phone</span><span class="civ">████-████</span></div><div class="fci"><span class="cil">Email</span><span class="civ">████@███.com</span></div><div class="fci"><span class="cil">Address</span><span class="civ">████████ Blvd</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span class="ftxt">Fort Worth Accela &nbsp;&middot;&nbsp; Apr 13, 2026 &nbsp;&middot;&nbsp; Valid 30 days</span>
+    <span class="fbrand">Permit<span>Daily</span>.com</span>
+  </div>
+</div>
+
+<!-- PRICING MODAL -->
+<div id="dpModal" class="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-top">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:7px;background:var(--grad);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 20 20" fill="none" style="width:16px;height:16px"><rect x="3" y="2" width="10" height="14" rx="1.5" fill="white" opacity=".9"/><circle cx="15" cy="15" r="4" fill="rgba(255,255,255,.9)"/><rect x="14.4" y="13" width="1.2" height="2.8" rx=".6" fill="#059669"/><rect x="13" y="14.4" width="4" height="1.2" rx=".6" fill="#059669"/></svg></div>
+          <span style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:16px;color:#f1f5f9">Permit<span style="background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Daily</span></span>
+        </div>
+        <p style="font-size:12px;color:#64748b">Fresh permit leads every morning. Be first to call.</p>
+      </div>
+      <button class="modal-close" onclick="closeModal()">&#215;</button>
+    </div>
+    <div class="modal-trial"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>&nbsp;3-day free trial on all plans &mdash; no credit card required</div>
+    <div class="plans">
+      <div class="plan">
+        <div><div class="plan-name">Starter</div><div class="plan-desc">1 city · Daily leads</div></div>
+        <div class="plan-price">$79<span>/mo</span></div>
+        <ul class="plan-feats">
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>All permits in 1 city</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Phone + email per lead</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Daily lead score</li>
+        </ul>
+        <button class="pbtn sec" onclick="closeModal()">Start Free Trial</button>
+      </div>
+      <div class="plan featured">
+        <div class="plan-badge">Most Popular</div>
+        <div style="margin-top:8px"><div class="plan-name">Pro</div><div class="plan-desc">5 cities · All trades</div></div>
+        <div class="plan-price">$149<span>/mo</span></div>
+        <ul class="plan-feats">
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Everything in Starter</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>5 cities covered</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>AI call script per lead</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>CRM webhooks</li>
+        </ul>
+        <button class="pbtn pri" onclick="closeModal()">Start Free Trial &rarr;</button>
+      </div>
+      <div class="plan">
+        <div><div class="plan-name">Agency</div><div class="plan-desc">Nationwide · API</div></div>
+        <div class="plan-price">$399<span>/mo</span></div>
+        <ul class="plan-feats">
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Everything in Pro</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Nationwide coverage</li>
+          <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>API + white-label</li>
+        </ul>
+        <button class="pbtn sec" onclick="closeModal()">Start Free Trial</button>
+      </div>
+    </div>
+    <p class="modal-note">Cancel anytime &middot; 30-day money-back guarantee &middot; permitdaily.com</p>
+  </div>
+</div>
+
+<!-- STICKY BANNER -->
+<div id="stickyBanner" class="sticky">
+  <div class="sticky-l">
+    <div class="sticky-dot"></div>
+    <div>
+      <div class="sticky-title"><strong style="color:var(--pr)">12 permits</strong> in Fort Worth today &mdash; you're seeing 1</div>
+      <div class="sticky-sub">Unlock full feed &middot; phone &middot; email &middot; address &middot; AI script</div>
+    </div>
+  </div>
+  <div class="sticky-r">
+    <button class="sticky-x" onclick="document.getElementById('stickyBanner').style.display='none'">&#10005;</button>
+    <button class="sticky-cta" onclick="openModal()">Start Free Trial &rarr;</button>
+  </div>
+</div>
+
+<script>
+/* ── SCORE RING ─────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded',function(){
+  var SCORE=84,C=257.61;
+  var arc=document.getElementById('arc'),sn=document.getElementById('sn');
+  arc.style.strokeDasharray=C;arc.style.strokeDashoffset=C;
+  setTimeout(function(){arc.style.strokeDashoffset=(C*(1-SCORE/100)).toFixed(2);},150);
+  var t0=null;
+  function count(ts){if(!t0)t0=ts;var p=Math.min((ts-t0)/1400,1);sn.textContent=Math.round((1-Math.pow(1-p,3))*SCORE);if(p<1)requestAnimationFrame(count);}
+  requestAnimationFrame(count);
+
+  /* factor bars */
+  document.querySelectorAll('.ffill').forEach(function(el,i){
+    setTimeout(function(){
+      el.style.width=el.getAttribute('data-w')+'%';
+      var bar=el.parentElement;
+      if(el.classList.contains('fgr'))bar.style.borderColor='rgba(34,197,94,.4)';
+      else if(el.classList.contains('fpr'))bar.style.borderColor='rgba(29,78,216,.4)';
+      else if(el.classList.contains('fye'))bar.style.borderColor='rgba(217,119,6,.4)';
+      else bar.style.borderColor='rgba(220,38,38,.4)';
+    },200+i*120);
+  });
+
+  document.getElementById('bCall').addEventListener('click',function(){window.location.href='tel:7143301763';});
+  document.getElementById('bEmail').addEventListener('click',function(){window.location.href='mailto:contact@bgeinc.com';});
+  document.getElementById('ciP').addEventListener('click',function(){window.location.href='tel:7143301763';});
+  document.getElementById('ciM').addEventListener('click',function(){window.location.href='mailto:contact@bgeinc.com';});
+
+  /* PDF */
+  document.getElementById('bPDF').addEventListener('click',function(){
+    if(typeof window.jspdf==='undefined'){alert('PDF loading — wait 2 seconds and try again.');return;}
+    var btn=this;btn.disabled=true;
+    btn.innerHTML='<span class="spin">&#8635;</span>&nbsp;Generating...';
+    setTimeout(function(){
+      try{generatePDF();}catch(e){alert('PDF error: '+e.message);console.error(e);}
+      btn.disabled=false;
+      btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="15" height="15"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export PDF';
+    },80);
+  });
+});
+
+/* ── MODAL ──────────────────────────────────────────── */
+function openModal(){document.getElementById('dpModal').classList.add('open');document.body.style.overflow='hidden';}
+function closeModal(){document.getElementById('dpModal').classList.remove('open');document.body.style.overflow='';}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
+
+/* ── PDF GENERATOR (blue-green theme) ──────────────── */
+function generatePDF(){
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({orientation:'portrait',unit:'pt',format:'a4'});
+  var PW=595,PH=842,M=40,CW=PW-M*2;
+  function f(c){doc.setFillColor(c[0],c[1],c[2]);}
+  function d(c){doc.setDrawColor(c[0],c[1],c[2]);}
+  function t(c){doc.setTextColor(c[0],c[1],c[2]);}
+  function ft(b,sz,c){doc.setFont('helvetica',b?'bold':'normal');doc.setFontSize(sz);t(c);}
+  function fR(x,y,w,h,col,r){f(col);r?doc.roundedRect(x,y,w,h,r,r,'F'):doc.rect(x,y,w,h,'F');}
+  function card(x,y,w,h,r){fR(x,y,w,h,[255,255,255],r||6);d([226,232,240]);doc.setLineWidth(.5);r?doc.roundedRect(x,y,w,h,r,r,'S'):doc.rect(x,y,w,h,'S');}
+  function hr(x,y,w){d([226,232,240]);doc.setLineWidth(.4);doc.line(x,y,x+w,y);}
+  /* brand colors */
+  var BL=[29,78,216],GR_=[5,150,105],AC=[16,185,129];
+  var NAVY=[15,23,42],SLATE=[51,65,85],MUTED=[148,163,184];
+  var LINE=[226,232,240],BG=[240,244,248],WHITE=[255,255,255];
+  var GRS=[34,197,94],YE=[217,119,6],BLST=[59,130,246];
+  function gradRect(x,y,w,h,r){
+    /* approximate gradient with two rects */
+    var steps=20;for(var i=0;i<steps;i++){var p=i/steps;var cr=[Math.round(BL[0]+(GR_[0]-BL[0])*p),Math.round(BL[1]+(GR_[1]-BL[1])*p),Math.round(BL[2]+(GR_[2]-BL[2])*p)];f(cr);var rx=x+w*p,rw=w/steps+1;if(r&&i===0)doc.roundedRect(rx,y,rw,h,r,r,'F');else doc.rect(rx,y,rw,h,'F');}
+  }
+  function pbar(x,y,w,h,pct,col){
+    fR(x,y,w,h,[235,238,244],h/2);
+    if(pct>0)fR(x,y,w*pct,h,col,h/2);
+    var bC=col===GRS?[10,100,50]:col===BL?[15,50,160]:col===YE?[140,80,0]:[160,20,20];
+    d(bC);doc.setLineWidth(.8);doc.roundedRect(x,y,w,h,h/2,h/2,'S');
+  }
+  function pill(lbl,x,y,bg){ft(false,7,WHITE);var tw=doc.getTextWidth(lbl),bw=tw+14,bh=14;fR(x,y-10,bw,bh,bg,3);doc.text(lbl,x+7,y);return bw+6;}
+  function arcRing(cx,cy,R,score,lw){
+    d(LINE);doc.setLineWidth(lw);doc.circle(cx,cy,R,'S');
+    var s=-Math.PI/2,e=s+(score/100)*2*Math.PI,st=120;
+    var px=null,py=null;
+    for(var i=0;i<=st;i++){
+      var p=i/st,a=s+(e-s)*p;
+      var col=[Math.round(BL[0]+(GR_[0]-BL[0])*p),Math.round(BL[1]+(GR_[1]-BL[1])*p),Math.round(BL[2]+(GR_[2]-BL[2])*p)];
+      d(col);doc.setLineWidth(lw);
+      var nx=cx+R*Math.cos(a),ny=cy+R*Math.sin(a);
+      if(px!==null)doc.line(px,py,nx,ny);px=nx;py=ny;
+    }
+  }
+
+  /* PAGE 1 */
+  fR(0,0,PW,PH,BG);
+  /* gradient top bar */
+  gradRect(0,0,PW,6,0);
+  fR(0,6,PW,48,NAVY);
+  /* logo */
+  gradRect(M,14,24,24,3);ft(true,10,WHITE);doc.text('PD',M+4,29);
+  ft(true,13,WHITE);doc.text('Permit',M+31,29);
+  ft(true,13,AC);doc.text('Daily',M+70,29);
+  ft(false,7,MUTED);doc.text('Lead Intelligence Report',PW-M,26,{align:'right'});
+  doc.text('Generated Apr 13, 2026',PW-M,38,{align:'right'});
+  var y=70;
+  /* hero card */
+  var hH=165;card(M,y,CW,hH,10);
+  gradRect(M,y,4,hH,2);
+  ft(false,7,MUTED);doc.text('PERMIT  \u00B7  PW26-12642  \u00B7  ISSUED APR 13, 2026',M+16,y+17);
+  ft(true,22,NAVY);doc.text('Encroachment Permit',M+16,y+42);
+  ft(false,9,SLATE);doc.text('Allen / Coran  \u00B7  Public Right of Way',M+16,y+58);
+  var tx=M+16;tx+=pill('Right-of-Way Work',tx,y+77,BL);tx+=pill('Approved',tx,y+77,GRS);tx+=pill('EP RTC 506',tx,y+77,BLST);
+  /* score ring */
+  var scx=PW-M-55,scy=y+56;
+  ft(false,6.5,MUTED);doc.text('LEAD SCORE',scx,y+13,{align:'center'});
+  arcRing(scx,scy,38,84,8);f(WHITE);doc.circle(scx,scy,27,'F');
+  ft(true,24,NAVY);doc.text('84',scx,scy+4,{align:'center'});
+  ft(true,10,BL);doc.text('A-',scx,scy+18,{align:'center'});
+  hr(M+16,y+105,CW-86);
+  fR(M+10,y+111,CW-20,44,[237,253,244],4);d([187,247,208]);doc.setLineWidth(.4);doc.roundedRect(M+10,y+111,CW-20,44,4,4,'S');
+  f(GRS);doc.circle(M+22,y+128,4,'F');
+  ft(true,8.5,[21,128,61]);doc.text('Hot lead \u2014 call today.',M+31,y+131);
+  ft(false,8,[22,101,52]);doc.text('Active permit just issued. Direct phone & email in permit. High conversion for paving & civil contractors.',M+16,y+146,{maxWidth:396});
+  y+=hH+16;
+  /* two info columns */
+  var colW=(CW-12)/2,col2=M+colW+12;
+  function infoCard(x,sy,title,rows){
+    var rh=27,hh=34,h=hh+rows.length*rh+8;card(x,sy,colW,h,6);
+    gradRect(x,sy,4,h,2);
+    fR(x+4,sy,colW-4,hh,BG);doc.roundedRect(x+4,sy,colW-4,hh,5,5,'F');fR(x+4,sy+5,colW-4,hh-5,BG);
+    hr(x+4,sy+hh,colW-4);ft(true,7.5,MUTED);doc.text(title,x+16,sy+22);
+    rows.forEach(function(r,i){var ry=sy+hh+10+i*rh;ft(false,8.5,MUTED);doc.text(r[0],x+16,ry+9);ft(r[2]?true:false,8.5,r[2]||NAVY);doc.text(r[1],x+colW-10,ry+9,{align:'right'});if(i<rows.length-1)hr(x+16,ry+rh,colW-26);});
+    return h;
+  }
+  var h1=infoCard(M,y,'PERMIT DETAILS',[['Record #','PW26-12642',BL],['Type','Encroachment',null],['Status','Approved',GRS],['Issued','Apr 13, 2026',null],['Expires','Jun 01, 2026',YE],['Project Cost','$0.00',null]]);
+  var h2=infoCard(col2,y,'LOCATION & PROJECT',[['Project','Allen / Coran',null],['Owner','Public ROW',null],['Permit Type','EP RTC 506',null],['Contact Pref.','Business Phone',null],['RTC Transit','No',null],['Jurisdiction','Fort Worth, TX',null]]);
+  y+=Math.max(h1,h2)+14;
+  /* factors */
+  var fs=[['Contact info present',100,GRS,'25%'],['Permit status',100,GRS,'20%'],['Work type match',78,BL,'20%'],['Permit freshness',95,GRS,'20%'],['Job value signal',48,YE,'15%']];
+  var fhh=38,frh=29,fh=fhh+fs.length*frh+8;card(M,y,CW,fh,6);
+  fR(M,y,CW,fhh,[235,242,255],0);doc.roundedRect(M,y,CW,fhh,6,6,'F');fR(M,y+6,CW,fhh-6,[235,242,255]);
+  gradRect(M,y,4,fhh,2);
+  ft(true,8.5,BL);doc.text('LEAD SCORE FACTORS',M+16,y+24);
+  gradRect(PW-M-64,y+10,56,18,4);ft(true,9,WHITE);doc.text('Score: 84  A-',PW-M-54,y+23);
+  fs.forEach(function(fac,i){var fy=y+fhh+i*frh,bX=M+172,bW=CW-230,bH=8,bY=fy+frh/2-bH/2;if(i%2===0)fR(M,fy,CW,frh,BG);ft(false,8.5,SLATE);doc.text(fac[0],M+16,fy+frh/2+4);pbar(bX,bY,bW,bH,fac[1]/100,fac[2]);ft(true,8.5,fac[2]);doc.text(String(fac[1]),bX+bW+12,fy+frh/2+4);ft(false,7.5,MUTED);doc.text(fac[3],PW-M-8,fy+frh/2+4,{align:'right'});if(i<fs.length-1)hr(M+8,fy+frh,CW-16);});
+  /* p1 footer */
+  fR(0,PH-34,PW,34,NAVY);ft(false,7.5,MUTED);doc.text('Permitlify.com  \u00B7  Fort Worth Accela  \u00B7  Apr 13, 2026  \u00B7  Valid 30 days',M,PH-14);ft(false,7.5,AC);doc.text('Page 1 of 2',PW-M,PH-14,{align:'right'});
+
+  /* PAGE 2 */
+  doc.addPage();fR(0,0,PW,PH,BG);gradRect(0,0,PW,6,0);fR(0,6,PW,48,NAVY);
+  gradRect(M,14,24,24,3);ft(true,10,WHITE);doc.text('PD',M+4,29);ft(true,12,WHITE);doc.text('Permit',M+31,29);ft(true,12,AC);doc.text('Daily',M+70,29);
+  ft(false,7,MUTED);doc.text('Contact Details & Work Scope  \u00B7  PW26-12642',PW-M,26,{align:'right'});doc.text('Page 2 of 2',PW-M,38,{align:'right'});
+  y=70;
+  /* contact */
+  var ch=162;card(M,y,CW,ch,10);
+  gradRect(M,y,CW,42,10);
+  ft(true,10,WHITE);doc.text('CONTACT INFORMATION',M+18,y+26);
+  ft(false,7.5,[200,230,255]);doc.text('Direct contact from permit \u2014 call before competition does',PW-M-18,y+26,{align:'right'});
+  fR(M+16,y+50,68,68,[219,234,254],34);ft(true,20,BL);doc.text('AC',M+33,y+88);
+  ft(true,15,NAVY);doc.text('Allen / Coran',M+96,y+68);ft(false,9,SLATE);doc.text('Public Right of Way  \u00B7  Fort Worth, TX',M+96,y+84);ft(false,7.5,MUTED);doc.text('Preference: Business Phone',M+96,y+98);
+  var tiles=[['PHONE','(714) 330-1763'],['EMAIL','contact@bgeinc.com'],['LOCATION','Fort Worth, TX'],['PREF.','Business Phone']];
+  var tW=(CW-24)/4;
+  tiles.forEach(function(ti,i){var tx2=M+6+i*(tW+6),ty2=y+ch-48;fR(tx2,ty2,tW,38,BG,4);d(LINE);doc.setLineWidth(.4);doc.roundedRect(tx2,ty2,tW,38,4,4,'S');ft(false,6,MUTED);doc.text(ti[0],tx2+10,ty2+13);ft(true,8.5,NAVY);doc.text(ti[1],tx2+10,ty2+28,{maxWidth:tW-16});});
+  y+=ch+14;
+  /* work scope */
+  var items=[['2-inch asphaltic concrete paving','SY','$11.70'],['3-inch asphaltic concrete paving','SY','$17.55'],['4-inch asphaltic concrete paving','SY','$23.40'],['5-inch asphaltic concrete paving','SY','$29.25'],['Open Grade','CY','$8.50'],['Type I Gravel','CY','$25.00'],['Type II Gravel','CY','$25.00'],['Excavation embankments in ROW','CY','$5.60'],['Curb and Gutter (24-inch)','LF','$11.30'],['Curb and Gutter (30-inch)','LF','$14.15'],['4-inch concrete sidewalk','SF','$4.50'],['5-inch concrete sidewalk','SF','$5.50']];
+  var irh=20,ihh=36,ih=ihh+items.length*irh+8;card(M,y,CW,ih,6);
+  fR(M,y,CW,ihh,NAVY);doc.roundedRect(M,y,CW,ihh,6,6,'F');fR(M,y+6,CW,ihh-6,NAVY);
+  ft(true,8.5,WHITE);doc.text('WORK SCOPE \u2014 ROADWAY ITEMS',M+16,y+23);
+  ft(true,6.5,MUTED);doc.text('Description',M+16,y+ihh-1);doc.text('Unit',M+CW-100,y+ihh-1);doc.text('Price',PW-M-10,y+ihh-1,{align:'right'});hr(M,y+ihh,CW);
+  items.forEach(function(r,i){var ry=y+ihh+i*irh;fR(M,ry,CW,irh,i%2===0?WHITE:BG);ft(false,8.5,SLATE);doc.text(r[0],M+16,ry+13.5);ft(false,8.5,MUTED);doc.text(r[1],M+CW-100,ry+13.5);ft(true,8.5,NAVY);doc.text(r[2],PW-M-10,ry+13.5,{align:'right'});if(i<items.length-1)hr(M+8,ry+irh,CW-16);});
+  y+=ih+14;
+  /* cta banner */
+  gradRect(M,y,CW,52,8);
+  ft(true,13,WHITE);doc.text('Ready to claim this lead?',M+20,y+22);
+  ft(false,8.5,[200,230,255]);doc.text('Call (714) 330-1763 or email contact@bgeinc.com \u2014 be first.',M+20,y+38,{maxWidth:CW*0.68});
+  ft(true,9,WHITE);doc.text('Permitlify.com',PW-M-16,y+38,{align:'right'});
+  /* p2 footer */
+  fR(0,PH-34,PW,34,NAVY);ft(false,7.5,MUTED);doc.text('Permitlify.com  \u00B7  Fort Worth Accela  \u00B7  PW26-12642  \u00B7  Valid 30 days',M,PH-14);ft(false,7.5,AC);doc.text('Page 2 of 2',PW-M,PH-14,{align:'right'});
+
+  doc.save('Permitlify-PW26-12642.pdf');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#1d4ed8">
+<title>Permitlify — Settings</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  /* Blue-to-Green brand */
+  --pr:#1d4ed8;--pr2:#3b82f6;--pr3:#1e3a8a;
+  --pd:rgba(29,78,216,.09);--pg:rgba(29,78,216,.18);
+  --ac:#059669;--ac2:#10b981;--ad:rgba(5,150,105,.09);
+  --grad:linear-gradient(135deg,#1d4ed8 0%,#059669 100%);
+  --grad2:linear-gradient(135deg,#2563eb 0%,#10b981 100%);
+  /* Status */
+  --gr:#22c55e;--gd:rgba(34,197,94,.1);
+  --ye:#d97706;--yd:rgba(217,119,6,.1);
+  --re:#dc2626;--rd:rgba(220,38,38,.08);
+  --bl:#3b82f6;--bd:rgba(59,130,246,.1);
+  /* Surfaces */
+  --bg:#f0f4f8;--sur:#ffffff;--sur2:#f8fafc;
+  --b1:rgba(0,0,0,.06);--b2:rgba(0,0,0,.10);
+  --tx:#0f172a;--tx2:#475569;--tx3:#94a3b8;
+  /* Shadows */
+  --sh:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --sh2:0 4px 16px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.04);
+  --sh-pr:0 4px 14px rgba(29,78,216,.25);
+}
+html{scroll-behavior:smooth;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;}
+
+/* ── TOPBAR ─────────────────────────────────────── */
+.topbar{display:flex;align-items:center;padding:0 20px;height:60px;background:var(--sur);border-bottom:1px solid var(--b1);position:sticky;top:0;z-index:100;gap:10px;box-shadow:var(--sh);}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0;text-decoration:none;}
+.lico svg{width:19px;height:19px;}
+.lname{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:800;color:#1C2F74;letter-spacing:-.4px;}
+.lname span{color:#49C85B;}
+
+/* ── TOP NAV ─────────────────────────────────────── */
+.top-nav{display:flex;align-items:center;gap:1px;margin-left:14px;}
+@media(max-width:960px){.top-nav{display:none;}}
+.nav-dd{position:relative;}
+.nav-btn{display:flex;align-items:center;gap:4px;padding:7px 11px;background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;color:var(--tx2);cursor:pointer;border-radius:8px;transition:all .18s;}
+.nav-btn:hover,.nav-btn.open{background:var(--sur2);color:var(--tx);}
+.nav-btn svg{width:13px;height:13px;transition:transform .2s;}
+.nav-btn.open svg{transform:rotate(180deg);}
+.nav-link-top{padding:7px 11px;font-size:13.5px;font-weight:500;color:var(--tx2);text-decoration:none;border-radius:8px;transition:all .18s;white-space:nowrap;font-family:'DM Sans',sans-serif;}
+.nav-link-top:hover{background:var(--sur2);color:var(--tx);}
+.drop-menu{position:absolute;top:calc(100% + 8px);left:0;min-width:220px;background:var(--sur);border:1px solid var(--b1);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.1),0 2px 8px rgba(0,0,0,.06);padding:6px;opacity:0;pointer-events:none;transform:translateY(-8px);transition:all .2s;z-index:200;}
+.nav-dd.open .drop-menu{opacity:1;pointer-events:auto;transform:translateY(0);}
+.drop-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:500;color:var(--tx2);text-decoration:none;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;}
+.drop-item:hover{background:var(--pd);color:var(--pr);}
+.drop-item svg{width:14px;height:14px;color:var(--pr);flex-shrink:0;}
+.drop-divider{height:1px;background:var(--b1);margin:4px 0;}
+.drop-label{font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.9px;padding:8px 12px 4px;font-family:'JetBrains Mono',monospace;}
+
+/* ── SEARCH ─────────────────────────────────────── */
+.search-wrap{flex:1;max-width:340px;position:relative;margin-left:auto;}
+.search-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--tx3);}
+.search-input{width:100%;padding:8px 12px 8px 34px;background:var(--sur2);border:1px solid var(--b1);border-radius:10px;color:var(--tx);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:all .2s;}
+.search-input:focus{border-color:rgba(29,78,216,.35);box-shadow:0 0 0 3px rgba(29,78,216,.08);background:#fff;}
+.search-input::placeholder{color:var(--tx3);}
+
+/* ── TOPBAR RIGHT ─────────────────────────────── */
+.topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.city-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;background:var(--pd);color:var(--pr);border:1px solid rgba(29,78,216,.18);padding:4px 11px;border-radius:20px;white-space:nowrap;}
+.live-badge{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--gd);color:var(--gr);border:1px solid rgba(34,197,94,.22);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;}
+.live-dot{width:6px;height:6px;background:var(--gr);border-radius:50%;animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;cursor:pointer;text-decoration:none;flex-shrink:0;box-shadow:0 2px 8px rgba(29,78,216,.25);}
+.mob-menu-btn{display:none;background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--tx2);}
+.mob-menu-btn:hover{background:var(--sur2);}
+@media(max-width:960px){.mob-menu-btn{display:flex;align-items:center;justify-content:center;}}
+
+/* ── LAYOUT ─────────────────────────────────────── */
+.main{display:flex;flex:1;position:relative;}
+
+/* ── SIDEBAR ─────────────────────────────────────── */
+.sidebar{width:220px;flex-shrink:0;background:var(--sur);border-right:1px solid var(--b1);padding:18px 12px;display:flex;flex-direction:column;gap:2px;min-height:calc(100vh - 60px);}
+@media(max-width:960px){
+  .sidebar{position:fixed;top:60px;left:0;bottom:0;z-index:90;transform:translateX(-100%);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:6px 0 24px rgba(0,0,0,.1);}
+  .sidebar.mob-open{transform:translateX(0);}
+}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;font-size:13.5px;font-weight:500;color:var(--tx2);transition:all .18s;text-decoration:none;font-family:'DM Sans',sans-serif;}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;}
+.nav-item:hover{background:var(--sur2);color:var(--tx);}
+.nav-item.active{background:var(--pd);color:var(--pr);font-weight:600;}
+.nav-item.active svg{color:var(--pr);}
+.nav-section{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:1.1px;padding:14px 12px 5px;margin-top:2px;}
+.sidebar-bottom{margin-top:auto;padding-top:14px;border-top:1px solid var(--b1);}
+.plan-card{background:var(--grad);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden;}
+.plan-card::before{content:'';position:absolute;top:-20px;right:-20px;width:80px;height:80px;background:rgba(255,255,255,.08);border-radius:50%;}
+.plan-name{font-size:12px;font-weight:700;color:rgba(255,255,255,.85);margin-bottom:2px;font-family:'Plus Jakarta Sans',sans-serif;}
+.plan-desc{font-size:11px;color:rgba(255,255,255,.65);margin-bottom:10px;}
+.plan-upgrade{width:100%;background:rgba(255,255,255,.15);backdrop-filter:blur(4px);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;}
+.plan-upgrade:hover{background:rgba(255,255,255,.25);}
+
+/* ── CONTENT ─────────────────────────────────────── */
+.content{flex:1;padding:26px 30px;overflow:auto;min-width:0;}
+@media(max-width:640px){.content{padding:16px;}}
+.page-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:21px;font-weight:800;color:var(--tx);letter-spacing:-.5px;margin-bottom:4px;}
+.page-desc{font-size:13px;color:var(--tx3);margin-bottom:22px;font-weight:400;}
+
+/* ── STAT CARDS ─────────────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+@media(max-width:960px){.stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:500px){.stats-row{grid-template-columns:1fr 1fr;}}
+.stat-card{background:var(--sur);border:1px solid var(--b1);border-radius:14px;padding:18px 20px;box-shadow:var(--sh);transition:box-shadow .2s;}
+.stat-card:hover{box-shadow:var(--sh2);}
+.stat-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:10px;}
+.stat-num{font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;font-weight:800;color:var(--tx);letter-spacing:-1.2px;margin-bottom:4px;}
+.stat-sub{font-size:12px;color:var(--tx3);}
+.stat-sub.up{color:var(--gr);font-weight:500;}
+.stat-sub.pr{color:var(--pr);font-weight:500;}
+
+/* ── SECTION CARDS ───────────────────────────────── */
+.section-card{background:var(--sur);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:18px;box-shadow:var(--sh);}
+.section-head{padding:18px 22px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.section-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;color:var(--tx);display:flex;align-items:center;gap:9px;}
+.section-title svg{width:16px;height:16px;color:var(--pr);}
+.section-sub{font-size:12px;color:var(--tx3);margin-top:2px;}
+.section-body{padding:20px 22px;display:flex;flex-direction:column;gap:18px;}
+
+/* ── BUTTONS ─────────────────────────────────────── */
+.btn{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;padding:9px 20px;border-radius:10px;border:none;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:7px;}
+.btn svg{width:14px;height:14px;}
+.btn.primary{background:var(--grad);color:#fff;box-shadow:var(--sh-pr);}
+.btn.primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 6px 20px rgba(29,78,216,.3);}
+.btn.secondary{background:var(--sur2);color:var(--tx2);border:1px solid var(--b2);}
+.btn.secondary:hover{border-color:var(--pr);color:var(--pr);background:#fff;}
+.btn.danger{background:var(--rd);color:var(--re);border:1px solid rgba(220,38,38,.2);}
+.btn.sm{padding:7px 14px;font-size:12px;}
+.row-btns{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+
+/* ── FORMS ─────────────────────────────────────── */
+.field{display:flex;flex-direction:column;gap:6px;}
+.field.full{grid-column:1/-1;}
+.field label{font-size:11.5px;font-weight:600;color:var(--tx3);font-family:'JetBrains Mono',monospace;letter-spacing:.4px;text-transform:uppercase;}
+.field input,.field select,.field textarea{padding:10px 13px;background:var(--sur2);border:1px solid var(--b1);border-radius:10px;color:var(--tx);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:all .2s;}
+.field textarea{resize:vertical;min-height:80px;line-height:1.6;}
+.field input::placeholder,.field textarea::placeholder{color:var(--tx3);}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(29,78,216,.4);box-shadow:0 0 0 3px rgba(29,78,216,.08);background:#fff;}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:640px){.field-grid{grid-template-columns:1fr;}}
+
+/* ── TABLE ─────────────────────────────────────── */
+.th-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+.th-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:700;color:var(--tx);letter-spacing:-.3px;}
+.th-sub{font-size:12px;color:var(--tx3);margin-top:2px;}
+.filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.fb{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;padding:6px 13px;border-radius:8px;border:1px solid var(--b2);background:var(--sur2);color:var(--tx2);cursor:pointer;transition:all .18s;text-decoration:none;display:inline-block;}
+.fb:hover,.fb.active{background:var(--pd);border-color:rgba(29,78,216,.25);color:var(--pr);}
+.exp-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--tx2);background:var(--sur2);border:1px solid var(--b2);border-radius:9px;padding:7px 13px;cursor:pointer;transition:all .18s;font-family:'DM Sans',sans-serif;}
+.exp-btn:hover{border-color:var(--pr);color:var(--pr);background:#fff;}
+.exp-btn svg{width:13px;height:13px;}
+.tw{background:var(--sur);border:1px solid var(--b1);border-radius:16px;overflow:hidden;box-shadow:var(--sh);}
+.tw-scroll{overflow-x:auto;}
+.tbl{width:100%;border-collapse:collapse;min-width:820px;}
+.tbl thead tr{background:var(--sur2);border-bottom:1px solid var(--b1);}
+.tbl th{text-align:left;padding:11px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.9px;white-space:nowrap;}
+.tbl tbody tr{border-bottom:1px solid var(--b1);transition:background .15s;}
+.tbl tbody tr:last-child{border-bottom:none;}
+.tbl tbody tr:hover{background:var(--sur2);}
+.tbl td{padding:11px 14px;font-size:13px;color:var(--tx2);vertical-align:middle;}
+.rec{font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500;color:var(--pr);}
+.pt{font-weight:600;color:var(--tx);font-size:13px;font-family:'DM Sans',sans-serif;}
+.pd{font-size:11px;color:var(--tx3);margin-top:2px;}
+.sb_{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+.st-approved{background:var(--gd);color:#16a34a;border:1px solid rgba(34,197,94,.25);}
+.st-pending{background:var(--yd);color:var(--ye);border:1px solid rgba(217,119,6,.25);}
+.st-expired{background:var(--rd);color:var(--re);border:1px solid rgba(220,38,38,.2);}
+.st-review{background:var(--bd);color:var(--bl);border:1px solid rgba(59,130,246,.25);}
+.sr{width:38px;height:38px;border-radius:50%;border:2.5px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.sn{font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:800;line-height:1;}
+.sg{font-family:'JetBrains Mono',monospace;font-size:8px;line-height:1;margin-top:1px;}
+.ar{display:flex;align-items:center;gap:6px;}
+.ab{width:29px;height:29px;border-radius:8px;border:1px solid var(--b2);background:var(--sur2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s;text-decoration:none;}
+.ab svg{width:13px;height:13px;color:var(--tx3);}
+.ab:hover{border-color:var(--pr);background:var(--pd);}
+.ab:hover svg{color:var(--pr);}
+.ab.call{background:var(--grad);border-color:transparent;}
+.ab.call svg{color:#fff;}
+.ab.call:hover{opacity:.85;}
+.pager{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-top:1px solid var(--b1);flex-wrap:wrap;gap:10px;}
+.pager-info{font-size:12px;color:var(--tx3);font-family:'JetBrains Mono',monospace;}
+.pager-btns{display:flex;gap:6px;}
+.pb{width:30px;height:30px;border-radius:8px;border:1px solid var(--b2);background:var(--sur2);font-size:12px;font-weight:600;color:var(--tx2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;font-family:'JetBrains Mono',monospace;}
+.pb:hover{border-color:var(--pr);color:var(--pr);}
+.pb.active{background:var(--grad);border-color:transparent;color:#fff;box-shadow:var(--sh-pr);}
+
+/* ── TOGGLES ─────────────────────────────────────── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--b1);gap:16px;}
+.toggle-row:last-child{border:none;padding-bottom:0;}
+.toggle-info .t{font-size:13.5px;font-weight:500;color:var(--tx);}
+.toggle-info .s{font-size:12px;color:var(--tx3);margin-top:3px;}
+.sw{position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer;}
+.sw input{opacity:0;width:0;height:0;position:absolute;}
+.sw-track{position:absolute;inset:0;background:var(--sur2);border:1px solid var(--b2);border-radius:12px;transition:all .22s;}
+.sw-thumb{position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:2px;left:2px;transition:transform .22s;box-shadow:0 1px 4px rgba(0,0,0,.2);}
+.sw input:checked ~ .sw-track{background:var(--grad);border-color:transparent;}
+.sw input:checked ~ .sw-thumb{transform:translateX(20px);}
+
+/* ── PROFILE ─────────────────────────────────────── */
+.big-avatar{width:72px;height:72px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;flex-shrink:0;position:relative;font-family:'Plus Jakarta Sans',sans-serif;box-shadow:0 4px 16px rgba(29,78,216,.3);}
+.avatar-change{position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;background:var(--grad);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--sur);}
+.avatar-change svg{width:10px;height:10px;color:#fff;}
+.mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:18px 22px;border-bottom:1px solid var(--b1);}
+.mini-stat{text-align:center;}
+.mini-stat .n{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.5px;}
+.mini-stat .l{font-size:11px;color:var(--tx3);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+.activity-item{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid var(--b1);}
+.activity-item:last-child{border:none;padding-bottom:0;}
+.act-ico{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.act-ico.pr{background:var(--pd);}
+.act-ico.gr{background:var(--gd);}
+.act-ico.bl{background:var(--bd);}
+.act-ico svg{width:14px;height:14px;}
+.act-text{flex:1;}
+.act-title{font-size:13px;font-weight:500;color:var(--tx);}
+.act-desc{font-size:12px;color:var(--tx3);margin-top:2px;}
+.act-time{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--tx3);white-space:nowrap;}
+
+/* ── SETTINGS ─────────────────────────────────────── */
+.city-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;}
+.city-tile{background:var(--sur2);border:1.5px solid var(--b1);border-radius:12px;padding:13px 15px;cursor:pointer;transition:all .18s;position:relative;}
+.city-tile:hover{border-color:rgba(29,78,216,.25);box-shadow:var(--sh);}
+.city-tile.active{border-color:rgba(29,78,216,.4);background:var(--pd);}
+.city-tile .ct-name{font-size:13px;font-weight:600;color:var(--tx);font-family:'DM Sans',sans-serif;}
+.city-tile .ct-state{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tx3);margin-top:3px;}
+.city-tile .ct-count{font-size:11px;color:var(--ac);margin-top:6px;font-weight:500;}
+.city-check{position:absolute;top:10px;right:10px;width:18px;height:18px;background:var(--grad);border-radius:50%;display:none;align-items:center;justify-content:center;}
+.city-tile.active .city-check{display:flex;}
+.city-check svg{width:10px;height:10px;color:#fff;}
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:720px){.plan-grid{grid-template-columns:1fr;}}
+.plan-opt{background:var(--sur2);border:2px solid var(--b1);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;transition:all .2s;}
+.plan-opt:hover{border-color:rgba(29,78,216,.2);box-shadow:var(--sh);}
+.plan-opt.current{border-color:rgba(29,78,216,.35);background:var(--pd);}
+.plan-opt .po-name{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:800;color:var(--tx);}
+.plan-opt .po-price{font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.8px;}
+.plan-opt .po-price span{font-size:12px;font-weight:400;color:var(--tx3);-webkit-text-fill-color:var(--tx3);}
+.plan-opt .po-feats{list-style:none;display:flex;flex-direction:column;gap:6px;flex:1;}
+.plan-opt .po-feats li{font-size:12.5px;color:var(--tx2);display:flex;align-items:center;gap:8px;font-family:'DM Sans',sans-serif;}
+.cur-badge{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;background:var(--grad);color:#fff;padding:2px 9px;border-radius:10px;width:fit-content;}
+.danger-item{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--b1);gap:16px;flex-wrap:wrap;}
+.danger-item:last-child{border:none;padding-bottom:0;}
+.danger-info .t{font-size:13.5px;font-weight:500;color:var(--tx);}
+.danger-info .s{font-size:12px;color:var(--tx3);margin-top:3px;}
+.ch-item{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--b1);}
+.ch-item:last-child{border:none;padding-bottom:0;}
+.ch-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ch-name{font-size:13.5px;font-weight:500;color:var(--tx);flex:1;}
+.ch-desc{font-size:12px;color:var(--tx3);margin-top:2px;}
+.ch-st{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;font-weight:600;}
+.ch-st.on{background:var(--gd);color:#16a34a;border:1px solid rgba(34,197,94,.2);}
+.ch-st.off{background:var(--sur2);color:var(--tx3);border:1px solid var(--b2);}
+/* Mobile */
+.mob-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.3);z-index:85;backdrop-filter:blur(2px);}
+.mob-overlay.show{display:block;}
+</style>
+</head>
+<body>
+<div class="topbar">
+<a class="logo" href="dailypermit_dashboard.html"><svg xmlns="http://www.w3.org/2000/svg" height="34" viewBox="0 0 512 512" fill="none" style="width:auto;flex-shrink:0"><defs><linearGradient id="settings-gBG" x1="128" y1="90" x2="350" y2="360" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4DB8FF"/><stop offset=".55" stop-color="#2B8CFF"/><stop offset="1" stop-color="#63D95C"/></linearGradient><linearGradient id="settings-gDS" x1="40" y1="160" x2="230" y2="360" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#27B8D8"/><stop offset="1" stop-color="#77E34E"/></linearGradient><linearGradient id="settings-gN" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F347E"/><stop offset="1" stop-color="#162A6A"/></linearGradient><filter id="settings-sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#16306b" flood-opacity="0.14"/></filter></defs><g transform="translate(44,58)" filter="url(#settings-sh)"><rect x="0" y="82" width="172" height="232" rx="26" fill="url(#settings-gDS)" opacity=".96"/><path d="M52 24H238C252.359 24 264 35.641 264 50V250L204 314H52C37.641 314 26 302.359 26 288V50C26 35.641 37.641 24 52 24Z" fill="white"/><path d="M52 24H238C252.359 24 264 35.641 264 50V250L204 314H52C37.641 314 26 302.359 26 288V50C26 35.641 37.641 24 52 24Z" stroke="#BFD2F7" stroke-width="12"/><path d="M264 250L204 314L148 314L214 242C226 229 245 236 264 250Z" fill="url(#settings-gN)"/><path d="M84 106L110 132L155 85" stroke="#39C38B" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><rect x="86" y="170" width="76" height="12" rx="6" fill="#CFD9F2"/><rect x="86" y="208" width="92" height="12" rx="6" fill="#CFD9F2"/><rect x="86" y="246" width="70" height="12" rx="6" fill="#CFD9F2"/><g transform="translate(112,48)"><path d="M148 8C82 8 28 61 28 127C28 212 128 298 140 313C144 319 153 319 157 313C169 298 268 215 268 127C268 61 214 8 148 8Z" fill="url(#settings-gBG)"/><circle cx="149" cy="125" r="54" fill="white"/><path d="M148 8C82 8 28 61 28 127C28 212 128 298 140 313C144 319 153 319 157 313C168 300 235 229 258 158C225 142 194 134 161 135C132 136 103 146 77 165C84 201 111 240 148 276C183 234 216 198 241 157C225 118 192 89 152 82C150 57 149 33 148 8Z" fill="#1B77E8" fill-opacity=".35"/><path d="M259 153C234 133 202 123 166 125C138 127 109 136 82 154C95 211 146 259 184 293C208 269 247 223 265 169C262 163 261 158 259 153Z" fill="#9EE75A" fill-opacity=".55"/></g></g></svg><span class="lname"><span style="color:#1C2F74">Permit</span><span style="color:#49C85B">lify</span></span></a>
+<nav class="top-nav">
+  <div class="nav-dd" id="dd-products">
+    <button class="nav-btn" onclick="toggleDD('dd-products')">Products <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="drop-menu">
+      <div class="drop-label">Permit Types</div>
+      <a class="drop-item" href="dailypermit_permits.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>All Permits</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Hot Leads</a>
+      <div class="drop-divider"></div>
+      <div class="drop-label">By Trade</div>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Roofing</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>HVAC</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Plumbing</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4"/></svg>Electrical</a>
+    </div>
+  </div>
+  <div class="nav-dd" id="dd-ind">
+    <button class="nav-btn" onclick="toggleDD('dd-ind')">Industries <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="drop-menu">
+      <div class="drop-label">Who We Serve</div>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Roofing Contractors</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>HVAC Contractors</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Plumbing Companies</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4"/></svg>Electricians</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>General Contractors</a>
+      <a class="drop-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 12l2 2 4-4"/><path d="M5 7c0-1.1.9-2 2-2h10a2 2 0 012 2v12H5V7z"/></svg>Insurance Adjusters</a>
+    </div>
+  </div>
+  <a class="nav-link-top" href="#">Pricing</a>
+  <a class="nav-link-top" href="#">About</a>
+</nav>
+<div class="search-wrap">
+  <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input id="searchInput" type="text" class="search-input" placeholder="Search permits..." oninput="filterTable()"/>
+</div>
+<div class="topbar-right">
+  <div class="live-badge"><div class="live-dot"></div>Live</div>
+  <div class="city-badge">Fort Worth TX</div>
+  <a class="avatar" href="dailypermit_profile.html">MK</a>
+  <button class="mob-menu-btn" onclick="toggleSidebar()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+</div>
+</div>
+<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
+<div class="main">
+<div class="sidebar" id="sidebar"><a class="nav-item" href="dailypermit_dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a><a class="nav-item" href="dailypermit_permits.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>All Permits</a><a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Hot Leads<span style="margin-left:auto;background:var(--grad);color:#fff;font-size:10px;padding:1px 8px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:600">5</span></a><div class="nav-section">By Trade</div><a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Roofing</a><a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>HVAC</a><a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Plumbing</a><a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>Electrical</a><div class="nav-section">Account</div><a class="nav-item" href="dailypermit_profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Profile</a><a class="nav-item active" href="dailypermit_settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>Settings</a><div class="sidebar-bottom"><div class="plan-card">
+<div class="plan-name">Pro Plan</div><div class="plan-desc">Fort Worth + 4 cities</div>
+<button class="plan-upgrade" onclick="window.location.href='dailypermit_settings.html'">Upgrade to Agency &rarr;</button>
+</div></div></div>
+<div class="content">
+<div class="page-title">Settings</div>
+<div class="page-desc">Subscription, city coverage, alerts and security</div>
+
+<div class="section-card">
+  <div class="section-head"><div><div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>City Coverage</div><div class="section-sub">Pro plan &mdash; 5 cities max &middot; Using 2 of 5</div></div><button class="btn secondary sm">+ Add City</button></div>
+  <div class="section-body">
+    <div class="city-grid">
+      <div class="city-tile active"><div class="ct-name">Fort Worth</div><div class="ct-state">TX</div><div class="ct-count">13 permits today</div><div class="city-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+      <div class="city-tile active"><div class="ct-name">Arlington</div><div class="ct-state">TX</div><div class="ct-count">8 permits today</div><div class="city-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+      <div class="city-tile" onclick="this.classList.toggle('active')"><div class="ct-name">Austin</div><div class="ct-state">TX</div><div class="ct-count">22 permits today</div><div class="city-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+      <div class="city-tile" onclick="this.classList.toggle('active')"><div class="ct-name">Dallas</div><div class="ct-state">TX</div><div class="ct-count">31 permits today</div><div class="city-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+      <div class="city-tile" onclick="this.classList.toggle('active')"><div class="ct-name">San Antonio</div><div class="ct-state">TX</div><div class="ct-count">18 permits today</div><div class="city-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+    </div>
+    <div class="row-btns"><button class="btn primary" onclick="alert('Cities saved!')">Save Coverage</button></div>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="section-head"><div><div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Subscription &amp; Billing</div><div class="section-sub">Manage your plan and payment method</div></div></div>
+  <div class="section-body">
+    <div class="plan-grid">
+      <div class="plan-opt"><div class="po-name">Starter</div><div class="po-price">$79<span>/mo</span></div><ul class="po-feats"><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>1 city</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>Daily permit feed</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>CSV export</li></ul><button class="btn secondary sm" style="margin-top:auto">Downgrade</button></div>
+      <div class="plan-opt current"><div class="cur-badge">&#10003; Current</div><div class="po-name">Pro</div><div class="po-price">$197<span>/mo</span></div><ul class="po-feats"><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>Up to 5 cities</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>AI lead scoring</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>CRM webhooks</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>API access</li></ul><button class="btn secondary sm" style="margin-top:auto;opacity:.5;cursor:default" disabled>Current Plan</button></div>
+      <div class="plan-opt"><div class="po-name">Agency</div><div class="po-price">$397<span>/mo</span></div><ul class="po-feats"><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>Unlimited cities</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>Team members</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>White-label reports</li><li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>Priority support</li></ul><button class="btn primary sm" style="margin-top:auto" onclick="alert('Upgrading...')">Upgrade &rarr;</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="section-head"><div><div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Alert Channels</div><div class="section-sub">Where you receive your daily permit digest</div></div></div>
+  <div class="section-body" style="gap:0;padding:8px 22px;">
+    <div class="toggle-row"><div class="toggle-info"><div class="t">Email Digest</div><div class="s">Daily at 6:00 AM &mdash; mk@permitdaily.com</div></div><label class="sw"><input type="checkbox" checked/><div class="sw-track"></div><div class="sw-thumb"></div></label></div>
+    <div class="toggle-row"><div class="toggle-info"><div class="t">SMS Alerts</div><div class="s">Hot leads only &mdash; +1 (817) 555-0194</div></div><label class="sw"><input type="checkbox" checked/><div class="sw-track"></div><div class="sw-thumb"></div></label></div>
+    <div class="toggle-row"><div class="toggle-info"><div class="t">Webhook / CRM Push</div><div class="s">Push to GoHighLevel or Zapier on new hot lead</div></div><label class="sw"><input type="checkbox"/><div class="sw-track"></div><div class="sw-thumb"></div></label></div>
+    <div class="toggle-row"><div class="toggle-info"><div class="t">Slack Notifications</div><div class="s">Ping #leads for score 90+</div></div><label class="sw"><input type="checkbox"/><div class="sw-track"></div><div class="sw-thumb"></div></label></div>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="section-head"><div><div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Security</div><div class="section-sub">Password and account access</div></div></div>
+  <div class="section-body" style="gap:0;padding:8px 22px;">
+    <div class="danger-item"><div class="danger-info"><div class="t">Change Password</div><div class="s">Last changed 30 days ago</div></div><button class="btn secondary sm" onclick="alert('Password reset email sent!')">Change</button></div>
+    <div class="danger-item"><div class="danger-info"><div class="t">Two-Factor Authentication</div><div class="s">Add an extra layer of security to your account</div></div><button class="btn secondary sm">Enable 2FA</button></div>
+    <div class="danger-item"><div class="danger-info"><div class="t">Delete Account</div><div class="s">Permanently remove your data — this cannot be undone</div></div><button class="btn danger sm" onclick="confirm('Are you sure?')&&alert('Deletion requested.')">Delete Account</button></div>
+  </div>
+</div>
+</div>
+</div>
+<script>
+
+function toggleDD(id){
+  document.querySelectorAll('.nav-dd').forEach(d=>{if(d.id!==id)d.classList.remove('open');});
+  const el=document.getElementById(id);if(el)el.classList.toggle('open');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.nav-dd'))document.querySelectorAll('.nav-dd').forEach(d=>d.classList.remove('open'));
+});
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar'),ov=document.getElementById('mobOverlay');
+  if(sb)sb.classList.toggle('mob-open');
+  if(ov)ov.classList.toggle('show');
+}
+
+
+
+function filterTable(){}
+</script>
+</body></html>

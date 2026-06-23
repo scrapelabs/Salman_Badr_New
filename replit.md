@@ -1,6 +1,6 @@
-# [Project name]
+# Permitlify
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Permitlify is a Permit Intelligence Platform SaaS that delivers daily, AI-scored building-permit leads so sales teams know exactly who to call before the competition.
 
 ## Run & Operate
 
@@ -22,23 +22,33 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/permitlify/` — the web app (React + Vite, wouter routing), previewPath `/`.
+  - `src/App.tsx` — routes (`/` → Login, `/dashboard` → placeholder, NotFound).
+  - `src/pages/Login.tsx` + `src/pages/login.css` — login page; CSS scoped under `.login-page`.
+  - `src/components/LogoMark.tsx` — reusable brand SVG logo (uses `useId()` for unique gradient/filter IDs).
+  - `src/index.css` — shared brand design tokens in `:root` (`--pr`, `--ac`, `--grad`, `--tx`, `--sur2`, etc.) + fonts; reused by every page.
+  - `index.html` — Google Fonts (Plus Jakarta Sans, DM Sans, JetBrains Mono).
+- `attached_assets/dailypermit_*.html` — the supplied pixel-exact design mockups (source of truth for each page's look).
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The supplied HTML/CSS mockups are an exact spec. Pages are recreated faithfully by hand (not via the design subagent, which improvises).
+- Brand tokens defined once in `:root` (`src/index.css`); each page's mockup CSS is scoped under a page-root class (e.g. `.login-page`) to avoid cross-page selector/layout leakage.
+- Frontend-only so far — no auth, OpenAPI/codegen, or DB yet. Sign In navigates to a `/dashboard` placeholder; real auth is deferred.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Login** (`/`) — two-column page: dark sales/marketing panel (headline, proof points, trust badges) left, white sign-in form (email/password, Google social login) right. Complete.
+- Planned (mockups supplied): dashboard, profile, settings, permit report.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Recreate the supplied designs faithfully/pixel-exact rather than improvising.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Always run `pnpm --filter @workspace/permitlify run typecheck` after edits (not `build`, which needs workflow-provided `PORT`/`BASE_PATH`).
+- Brand tokens are global in `src/index.css` `:root`; keep new-page CSS scoped under that page's root class.
 
 ## Pointers
 
