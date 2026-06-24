@@ -1,0 +1,43 @@
+{% comment %}Reusable MatchMiner tennis-ball logo. Pass `uid` (unique per use on a
+page, to keep gradient/filter ids unique) and optional `height`.{% endcomment %}
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  height="{{ height|default:38 }}"
+  viewBox="0 0 512 512"
+  fill="none"
+  style="width: auto; flex-shrink: 0"
+  aria-hidden="true"
+  focusable="false"
+>
+  <defs>
+    <linearGradient
+      id="mm-gBall-{{ uid }}"
+      x1="110"
+      y1="90"
+      x2="402"
+      y2="420"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop offset="0" stop-color="#4DB8FF" />
+      <stop offset=".5" stop-color="#2B8CFF" />
+      <stop offset="1" stop-color="#5FD957" />
+    </linearGradient>
+    <filter id="mm-sh-{{ uid }}" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow
+        dx="0"
+        dy="12"
+        stdDeviation="14"
+        flood-color="#16306b"
+        flood-opacity="0.18"
+      />
+    </filter>
+  </defs>
+  <g filter="url(#mm-sh-{{ uid }})">
+    <circle cx="256" cy="252" r="196" fill="url(#mm-gBall-{{ uid }})" />
+  </g>
+  <ellipse cx="194" cy="166" rx="84" ry="52" fill="#ffffff" opacity=".14" />
+  <g stroke="#ffffff" stroke-width="26" stroke-linecap="round" fill="none">
+    <path d="M86 154 C236 180 236 324 86 350" />
+    <path d="M426 154 C276 180 276 324 426 350" />
+  </g>
+</svg>

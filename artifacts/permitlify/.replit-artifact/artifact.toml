@@ -15,16 +15,19 @@ paths = [ "/" ]
 localPort = 22712
 
 [services.development]
-run = "pnpm --filter @workspace/permitlify run dev"
+run = "python3 manage.py runserver 0.0.0.0:$PORT --noreload"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/permitlify", "run", "build" ]
-publicDir = "artifacts/permitlify/dist/public"
-serve = "static"
+[services.production.build]
+args = ["sh", "-c", "python3 manage.py collectstatic --noinput && python3 manage.py migrate --noinput"]
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.build.env]
+DJANGO_DEBUG = "False"
+
+[services.production.run]
+args = ["sh", "-c", "gunicorn matchminer.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60"]
+
+[services.production.run.env]
+DJANGO_DEBUG = "False"
 
 [services.env]
 PORT = "22712"

@@ -1,1 +1,2 @@
 - [Permitlify design recreation](permitlify-design-recreation.md) — supplied HTML/CSS mockups are an exact spec; recreate by hand (NOT design subagent), brand tokens in :root, page CSS scoped under a page-root class.
+- [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
