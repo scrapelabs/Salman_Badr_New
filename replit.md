@@ -88,7 +88,7 @@ Django's built-in auth. Seeded login: username `salman` (password set out-of-ban
 ## User preferences
 
 - Recreate supplied designs faithfully/pixel-exact rather than improvising.
-- Keep code synced to the GitHub repo (`scrapelabs/Salman_Badr_New`) automatically — do **not** ask each time. **Pull-request workflow (chosen by the user):** push each end-of-turn checkpoint to the long-lived branch `agent/updates` and maintain **one ongoing pull request** from `agent/updates` → `main`. Do **not** push directly to `main` — the user reviews and merges the PR. Normal/fast-forward push to the branch only (never force-push); if histories diverge, stop and ask. Note the one-turn commit lag: a turn's edits become a commit only at end-of-turn, so they reach the branch/PR on the *next* turn.
+- Keep code synced to the GitHub repo (`scrapelabs/Salman_Badr_New`, branch `main`) automatically after finishing work — do **not** ask each time. **Push committed checkpoints directly to `main`** (fast-forward/normal push only, never force-push); if histories diverge, stop and ask. Note the one-turn commit lag: a turn's edits become a commit only at end-of-turn, so they reach `main` on the *next* turn.
 
 ## Gotchas
 
