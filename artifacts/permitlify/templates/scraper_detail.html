@@ -76,6 +76,7 @@
         <span class="mode-pill {{ s.mode }}">{{ s.get_mode_display }}</span>
       </div>
       <div class="rt-start-row">
+        {% if input_kind == 'year_month' %}
         <div class="rt-field">
           <label class="field-label" for="rtYear">Season year</label>
           <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance or active_run %}disabled{% endif %}>
@@ -84,6 +85,40 @@
             {% endfor %}
           </select>
         </div>
+        <div class="rt-field">
+          <label class="field-label" for="rtMonth">Month</label>
+          <select class="rt-input" id="rtMonth" name="month" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+            <option value="0" {% if default_month == 0 %}selected{% endif %}>All months</option>
+            {% for m_val, m_label in months %}
+            <option value="{{ m_val }}" {% if m_val == default_month %}selected{% endif %}>{{ m_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% elif input_kind == 'date_range' or input_kind == 'date_range_or_url' %}
+        {% if allows_url %}
+        <div class="rt-field rt-field-wide">
+          <label class="field-label" for="rtUrl">Tournament URL <span class="rt-opt">(optional)</span></label>
+          <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" placeholder="https://…  — leave blank to scrape the date range" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+        </div>
+        {% endif %}
+        <div class="rt-field">
+          <label class="field-label" for="rtFrom">From</label>
+          <input class="rt-input" id="rtFrom" name="date_from" type="date" value="{{ default_date_from }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="rtTo">To</label>
+          <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+        </div>
+        {% else %}
+        <div class="rt-field">
+          <label class="field-label" for="rtYear">Season year</label>
+          <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <button class="btn btn-primary rt-start-btn" type="submit" id="rtStartBtn" {% if s.is_maintenance or active_run %}disabled{% endif %}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
           Run scrape
@@ -166,7 +201,7 @@
       {% elif display_run %}
       <ol class="term-log term-log--num console-out" id="consoleLog" start="{{ log_page.start_index }}">{% for line in log_page %}<li class="logline">{{ line }}</li>{% endfor %}</ol>
       {% else %}
-      <pre class="term-log console-out" id="consoleOut" aria-live="polite">No runs yet. Pick a season year above and start a scrape — its live output will stream here.</pre>
+      <pre class="term-log console-out" id="consoleOut" aria-live="polite">No runs yet. Configure the run above and start a scrape — its live output will stream here.</pre>
       {% endif %}
     </div>
   </div>
@@ -647,10 +682,12 @@
           <pre class="sch-code"><code id="schCurl">curl -fsS -X POST "{{ trigger_url }}" \
   -H "Authorization: Bearer YOUR_TRIGGER_TOKEN" \
   -H "Content-Type: application/json" \
-  --data '{"year":"{{ default_year }}"}'</code></pre>
+  --data '{{ schedule_curl_json }}'</code></pre>
         </div>
         <p class="status-note">
-          <code>year</code> is optional (defaults to the current season). Responses:
+          The run params are optional (they default to the current season / a recent
+          window).{% if input_kind == 'date_range_or_url' %} For a single event, POST
+          <code>{"tournament_url":"https://…"}</code> instead.{% endif %} Responses:
           <code>201</code> started, <code>401</code> bad token, <code>409</code> a run is already in
           progress, <code>503</code> in maintenance.
         </p>

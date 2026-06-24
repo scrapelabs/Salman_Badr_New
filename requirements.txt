@@ -9,3 +9,4 @@ gunicorn>=26.0.0
 curl-cffi>=0.15.0
 python-dotenv>=1.0.0
 nh3>=0.3.6
+parsel>=1.9.0

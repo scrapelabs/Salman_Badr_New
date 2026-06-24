@@ -1,4 +1,5 @@
 import hmac
+import ipaddress
 import json
 import os
 import signal
@@ -6,7 +7,9 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import date, timezone as dt_timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone as dt_timezone
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib import messages
@@ -24,6 +27,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from .live_scrapers import _ssrf, registry
 from .models import Proxy, Run, Scraper, Ticket
 from .runs import ALL_TOURNAMENTS
 
@@ -31,6 +35,16 @@ STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
 YEAR_MIN = 2000
 YEAR_MAX = 2030
 IS_WINDOWS = os.name == "nt"
+
+# Date-range run inputs (date_range / date_range_or_url scrapers).
+DEFAULT_RANGE_DAYS = 30   # webhook window when a scheduled call omits dates
+MAX_RANGE_DAYS = 400      # reject absurd windows
+MAX_URL_LEN = 2048
+MONTHS = [
+    (1, "January"), (2, "February"), (3, "March"), (4, "April"),
+    (5, "May"), (6, "June"), (7, "July"), (8, "August"),
+    (9, "September"), (10, "October"), (11, "November"), (12, "December"),
+]
 
 TAB_LABELS = {
     "real-time": "Real-time test",
@@ -247,18 +261,36 @@ def scraper_detail_view(request, slug):
             paginator = Paginator(log_lines, LOG_LINES_PER_PAGE)
             ctx["log_page"] = paginator.get_page(request.GET.get("logpage"))
             ctx["log_total"] = len(log_lines)
+        spec = registry.spec_for(slug)
         current_year = timezone.localdate().year
+        today = timezone.localdate()
+        ctx["input_kind"] = spec.input_kind
+        ctx["allows_url"] = spec.input_kind == registry.INPUT_DATE_RANGE_OR_URL
         ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
         ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)
+        ctx["months"] = MONTHS
+        ctx["default_month"] = 0
+        ctx["default_date_to"] = today.isoformat()
+        ctx["default_date_from"] = (
+            today - timedelta(days=DEFAULT_RANGE_DAYS)
+        ).isoformat()
     elif tab == "calls":
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
         ctx["run_total"] = paginator.count
     elif tab == "schedule":
+        spec = registry.spec_for(slug)
         trigger_url = request.build_absolute_uri(
             reverse("scraper_trigger", args=[s.slug])
         )
         default_year = min(max(timezone.localdate().year, YEAR_MIN), YEAR_MAX)
+        today = timezone.localdate()
+        sched_defaults = {
+            "year": default_year,
+            "month": 0,
+            "date_from": (today - timedelta(days=DEFAULT_RANGE_DAYS)).isoformat(),
+            "date_to": today.isoformat(),
+        }
         secret_name = (
             "MATCHMINER_"
             + "".join(c if c.isalnum() else "_" for c in s.code.upper())
@@ -267,12 +299,17 @@ def scraper_detail_view(request, slug):
         ctx["trigger_url"] = trigger_url
         ctx["default_year"] = default_year
         ctx["secret_name"] = secret_name
+        ctx["input_kind"] = spec.input_kind
+        ctx["schedule_curl_json"] = _trigger_example_json(
+            spec.input_kind, sched_defaults
+        )
         ctx["workflow_filename"] = f"{s.slug}-schedule.yml"
         ctx["workflow_yaml"] = _github_workflow_yaml(
             code=s.code,
             trigger_url=trigger_url,
             secret_name=secret_name,
-            default_year=default_year,
+            input_kind=spec.input_kind,
+            defaults=sched_defaults,
         )
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
@@ -316,12 +353,185 @@ def _parse_year(raw, *, default_current=False):
     return year
 
 
-def _start_scraper_run(scraper, *, year, launched_by):
+@dataclass
+class RunInputs:
+    """Validated, normalized inputs for one run.
+
+    ``params`` is the canonical machine-readable form persisted on ``Run.params``.
+    ``date_from`` / ``date_to`` / ``tournament`` mirror it for display in the UI
+    and for scrapers that still read the date fields (e.g. Stadion).
+    """
+
+    params: dict
+    date_from: object
+    date_to: object
+    tournament: str
+
+
+def _parse_month(raw, *, default_all=False):
+    """Validate a month: 1–12, or 0 meaning "all months"."""
+    raw = (raw or "").strip()
+    if not raw:
+        if default_all:
+            return 0
+        raise RunStartError("invalid_month", "Select a month to run.", 400)
+    try:
+        month = int(raw)
+    except (TypeError, ValueError):
+        raise RunStartError(
+            "invalid_month", "Pick a month 1–12, or 0 for the whole year.", 400
+        )
+    if month == 0 or 1 <= month <= 12:
+        return month
+    raise RunStartError(
+        "invalid_month", "Pick a month 1–12, or 0 for the whole year.", 400
+    )
+
+
+def _parse_iso_date(raw, label):
+    """Parse a ``YYYY-MM-DD`` calendar date or raise RunStartError(400)."""
+    raw = (raw or "").strip()
+    if not raw:
+        raise RunStartError("invalid_date", f"Provide a {label} date.", 400)
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise RunStartError(
+            "invalid_date", f"The {label} date must be in YYYY-MM-DD format.", 400
+        )
+
+
+def _month_end(year, month):
+    if month == 12:
+        return date(year, 12, 31)
+    return date(year, month + 1, 1) - timedelta(days=1)
+
+
+def _validate_tournament_url(raw, allowed_hosts):
+    """Validate a user-supplied tournament URL (SSRF guard).
+
+    Only ``http(s)`` URLs to an allowlisted host are accepted; IP-literal and
+    local/internal hosts are rejected so the URL input can't be turned into a
+    probe of the internal network.
+    """
+    url = (raw or "").strip()
+    if not url:
+        raise RunStartError("invalid_url", "Enter a tournament URL.", 400)
+    if len(url) > MAX_URL_LEN:
+        raise RunStartError("invalid_url", "That tournament URL is too long.", 400)
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("http", "https") or not host:
+        raise RunStartError(
+            "invalid_url", "Enter a full http(s) tournament URL.", 400
+        )
+    try:
+        ipaddress.ip_address(host)
+        raise RunStartError("invalid_url", "IP-address URLs are not allowed.", 400)
+    except ValueError:
+        pass  # a hostname, not an IP literal — good
+    if host == "localhost" or host.endswith(".local") or host.endswith(".internal"):
+        raise RunStartError("invalid_url", "That host is not allowed.", 400)
+    if allowed_hosts and not any(
+        host == h or host.endswith("." + h) for h in allowed_hosts
+    ):
+        raise RunStartError(
+            "invalid_url", "That URL's host isn't allowed for this scraper.", 400
+        )
+    # Resolve the host and reject anything that maps to a private/loopback/
+    # link-local/reserved address. This also defeats numeric-host obfuscation
+    # (decimal/octal/hex IPs) that the IP-literal check above can't see.
+    try:
+        _ssrf.assert_resolves_public(host)
+    except _ssrf.UnsafeUrlError:
+        raise RunStartError("invalid_url", "That host is not allowed.", 400)
+    return url
+
+
+def validate_run_params(spec, data, *, webhook=False):
+    """Validate the start inputs for ``spec`` from a dict-like ``data``.
+
+    Returns a :class:`RunInputs`. Shared by the browser start form (``data`` =
+    ``request.POST``) and the trigger webhook (``data`` from JSON/POST). When
+    ``webhook`` is set, missing inputs fall back to sensible scheduled defaults
+    (current year/month, or a trailing window) instead of raising.
+    """
+    kind = spec.input_kind
+    get = data.get
+
+    if kind == registry.INPUT_YEAR_MONTH:
+        year = _parse_year(get("year"), default_current=webhook)
+        month = _parse_month(get("month"), default_all=webhook)
+        if month:
+            return RunInputs(
+                params={"year": year, "month": month},
+                date_from=date(year, month, 1),
+                date_to=_month_end(year, month),
+                tournament=f"{year}-{month:02d}",
+            )
+        return RunInputs(
+            params={"year": year, "month": 0},
+            date_from=date(year, 1, 1),
+            date_to=date(year, 12, 31),
+            tournament=f"{year} · all months",
+        )
+
+    if kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
+        url_raw = (get("tournament_url") or "").strip()
+        if kind == registry.INPUT_DATE_RANGE_OR_URL and url_raw:
+            url = _validate_tournament_url(url_raw, spec.allowed_hosts)
+            return RunInputs(
+                params={"tournament_url": url},
+                date_from=None,
+                date_to=None,
+                tournament=url,
+            )
+        if (
+            webhook
+            and not (get("date_from") or "").strip()
+            and not (get("date_to") or "").strip()
+        ):
+            end = timezone.localdate()
+            start = end - timedelta(days=DEFAULT_RANGE_DAYS)
+        else:
+            start = _parse_iso_date(get("date_from"), "start")
+            end = _parse_iso_date(get("date_to"), "end")
+        if start > end:
+            raise RunStartError(
+                "invalid_date",
+                "The start date must be on or before the end date.",
+                400,
+            )
+        if (end - start).days > MAX_RANGE_DAYS:
+            raise RunStartError(
+                "invalid_date",
+                f"Keep the date range within {MAX_RANGE_DAYS} days.",
+                400,
+            )
+        return RunInputs(
+            params={"date_from": start.isoformat(), "date_to": end.isoformat()},
+            date_from=start,
+            date_to=end,
+            tournament=f"{start.isoformat()} → {end.isoformat()}",
+        )
+
+    # Default / INPUT_YEAR.
+    year = _parse_year(get("year"), default_current=webhook)
+    return RunInputs(
+        params={"year": year},
+        date_from=date(year, 1, 1),
+        date_to=date(year, 12, 31),
+        tournament=ALL_TOURNAMENTS,
+    )
+
+
+def _start_scraper_run(scraper, *, inputs, launched_by):
     """Apply the run guards and launch the worker, returning the new Run.
 
     Shared by the real-time browser form and the GitHub-Actions trigger webhook so
     both honour maintenance, stale-run reaping, the single-in-flight-run rule, and
-    launch-failure handling identically. Raises RunStartError on any guard failure.
+    launch-failure handling identically. ``inputs`` is a validated
+    :class:`RunInputs`. Raises RunStartError on any guard failure.
     """
     if scraper.is_maintenance:
         raise RunStartError(
@@ -336,9 +546,10 @@ def _start_scraper_run(scraper, *, year, launched_by):
         run = Run.objects.create(
             scraper=scraper,
             launched_by=launched_by,
-            tournament=ALL_TOURNAMENTS,
-            date_from=date(year, 1, 1),
-            date_to=date(year, 12, 31),
+            tournament=(inputs.tournament or ALL_TOURNAMENTS)[:120],
+            date_from=inputs.date_from,
+            date_to=inputs.date_to,
+            params=inputs.params,
             status=Run.Status.RUNNING,
             started_at=timezone.now(),
         )
@@ -366,8 +577,8 @@ def scraper_run_view(request, slug):
     s = get_object_or_404(Scraper, slug=slug)
     back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
     try:
-        year = _parse_year(request.POST.get("year"))
-        run = _start_scraper_run(s, year=year, launched_by=request.user)
+        inputs = validate_run_params(registry.spec_for(slug), request.POST)
+        run = _start_scraper_run(s, inputs=inputs, launched_by=request.user)
     except RunStartError as exc:
         messages.error(request, exc.message)
         return redirect(back)
@@ -386,17 +597,23 @@ def _extract_bearer_token(request):
     return ""
 
 
-def _trigger_year_param(request):
-    """Read the optional ``year`` from a JSON body or a form-encoded POST."""
+def _request_params(request):
+    """Return a dict-like of start params from a JSON body or a form-encoded POST.
+
+    The webhook accepts either ``application/json`` or form-encoded params; both
+    are normalized to string values so :func:`validate_run_params` can treat them
+    uniformly. A malformed or non-object JSON body yields an empty mapping (which
+    then falls back to the per-kind scheduled defaults).
+    """
     if "application/json" in (request.content_type or ""):
         try:
             data = json.loads((request.body or b"").decode("utf-8") or "{}")
         except (ValueError, TypeError, UnicodeDecodeError):
-            return ""
-        if isinstance(data, dict) and data.get("year") is not None:
-            return str(data.get("year")).strip()
-        return ""
-    return (request.POST.get("year") or "").strip()
+            return {}
+        if isinstance(data, dict):
+            return {k: ("" if v is None else str(v)) for k, v in data.items()}
+        return {}
+    return request.POST
 
 
 @csrf_exempt
@@ -420,8 +637,10 @@ def scraper_trigger_view(request, slug):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
 
     try:
-        year = _parse_year(_trigger_year_param(request), default_current=True)
-        run = _start_scraper_run(s, year=year, launched_by=None)
+        inputs = validate_run_params(
+            registry.spec_for(slug), _request_params(request), webhook=True
+        )
+        run = _start_scraper_run(s, inputs=inputs, launched_by=None)
     except RunStartError as exc:
         return JsonResponse(
             {"ok": False, "error": exc.code, "detail": exc.message}, status=exc.status
@@ -433,7 +652,7 @@ def scraper_trigger_view(request, slug):
             "run_id": run.short_id,
             "run_uuid": str(run.uuid),
             "status": run.status,
-            "year": year,
+            "params": run.params,
             "events_url": request.build_absolute_uri(
                 reverse("run_events", args=[s.slug, run.uuid])
             ),
@@ -442,13 +661,75 @@ def scraper_trigger_view(request, slug):
     )
 
 
-def _github_workflow_yaml(*, code, trigger_url, secret_name, default_year):
+def _trigger_example_json(input_kind, defaults):
+    """A copy-ready JSON body for the manual ``curl`` example on the Schedule tab."""
+    if input_kind == registry.INPUT_YEAR_MONTH:
+        return '{"year":"%s","month":"%s"}' % (defaults["year"], defaults["month"])
+    if input_kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
+        return '{"date_from":"%s","date_to":"%s"}' % (
+            defaults["date_from"],
+            defaults["date_to"],
+        )
+    return '{"year":"%s"}' % defaults["year"]
+
+
+def _github_workflow_yaml(*, code, trigger_url, secret_name, input_kind, defaults):
     """Render the copy-ready GitHub Actions workflow shown on the Schedule tab.
 
-    Built in Python (not the template) so the GitHub ``${{ ... }}`` expressions and
-    JSON braces don't collide with Django's template syntax.
+    The ``workflow_dispatch`` inputs, ``env`` block and ``curl`` payload are
+    tailored to the scraper's ``input_kind`` (year / year+month / date range).
+    Built in Python (not the template) so the GitHub ``${{ ... }}`` expressions
+    and JSON braces don't collide with Django's template syntax.
     """
-    return (
+    if input_kind == registry.INPUT_YEAR_MONTH:
+        dy, dm = defaults["year"], defaults["month"]
+        inputs = (
+            f"    inputs:\n"
+            f"      year:\n"
+            f'        description: "Season year to scrape ({YEAR_MIN}-{YEAR_MAX})"\n'
+            f"        required: false\n"
+            f'        default: "{dy}"\n'
+            f"      month:\n"
+            f'        description: "Month 1-12 (0 = whole year)"\n'
+            f"        required: false\n"
+            f'        default: "{dm}"\n'
+        )
+        env = (
+            f"          YEAR: ${{{{ github.event.inputs.year || '{dy}' }}}}\n"
+            f"          MONTH: ${{{{ github.event.inputs.month || '{dm}' }}}}\n"
+        )
+        data = '{\\"year\\":\\"$YEAR\\",\\"month\\":\\"$MONTH\\"}'
+    elif input_kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
+        df, dt = defaults["date_from"], defaults["date_to"]
+        inputs = (
+            f"    inputs:\n"
+            f"      date_from:\n"
+            f'        description: "Start date (YYYY-MM-DD)"\n'
+            f"        required: false\n"
+            f'        default: "{df}"\n'
+            f"      date_to:\n"
+            f'        description: "End date (YYYY-MM-DD)"\n'
+            f"        required: false\n"
+            f'        default: "{dt}"\n'
+        )
+        env = (
+            f"          DATE_FROM: ${{{{ github.event.inputs.date_from || '{df}' }}}}\n"
+            f"          DATE_TO: ${{{{ github.event.inputs.date_to || '{dt}' }}}}\n"
+        )
+        data = '{\\"date_from\\":\\"$DATE_FROM\\",\\"date_to\\":\\"$DATE_TO\\"}'
+    else:  # INPUT_YEAR
+        dy = defaults["year"]
+        inputs = (
+            f"    inputs:\n"
+            f"      year:\n"
+            f'        description: "Season year to scrape ({YEAR_MIN}-{YEAR_MAX})"\n'
+            f"        required: false\n"
+            f'        default: "{dy}"\n'
+        )
+        env = f"          YEAR: ${{{{ github.event.inputs.year || '{dy}' }}}}\n"
+        data = '{\\"year\\":\\"$YEAR\\"}'
+
+    header = (
         f"name: MatchMiner — {code} scheduled scrape\n"
         f"\n"
         f"on:\n"
@@ -456,11 +737,8 @@ def _github_workflow_yaml(*, code, trigger_url, secret_name, default_year):
         f"    # 06:00 UTC daily. Edit this cron to change the cadence.\n"
         f'    - cron: "0 6 * * *"\n'
         f"  workflow_dispatch:\n"
-        f"    inputs:\n"
-        f"      year:\n"
-        f'        description: "Season year to scrape (2000-2030)"\n'
-        f"        required: false\n"
-        f'        default: "{default_year}"\n'
+    )
+    body = (
         f"\n"
         f"jobs:\n"
         f"  trigger:\n"
@@ -470,13 +748,14 @@ def _github_workflow_yaml(*, code, trigger_url, secret_name, default_year):
         f"        env:\n"
         f'          TRIGGER_URL: "{trigger_url}"\n'
         f"          TRIGGER_TOKEN: ${{{{ secrets.{secret_name} }}}}\n"
-        f"          YEAR: ${{{{ github.event.inputs.year || '{default_year}' }}}}\n"
+        f"{env}"
         f"        run: |\n"
         f'          curl -fsS -X POST "$TRIGGER_URL" \\\n'
         f'            -H "Authorization: Bearer $TRIGGER_TOKEN" \\\n'
         f'            -H "Content-Type: application/json" \\\n'
-        f'            --data "{{\\"year\\":\\"$YEAR\\"}}"\n'
+        f'            --data "{data}"\n'
     )
+    return header + inputs + body
 
 
 def _terminate_run_worker(run, settle=0.2):

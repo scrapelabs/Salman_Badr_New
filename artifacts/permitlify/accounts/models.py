@@ -157,6 +157,7 @@ class Run(models.Model):
     tournament = models.CharField(max_length=120, default="All tournaments")
     date_from = models.DateField(null=True, blank=True)
     date_to = models.DateField(null=True, blank=True)
+    params = models.JSONField(default=dict, blank=True)
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.SUCCESS
     )

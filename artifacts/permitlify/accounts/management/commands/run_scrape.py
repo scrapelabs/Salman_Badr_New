@@ -20,15 +20,9 @@ import traceback
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from accounts.live_scrapers import billiejeankingcup
+from accounts.live_scrapers.registry import spec_for
 from accounts.live_scrapers.telemetry import Telemetry, redact_secrets
 from accounts.models import Run, RunLogLine
-
-# Slug -> real scraper entry point. Each returns
-# (items_csv, requests_csv, errors_csv, row_count, status).
-LIVE_SCRAPERS = {
-    "billiejeankingcup": billiejeankingcup.run,
-}
 
 
 class _RunLogger:
@@ -95,7 +89,7 @@ class Command(BaseCommand):
                 f"\U0001f680 Worker online \u2014 Run #{run.short_id} "
                 f"\u00b7 {scraper.code}",
             )
-            runner = LIVE_SCRAPERS.get(scraper.slug)
+            runner = spec_for(scraper.slug).load_runner()
             if runner is None:
                 tele = Telemetry()
                 msg = (
