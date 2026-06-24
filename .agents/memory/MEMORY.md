@@ -1,4 +1,5 @@
 - [Permitlify design recreation](permitlify-design-recreation.md) — supplied HTML/CSS mockups are an exact spec; recreate by hand (NOT design subagent), brand tokens in :root, page CSS scoped under a page-root class.
+- [Windows + POSIX cross-platform](windows-cross-platform.md) — app runs on Replit (Linux) AND local Windows; guard worker `print()` (emoji vs cp1252 DEVNULL), and branch process launch/kill on `os.name` (killpg/setsid POSIX-only).
 - [GitHub auto-push workflow](github-auto-push.md) — push to scrapelabs/Salman_Badr_New every turn (no asking); fast-forward only via connector token; one-turn lag since commits only happen at end-of-turn checkpoint.
 - [Run-worker process lifecycle](run-worker-process-lifecycle.md) — MatchMiner scrape worker is a detached subprocess; SIGKILL→zombie (kill(pid,0) lies), reap after settle; worker final save must exclude pid via update_fields; stuck RUNNING + empty log = OOM kill, not a bug.
 - [Verifying full scrape runs](verifying-background-scrape-runs.md) — a full BJK run outlives the 120s bash timeout; bash-spawned workers die on call end — trigger via the live runserver over HTTP (mint a session, no password).

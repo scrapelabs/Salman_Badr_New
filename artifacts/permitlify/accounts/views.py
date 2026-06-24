@@ -28,6 +28,7 @@ from .runs import ALL_TOURNAMENTS
 STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
 YEAR_MIN = 2000
 YEAR_MAX = 2030
+IS_WINDOWS = os.name == "nt"
 
 TAB_LABELS = {
     "real-time": "Real-time test",
@@ -67,15 +68,22 @@ def _scrapers_annotated():
 def _launch_run(run):
     """Spawn the run as a detached ``manage.py run_scrape <uuid>`` subprocess.
 
-    ``start_new_session`` makes the child its own process-group leader; we persist
-    its PID on the Run so the real-time Stop button can force-kill the whole group.
+    The child is placed in its own process group so the real-time Stop button can
+    force-kill it (POSIX: ``start_new_session`` → setsid; Windows:
+    ``CREATE_NEW_PROCESS_GROUP``); we persist its PID on the Run.
     """
+    popen_kwargs = {
+        "cwd": str(settings.BASE_DIR),
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if IS_WINDOWS:
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["start_new_session"] = True
     proc = subprocess.Popen(
         [sys.executable, "manage.py", "run_scrape", str(run.uuid)],
-        cwd=str(settings.BASE_DIR),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
+        **popen_kwargs,
     )
     run.pid = proc.pid
     run.save(update_fields=["pid"])
@@ -444,28 +452,48 @@ def _terminate_run_worker(run, settle=0.2):
     if not pid:
         return False
     killed = True
-    try:
-        os.killpg(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass  # already gone — treat as killed
-    except PermissionError:
+    if IS_WINDOWS:
+        # Windows has no os.killpg / SIGKILL: TerminateProcess the worker (and any
+        # children) via taskkill. Exit code 128 == "process not found" == already
+        # gone, which counts as success.
         try:
-            os.kill(pid, signal.SIGKILL)
+            result = subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            if result.returncode not in (0, 128):
+                killed = False
+        except (OSError, subprocess.TimeoutExpired):
+            # This runs inside the Stop request, so never block on a wedged
+            # taskkill; leave the run for natural finish / stale reaping.
+            killed = False
+    else:
+        try:
+            os.killpg(pid, signal.SIGKILL)
         except ProcessLookupError:
-            pass
+            pass  # already gone — treat as killed
+        except PermissionError:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError:
+                killed = False
         except OSError:
             killed = False
-    except OSError:
-        killed = False
     if settle:
         time.sleep(settle)
     # Best-effort reap so we don't leave a zombie when this process is the worker's
     # parent (dev runserver / same gunicorn worker). ChildProcessError means it
-    # isn't our child — its owner reaps it on its next subprocess launch.
-    try:
-        os.waitpid(pid, os.WNOHANG)
-    except (ChildProcessError, OSError):
-        pass
+    # isn't our child — its owner reaps it on its next subprocess launch. Windows
+    # has no waitpid for non-children and taskkill already reaped.
+    if not IS_WINDOWS:
+        try:
+            os.waitpid(pid, os.WNOHANG)
+        except (ChildProcessError, OSError):
+            pass
     return killed
 
 

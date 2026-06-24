@@ -55,7 +55,13 @@ class _RunLogger:
                 run=self.run, seq=seq, level=level, text=text
             )
             self.buffer.append(text)
-            print(text, flush=True)
+            try:
+                print(text, flush=True)
+            except (UnicodeEncodeError, OSError, ValueError):
+                # The DB row above is the real record. On Windows the worker's
+                # stdout is the legacy-encoded ``nul`` device, which can't encode
+                # emoji — a failed console echo must never kill the run.
+                pass
 
     def full_text(self):
         return "\n".join(self.buffer) + ("\n" if self.buffer else "")
@@ -116,7 +122,8 @@ class Command(BaseCommand):
                 run.output_size_bytes = len(items_csv.encode("utf-8"))
         except Exception as exc:  # noqa: BLE001 - surface any failure in the run log
             tb = redact_secrets(traceback.format_exc())
-            log("ERROR", "\u274c Run crashed \u2014 traceback follows")
+            summary = redact_secrets(f"{exc.__class__.__name__}: {exc}")
+            log("ERROR", f"\u274c Run crashed \u2014 {summary}")
             for line in tb.splitlines():
                 log("ERROR", line)
             tele = Telemetry()
