@@ -87,14 +87,9 @@
           Run scrape
         </button>
       </div>
-      <p class="rt-start-note" id="rtStartNote">
-        {% if s.is_maintenance %}
-          Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.
-        {% elif active_run %}
-          A run is in progress — stop it or wait for it to finish before starting another.
-        {% else %}
-          The run starts immediately and streams its log in the console below.
-        {% endif %}
+      <p class="rt-start-note {% if s.is_maintenance %}is-warn{% elif active_run %}is-info{% else %}is-ready{% endif %}" id="rtStartNote">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span id="rtStartNoteText">{% if s.is_maintenance %}Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.{% elif active_run %}A run is in progress — stop it or wait for it to finish before starting another.{% else %}The run starts immediately and streams its log in the console below.{% endif %}</span>
       </p>
     </div>
   </form>
@@ -181,6 +176,7 @@
     var startBtn = document.getElementById('rtStartBtn');
     var yearSel = document.getElementById('rtYear');
     var startNote = document.getElementById('rtStartNote');
+    var startNoteText = document.getElementById('rtStartNoteText');
     var runMeta = document.getElementById('rtRunMeta');
     var stopForm = document.getElementById('rtStopForm');
     var progWrap = document.getElementById('rtProgress');
@@ -192,6 +188,10 @@
     if (!url) return;
     var maintenance = root.dataset.maintenance === '1';
     var last = 0, stopped = false;
+    function setNote(kind, text) {
+      if (startNoteText) startNoteText.textContent = text;
+      if (startNote) startNote.className = 'rt-start-note is-' + kind;
+    }
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function append(lines) {
       if (!lines || !lines.length) return;
@@ -228,11 +228,11 @@
       if (summary) summary.hidden = false;
       if (progWrap) progWrap.hidden = true;
       if (maintenance) {
-        if (startNote) startNote.textContent = 'Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.';
+        setNote('warn', 'Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.');
       } else {
         if (startBtn) startBtn.disabled = false;
         if (yearSel) yearSel.disabled = false;
-        if (startNote) startNote.textContent = 'The run starts immediately and streams its log in the console below.';
+        setNote('ready', 'The run starts immediately and streams its log in the console below.');
       }
     }
     function enableBtn(btn, ok, noDataMsg) {

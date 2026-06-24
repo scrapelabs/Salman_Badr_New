@@ -1330,17 +1330,28 @@ code {
 .rt-start-row {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 16px;
   flex-wrap: wrap;
 }
-.rt-start-row .rt-field { flex: 1 1 200px; min-width: 160px; max-width: 280px; }
-.rt-start-btn { height: 42px; white-space: nowrap; }
+.rt-start-row .rt-field { flex: 0 1 260px; min-width: 180px; }
+.rt-start-btn { height: 42px; white-space: nowrap; flex: 0 0 auto; padding-inline: 18px; }
 .rt-start-note {
-  margin: 12px 0 0;
-  color: var(--app-text-2);
-  font-size: 11px;
-  line-height: 1.55;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-weight: 500;
 }
+.rt-start-note svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.rt-start-note.is-ready { color: var(--app-prod); background: var(--app-prod-bg); border-color: var(--app-prod-bg); }
+.rt-start-note.is-warn { color: var(--app-maint); background: var(--app-maint-bg); border-color: var(--app-maint-bg); }
+.rt-start-note.is-info { color: var(--app-accent); background: var(--app-accent-bg); border-color: var(--app-accent-bg); }
 
 /* ============================================================
    Terminal log console — shared by the run-log viewer and the
