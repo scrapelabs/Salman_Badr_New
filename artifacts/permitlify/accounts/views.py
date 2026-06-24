@@ -137,8 +137,17 @@ def scraper_detail_view(request, slug):
             if proxy_id.isdigit():
                 proxy = Proxy.objects.filter(pk=int(proxy_id)).first()
             s.proxy = proxy
-            s.save(update_fields=["proxy", "updated_at"])
-            messages.success(request, "Proxy settings saved.")
+
+            try:
+                threads = int((request.POST.get("threads") or "").strip())
+            except (TypeError, ValueError):
+                threads = s.threads or Scraper.THREADS_DEFAULT
+            s.threads = max(
+                Scraper.THREADS_MIN, min(threads, Scraper.THREADS_MAX)
+            )
+
+            s.save(update_fields=["proxy", "threads", "updated_at"])
+            messages.success(request, "Scraper settings saved.")
             return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
 
         # Status tab: save Production/Maintenance status.
@@ -172,6 +181,8 @@ def scraper_detail_view(request, slug):
         ctx["run_total"] = paginator.count
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
+        ctx["thread_min"] = Scraper.THREADS_MIN
+        ctx["thread_max"] = Scraper.THREADS_MAX
 
     return render(request, "scraper_detail.html", ctx)
 

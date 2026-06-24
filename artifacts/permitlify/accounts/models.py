@@ -58,6 +58,13 @@ class Proxy(models.Model):
 
 
 class Scraper(models.Model):
+    # Concurrency bounds for the scrape worker pool (Scraper.threads). The value
+    # is editable from the Lab's Settings tab and clamped to this range before a
+    # run launches, so it can never spawn an unbounded pool.
+    THREADS_MIN = 1
+    THREADS_MAX = 16
+    THREADS_DEFAULT = 5
+
     class Mode(models.TextChoices):
         PRODUCTION = "production", "Production"
         MAINTENANCE = "maintenance", "Maintenance"
@@ -82,6 +89,7 @@ class Scraper(models.Model):
         on_delete=models.SET_NULL,
         related_name="scrapers",
     )
+    threads = models.PositiveSmallIntegerField(default=THREADS_DEFAULT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -94,6 +102,12 @@ class Scraper(models.Model):
     @property
     def is_maintenance(self):
         return self.mode == self.Mode.MAINTENANCE
+
+    @property
+    def worker_count(self):
+        """Thread count used to launch the scrape pool, clamped to a safe range."""
+        value = self.threads or self.THREADS_DEFAULT
+        return max(self.THREADS_MIN, min(value, self.THREADS_MAX))
 
 
 class Run(models.Model):

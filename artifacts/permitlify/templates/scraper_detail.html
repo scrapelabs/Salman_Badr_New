@@ -369,7 +369,7 @@
       <div class="status-head">
         <div>
           <div class="status-eyebrow">Scraper settings</div>
-          <div class="status-name">Proxy routing</div>
+          <div class="status-name">Routing &amp; performance</div>
         </div>
         {% if s.proxy %}
         <span class="ptype {{ s.proxy.kind }}">{{ s.proxy.get_kind_display }}</span>
@@ -379,10 +379,10 @@
       </div>
 
       <p class="rt-intro">
-        Choose which proxy pool <strong>{{ s.code }}</strong> routes its traffic through.
-        Manage the list of pools on the <a href="{% url 'proxies' %}">Proxies</a> page.
-        With “Direct connection” — or a pool that has no address set — the scraper
-        connects without a proxy.
+        Choose which proxy pool <strong>{{ s.code }}</strong> routes its traffic through,
+        and how many worker threads it uses. Manage the list of pools on the
+        <a href="{% url 'proxies' %}">Proxies</a> page. With “Direct connection” — or a
+        pool that has no address set — the scraper connects without a proxy.
       </p>
 
       <div class="rt-grid">
@@ -395,15 +395,26 @@
             {% endfor %}
           </select>
         </div>
+        <div class="rt-field">
+          <label class="field-label" for="threadsInput">Worker threads</label>
+          <input class="rt-input" id="threadsInput" name="threads" type="number"
+                 min="{{ thread_min }}" max="{{ thread_max }}" step="1"
+                 value="{{ s.threads }}" inputmode="numeric" />
+        </div>
       </div>
+
+      <p class="status-note settings-empty">
+        Threads control how many ties are scraped in parallel ({{ thread_min }}–{{ thread_max }}).
+        Higher is faster but puts more load on the proxy and upstream API.
+      </p>
 
       {% if not proxies %}
       <p class="status-note settings-empty">No proxy pools yet — <a href="{% url 'proxies' %}">add one</a> to route this scraper through it.</p>
       {% endif %}
     </div>
     <div class="panel-foot">
-      <span class="status-note">Saved per scraper. Real-time and scheduled runs use this selection.</span>
-      <button class="btn btn-primary" type="submit">Save proxy</button>
+      <span class="status-note">Saved per scraper. Real-time and scheduled runs use these settings.</span>
+      <button class="btn btn-primary" type="submit">Save settings</button>
     </div>
   </form>
 

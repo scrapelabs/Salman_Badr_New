@@ -49,8 +49,9 @@ UA = (
 IMPERSONATE = "chrome"
 
 # Ties are fetched concurrently, matching the production spider's behaviour, so
-# a full season's worth of ties is processed without an artificial cap.
-MAX_WORKERS = 8
+# a full season's worth of ties is processed without an artificial cap. The
+# number of worker threads is configurable per scraper (Scraper.threads, default
+# 5) and clamped to a safe range — see Scraper.worker_count.
 
 # Long ?include= expression copied from the production spider.
 _MATCH_INCLUDE = (
@@ -412,7 +413,9 @@ def run(config, run_obj, log):
     """
     tele = Telemetry()
     years = _years(run_obj)
+    workers = run_obj.scraper.worker_count
     log("INFO", f"\U0001f3be {config.label} scraper starting \u2014 ranking years={years}")
+    log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = _build_proxies(run_obj.scraper, log)
 
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering ties \u2500\u2500\u2500\u2500")
@@ -449,7 +452,7 @@ def run(config, run_obj, log):
     log(
         "INFO",
         f"\U0001f4cb {total} tie(s) discovered total "
-        f"\u2014 processing all with {MAX_WORKERS} workers",
+        f"\u2014 processing all with {workers} worker(s)",
     )
     log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping ties \u2500\u2500\u2500\u2500")
 
@@ -516,7 +519,7 @@ def run(config, run_obj, log):
             )
 
     if ties:
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             list(executor.map(process_tie, ties))
 
     row_count = counter["rows"]
