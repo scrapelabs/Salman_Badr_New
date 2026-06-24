@@ -1,13 +1,14 @@
 @echo off
 REM ===========================================================================
-REM  MatchMiner - local install (Windows)
-REM  Creates a .venv, installs Python dependencies, and prepares .env.
+REM  MatchMiner - 0. install (Windows)
+REM  Creates a .venv at the project root, installs deps, and prepares .env.
+REM  Run the scripts in this folder in order: 0 -> 1 -> 2 -> 3.
 REM ===========================================================================
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo ===========================================================
-echo  MatchMiner - local install (Windows)
+echo  MatchMiner - install (step 0)
 echo ===========================================================
 echo.
 
@@ -54,11 +55,11 @@ if not exist ".env" (
 
 echo.
 echo ===========================================================
-echo  Install complete. Next steps:
+echo  Install complete. Next steps (run in order):
 echo    1. Edit .env and set your PostgreSQL credentials
-echo    2. Double-click migrate.bat        (create the tables)
-echo    3. Double-click collectstatic.bat  (gather static files)
-echo    4. Double-click run_server.bat     (http://localhost:8000/)
+echo    2. Double-click 1_migrate.bat        (create the tables)
+echo    3. Double-click 2_collectstatic.bat  (gather static files)
+echo    4. Double-click 3_run_server.bat     (http://localhost:8000/)
 echo ===========================================================
 echo.
 pause
