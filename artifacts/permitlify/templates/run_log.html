@@ -28,6 +28,7 @@
       <div class="term-titlebar">
         <span class="term-dots" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
         <span class="term-title">full log · {{ run.size_label }}</span>
+        {% include "partials/pagination.html" with page_obj=page_obj base_query="" page_param="page" variant="mini" %}
         <span class="term-badge {{ run.status }}">{{ run.get_status_display }}</span>
       </div>
 

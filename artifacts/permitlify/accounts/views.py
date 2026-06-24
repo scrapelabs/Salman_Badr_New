@@ -40,7 +40,9 @@ TAB_LABELS = {
 
 CALLS_PER_PAGE = 12
 LOG_LINES_PER_PAGE = 150
-CONSOLE_TAIL_LINES = 500
+# Live console keeps only the most recent N streamed lines in the DOM (and only
+# fetches that many on initial load) so an in-flight run with a huge log stays light.
+LIVE_CONSOLE_CAP = 1200
 
 
 def _counts():
@@ -213,16 +215,24 @@ def scraper_detail_view(request, slug):
         display_run = active_run or s.runs.order_by("-started_at").first()
         ctx["active_run"] = active_run
         ctx["display_run"] = display_run
-        if display_run is not None and active_run is None:
+        if active_run is not None:
+            # Live stream: only fetch (and keep) the most recent LIVE_CONSOLE_CAP
+            # lines so opening a long in-flight run stays light.
+            latest_seq = (
+                active_run.log_lines.order_by("-seq")
+                .values_list("seq", flat=True)
+                .first()
+                or 0
+            )
+            ctx["console_after"] = max(0, latest_seq - LIVE_CONSOLE_CAP)
+            ctx["console_cap"] = LIVE_CONSOLE_CAP
+        elif display_run is not None:
+            # Replay the most recent finished run, paginated so the page stays
+            # light even when a run produced tens of thousands of log lines.
             log_lines = _run_lines(display_run)
-            if len(log_lines) > CONSOLE_TAIL_LINES:
-                tail = log_lines[-CONSOLE_TAIL_LINES:]
-                ctx["display_log"] = (
-                    f"[… showing the last {CONSOLE_TAIL_LINES} of {len(log_lines)} "
-                    "lines — open the full log for everything …]\n" + "\n".join(tail)
-                )
-            else:
-                ctx["display_log"] = "\n".join(log_lines)
+            paginator = Paginator(log_lines, LOG_LINES_PER_PAGE)
+            ctx["log_page"] = paginator.get_page(request.GET.get("logpage"))
+            ctx["log_total"] = len(log_lines)
         current_year = timezone.localdate().year
         ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
         ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)

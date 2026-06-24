@@ -142,11 +142,12 @@
   {% endif %}
 
   {# Console — always attached: live stream during a run, last-run output when idle #}
-  <div class="term-stage" id="rtConsole" data-maintenance="{{ s.is_maintenance|yesno:'1,0' }}"{% if active_run %} data-events-url="{% url 'run_events' s.slug display_run.uuid %}"{% endif %}>
+  <div class="term-stage" id="rtConsole" data-maintenance="{{ s.is_maintenance|yesno:'1,0' }}"{% if active_run %} data-events-url="{% url 'run_events' s.slug display_run.uuid %}" data-after="{{ console_after|default:0 }}" data-cap="{{ console_cap|default:1200 }}"{% endif %}>
     <div class="terminal{% if active_run %} matrix{% endif %}">
       <div class="term-titlebar">
         <span class="term-dots" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
         <span class="term-title">{% if active_run %}live log · Run #{{ display_run.short_id }}{% elif display_run %}last run · Run #{{ display_run.short_id }}{% else %}console{% endif %} · {{ s.code }}</span>
+        {% if not active_run and display_run %}{% include "partials/pagination.html" with page_obj=log_page base_query="tab=real-time&" page_param="logpage" variant="mini" %}{% endif %}
         {% if display_run %}<span class="term-badge {{ display_run.status }}" id="rtStatus">{{ display_run.get_status_display }}</span>{% endif %}
       </div>
       <div class="log-stats-bar">
@@ -155,7 +156,13 @@
         <div class="ls-cell"><span>Size</span><b class="ls-dim" id="rtSize">{% if active_run %}—{% elif display_run %}{{ display_run.size_label }}{% else %}—{% endif %}</b></div>
         <div class="ls-cell"><span>Duration</span><b class="ls-dim" id="rtDur">{% if active_run %}—{% elif display_run %}{{ display_run.duration_label }}{% else %}—{% endif %}</b></div>
       </div>
-      <pre class="term-log console-out" id="consoleOut" aria-live="polite">{% if not active_run %}{% if display_run %}{{ display_log }}{% else %}No runs yet. Pick a season year above and start a scrape — its live output will stream here.{% endif %}{% endif %}</pre>
+      {% if active_run %}
+      <pre class="term-log console-out" id="consoleOut" aria-live="polite"></pre>
+      {% elif display_run %}
+      <ol class="term-log term-log--num console-out" id="consoleLog" start="{{ log_page.start_index }}">{% for line in log_page %}<li class="logline">{{ line }}</li>{% endfor %}</ol>
+      {% else %}
+      <pre class="term-log console-out" id="consoleOut" aria-live="polite">No runs yet. Pick a season year above and start a scrape — its live output will stream here.</pre>
+      {% endif %}
     </div>
   </div>
   {% if active_run %}
@@ -187,21 +194,25 @@
     var url = root.dataset.eventsUrl;
     if (!url) return;
     var maintenance = root.dataset.maintenance === '1';
-    var last = 0, stopped = false;
+    var last = parseInt(root.dataset.after || '0', 10) || 0, stopped = false;
     function setNote(kind, text) {
       if (startNoteText) startNoteText.textContent = text;
       if (startNote) startNote.className = 'rt-start-note is-' + kind;
     }
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    var LIVE_CAP = parseInt(root.dataset.cap || '1200', 10) || 1200;
     function append(lines) {
       if (!lines || !lines.length) return;
       var html = '';
       for (var i = 0; i < lines.length; i++) {
         var lv = (lines[i].level || 'INFO').toLowerCase();
-        html += '<span class="cl cl-' + lv + '">' + esc(lines[i].text) + '</span>\n';
+        html += '<span class="cl cl-' + lv + '">' + esc(lines[i].text) + '</span>';
         last = lines[i].seq;
       }
       out.insertAdjacentHTML('beforeend', html);
+      // Keep the live DOM light: only the most recent LIVE_CAP lines are kept
+      // in view. The full log is always available paginated once the run ends.
+      while (out.children.length > LIVE_CAP) out.removeChild(out.firstElementChild);
       out.scrollTop = out.scrollHeight;
     }
     function finish(d) {
@@ -277,6 +288,34 @@
         .catch(function () { setTimeout(poll, 2000); });
     }
     poll();
+  })();
+  </script>
+  {% endif %}
+  {% if not active_run and display_run %}
+  <script>
+  (function () {
+    var root = document.getElementById('consoleLog');
+    if (!root) return;
+    var items = root.children;
+    for (var i = 0; i < items.length; i++) {
+      var li = items[i];
+      var t = (li.textContent || '').trim();
+      var cls = '';
+      if (t === '') {
+        cls = '';
+      } else if (/^[─━=*.\-\s]{8,}$/.test(t)) {
+        cls = 'lc-dim';
+      } else if (/traceback \(most recent call last\)|^(error|exception|fatal)\b|: ?error|\[error\]|\btraceback\b|\bfailed\b/i.test(t)) {
+        cls = 'lc-err';
+      } else if (/\bwarn(ing)?\b|\[warn\]/i.test(t)) {
+        cls = 'lc-warn';
+      } else if (/✓|✔|\bdone\b|\bsucceeded\b|\bsuccess\b|\bcompleted?\b|\bok\b/i.test(t)) {
+        cls = 'lc-ok';
+      } else if (/(Cup|MatchMiner)\b/.test(t) && /^[A-Za-z][A-Za-z0-9 ·\-]*$/.test(t) || /^=+$/.test(t) || /^[A-Z0-9 ·\-]{8,}$/.test(t)) {
+        cls = 'lc-banner';
+      }
+      if (cls) li.className = 'logline ' + cls;
+    }
   })();
   </script>
   {% endif %}

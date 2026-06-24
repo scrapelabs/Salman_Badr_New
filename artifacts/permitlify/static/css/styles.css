@@ -1729,27 +1729,88 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .msg-success { color: var(--app-prod); background: var(--app-prod-bg); border-color: var(--app-prod-bg); }
 .msg-error { color: var(--app-maint); background: var(--app-maint-bg); border-color: var(--app-maint-bg); }
 
-/* Pagination */
+/* Pagination — numbered, windowed pager (« ‹ 1 2 … N › ») */
 .pager {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  margin-top: 18px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 20px;
 }
 .pager-btn {
-  padding: 7px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
   border: 1px solid var(--app-border-2);
   border-radius: 9px;
   background: var(--app-surface);
   color: var(--app-text);
-  font-size: 10.4px;
+  font-size: 11px;
   font-weight: 600;
+  line-height: 1;
   text-decoration: none;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
 }
 .pager-btn:hover { border-color: var(--app-accent); color: var(--app-accent); background: var(--app-accent-bg); }
-.pager-btn.is-disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.pager-btn.is-active {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+  color: #fff;
+  cursor: default;
+  box-shadow: 0 6px 14px -6px var(--app-accent);
+}
+.pager-btn.is-active:hover { color: #fff; background: var(--app-accent); }
+.pager-btn.is-disabled { opacity: 0.34; cursor: not-allowed; pointer-events: none; }
+.pager-step, .pager-edge { font-size: 14px; color: var(--app-text-2); }
+.pager-gap {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 18px;
+  height: 32px;
+  color: var(--app-text-2);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
 .pager-info { color: var(--app-text-2); font-size: 10.4px; font-weight: 600; }
+
+/* Compact pager that lives inside the terminal titlebar */
+.pager--mini { margin: 0 0 0 auto; gap: 4px; flex-wrap: nowrap; }
+/* The pager already claims the titlebar's free space; keep the status badge
+   tucked right beside it instead of letting both grab auto-margin. */
+.pager--mini ~ .term-badge { margin-left: 0; }
+.pager--mini .pager-btn {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 10px;
+  border-radius: 7px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--term-line);
+  color: var(--term-fg-dim);
+}
+.pager--mini .pager-btn:hover {
+  color: var(--term-accent);
+  border-color: var(--term-accent);
+  background: rgba(61, 255, 133, 0.08);
+}
+.pager--mini .pager-btn.is-active {
+  background: var(--term-accent);
+  border-color: var(--term-accent);
+  color: #0b0f17;
+  box-shadow: none;
+}
+.pager--mini .pager-btn.is-active:hover { color: #0b0f17; background: var(--term-accent); }
+.pager--mini .pager-step, .pager--mini .pager-edge { font-size: 12px; }
+.pager--mini .pager-gap { min-width: 12px; height: 22px; font-size: 10px; }
+
+/* Live console: streamed lines render as block spans (kept light by JS cap). */
+.console-out .cl { display: block; }
 
 /* Log-viewer styles now live in the “Terminal log console” section above. */
 

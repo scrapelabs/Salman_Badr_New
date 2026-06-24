@@ -1,16 +1,37 @@
-{% comment %}Pager. Pass `page_obj` and `base_query` (a query prefix ending in '&' or empty).{% endcomment %}
+{% comment %}
+Numbered pager. Pass:
+  page_obj    - a Paginator page (required)
+  base_query  - query prefix ending in '&' or empty (default empty)
+  page_param  - GET param name for the page number (default 'page')
+  variant     - optional modifier, e.g. 'mini' for the terminal titlebar
+{% endcomment %}
+{% load pager_tags %}
 {% if page_obj.paginator.num_pages > 1 %}
-<nav class="pager" aria-label="Pagination">
+{% with pp=page_param|default:"page" %}
+<nav class="pager{% if variant %} pager--{{ variant }}{% endif %}" aria-label="Pagination">
   {% if page_obj.has_previous %}
-    <a class="pager-btn" href="?{{ base_query }}page={{ page_obj.previous_page_number }}" rel="prev">← Prev</a>
+    <a class="pager-btn pager-edge" href="?{{ base_query }}{{ pp }}=1" rel="first" aria-label="First page" title="First page">«</a>
+    <a class="pager-btn pager-step" href="?{{ base_query }}{{ pp }}={{ page_obj.previous_page_number }}" rel="prev" aria-label="Previous page" title="Previous page">‹</a>
   {% else %}
-    <span class="pager-btn is-disabled" aria-disabled="true">← Prev</span>
+    <span class="pager-btn pager-edge is-disabled" aria-disabled="true">«</span>
+    <span class="pager-btn pager-step is-disabled" aria-disabled="true">‹</span>
   {% endif %}
-  <span class="pager-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% for p in page_obj|elided_pages %}
+    {% if p == page_obj.paginator.ELLIPSIS %}
+      <span class="pager-gap" aria-hidden="true">…</span>
+    {% elif p == page_obj.number %}
+      <span class="pager-btn pager-num is-active" aria-current="page">{{ p }}</span>
+    {% else %}
+      <a class="pager-btn pager-num" href="?{{ base_query }}{{ pp }}={{ p }}">{{ p }}</a>
+    {% endif %}
+  {% endfor %}
   {% if page_obj.has_next %}
-    <a class="pager-btn" href="?{{ base_query }}page={{ page_obj.next_page_number }}" rel="next">Next →</a>
+    <a class="pager-btn pager-step" href="?{{ base_query }}{{ pp }}={{ page_obj.next_page_number }}" rel="next" aria-label="Next page" title="Next page">›</a>
+    <a class="pager-btn pager-edge" href="?{{ base_query }}{{ pp }}={{ page_obj.paginator.num_pages }}" rel="last" aria-label="Last page" title="Last page">»</a>
   {% else %}
-    <span class="pager-btn is-disabled" aria-disabled="true">Next →</span>
+    <span class="pager-btn pager-step is-disabled" aria-disabled="true">›</span>
+    <span class="pager-btn pager-edge is-disabled" aria-disabled="true">»</span>
   {% endif %}
 </nav>
+{% endwith %}
 {% endif %}
