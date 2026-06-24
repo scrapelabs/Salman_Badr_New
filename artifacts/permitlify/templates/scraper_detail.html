@@ -84,13 +84,13 @@
           Stop run
         </button>
       </form>
-      <div class="rt-foot-actions" id="rtFoot" hidden>
+      <div class="rt-foot-actions" id="rtFoot">
         <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
         <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
-        <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
-        <a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug active_run.uuid %}">Requests CSV</a>
-        <a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug active_run.uuid %}">Errors CSV</a>
-        <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
+        <a class="btn btn-ghost btn-sm is-disabled" id="rtCsv" data-href="{% url 'run_csv_download' s.slug active_run.uuid %}" title="Available when the run finishes">Download CSV</a>
+        <a class="btn btn-ghost btn-sm is-disabled" id="rtReq" data-href="{% url 'run_requests_download' s.slug active_run.uuid %}" title="Available when the run finishes">Requests CSV</a>
+        <a class="btn btn-ghost btn-sm is-disabled" id="rtErr" data-href="{% url 'run_errors_download' s.slug active_run.uuid %}" title="Available when the run finishes">Errors CSV</a>
+        <a class="btn btn-primary btn-sm is-disabled" id="rtAgain" data-href="?tab=real-time" title="Available when the run finishes">Run another</a>
       </div>
     </div>
   </div>
@@ -125,7 +125,6 @@
     if (!root) return;
     var out = document.getElementById('consoleOut');
     var statusEl = document.getElementById('rtStatus');
-    var foot = document.getElementById('rtFoot');
     var summary = document.getElementById('rtSummary');
     var statCell = document.getElementById('rtStat');
     var rowsCell = document.getElementById('rtRows');
@@ -134,6 +133,7 @@
     var csvBtn = document.getElementById('rtCsv');
     var reqBtn = document.getElementById('rtReq');
     var errBtn = document.getElementById('rtErr');
+    var againBtn = document.getElementById('rtAgain');
     var runMeta = document.getElementById('rtRunMeta');
     var stopForm = document.getElementById('rtStopForm');
     var progWrap = document.getElementById('rtProgress');
@@ -171,14 +171,26 @@
       durCell.className = 'ls-num';
       durCell.textContent = d.duration_label;
       summary.textContent = d.row_count + ' row' + (d.row_count === 1 ? '' : 's') + ' · ' + d.size_label + ' · ' + d.duration_label;
-      if (!d.has_csv && csvBtn) { csvBtn.classList.add('is-disabled'); csvBtn.removeAttribute('href'); csvBtn.title = 'No CSV — run produced no rows'; }
-      if (!d.has_requests && reqBtn) { reqBtn.classList.add('is-disabled'); reqBtn.removeAttribute('href'); reqBtn.title = 'No requests log for this run'; }
-      if (!d.has_errors && errBtn) { errBtn.classList.add('is-disabled'); errBtn.removeAttribute('href'); errBtn.title = 'No errors log for this run'; }
+      enableBtn(csvBtn, d.has_csv, 'No CSV — run produced no rows');
+      enableBtn(reqBtn, d.has_requests, 'No requests log for this run');
+      enableBtn(errBtn, d.has_errors, 'No errors log for this run');
+      enableBtn(againBtn, true, '');
       if (runMeta) runMeta.hidden = true;
       if (stopForm) stopForm.hidden = true;
       if (summary) summary.hidden = false;
       if (progWrap) progWrap.hidden = true;
-      foot.hidden = false;
+    }
+    function enableBtn(btn, ok, noDataMsg) {
+      if (!btn) return;
+      if (ok) {
+        btn.classList.remove('is-disabled');
+        if (btn.dataset.href) btn.setAttribute('href', btn.dataset.href);
+        btn.removeAttribute('title');
+      } else {
+        btn.classList.add('is-disabled');
+        btn.removeAttribute('href');
+        btn.title = noDataMsg;
+      }
     }
     function updateProgress(d) {
       if (!progWrap || d.done) return;
