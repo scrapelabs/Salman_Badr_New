@@ -1318,6 +1318,30 @@ code {
 .rt-input:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn:disabled, .btn[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
+/* Always-on start card (year + run button) pinned at the top of the tab */
+.rt-start { margin: 0 0 16px; }
+.rt-start-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+.rt-start-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rt-start-row .rt-field { flex: 1 1 200px; min-width: 160px; max-width: 280px; }
+.rt-start-btn { height: 42px; white-space: nowrap; }
+.rt-start-note {
+  margin: 12px 0 0;
+  color: var(--app-text-2);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 /* ============================================================
    Terminal log console — shared by the run-log viewer and the
    real-time live console. The terminal surface is intentionally

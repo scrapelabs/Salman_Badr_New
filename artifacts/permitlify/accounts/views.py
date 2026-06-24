@@ -40,6 +40,7 @@ TAB_LABELS = {
 
 CALLS_PER_PAGE = 12
 LOG_LINES_PER_PAGE = 150
+CONSOLE_TAIL_LINES = 500
 
 
 def _counts():
@@ -204,9 +205,24 @@ def scraper_detail_view(request, slug):
 
     if tab == "real-time":
         _reap_stale_runs(s)
-        ctx["active_run"] = (
+        active_run = (
             s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
         )
+        # The console is always attached: stream the live run, or replay the most
+        # recent finished run when nothing is in flight.
+        display_run = active_run or s.runs.order_by("-started_at").first()
+        ctx["active_run"] = active_run
+        ctx["display_run"] = display_run
+        if display_run is not None and active_run is None:
+            log_lines = _run_lines(display_run)
+            if len(log_lines) > CONSOLE_TAIL_LINES:
+                tail = log_lines[-CONSOLE_TAIL_LINES:]
+                ctx["display_log"] = (
+                    f"[… showing the last {CONSOLE_TAIL_LINES} of {len(log_lines)} "
+                    "lines — open the full log for everything …]\n" + "\n".join(tail)
+                )
+            else:
+                ctx["display_log"] = "\n".join(log_lines)
         current_year = timezone.localdate().year
         ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
         ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)

@@ -62,21 +62,54 @@
   {% endif %}
 
   {% if tab == 'real-time' %}
-  {% if active_run %}
-  <p class="rt-console-intro">
-    The scraper is running as a background process. This log streams live and is
-    saved as it goes — reload the page or open it elsewhere and you’ll see the
-    same output. When it finishes, the CSV and log are added to
-    <a href="?tab=calls">Calls history</a>.
-  </p>
+  {# Start controls — always pinned to the top in their own card #}
+  <form class="panel rt-start" method="post" action="{% url 'scraper_run' s.slug %}">
+    {% csrf_token %}
+    <div class="panel-pad">
+      <div class="rt-start-head">
+        <div>
+          <div class="status-eyebrow">Real-time test</div>
+          <div class="status-name">Run {{ s.code }} on demand</div>
+        </div>
+        <span class="mode-pill {{ s.mode }}">{{ s.get_mode_display }}</span>
+      </div>
+      <div class="rt-start-row">
+        <div class="rt-field">
+          <label class="field-label" for="rtYear">Season year</label>
+          <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-primary rt-start-btn" type="submit" id="rtStartBtn" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+          Run scrape
+        </button>
+      </div>
+      <p class="rt-start-note" id="rtStartNote">
+        {% if s.is_maintenance %}
+          Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.
+        {% elif active_run %}
+          A run is in progress — stop it or wait for it to finish before starting another.
+        {% else %}
+          The run starts immediately and streams its log in the console below.
+        {% endif %}
+      </p>
+    </div>
+  </form>
+
+  {# Run controls (stop + downloads) — for the live run, or the last run when idle #}
+  {% if display_run %}
   <div class="rt-runbar" id="rtRunbar">
-    <span class="rt-run-meta" id="rtRunMeta">
+    <span class="rt-run-meta" id="rtRunMeta"{% if not active_run %} hidden{% endif %}>
       <span class="rt-live-dot" aria-hidden="true"></span>
-      Live · Run #{{ active_run.short_id }}{% if active_run.pid %} · PID {{ active_run.pid }}{% endif %}
+      Live · Run #{{ display_run.short_id }}{% if display_run.pid %} · PID {{ display_run.pid }}{% endif %}
     </span>
-    <span class="rt-summary" id="rtSummary" hidden></span>
+    <span class="rt-summary" id="rtSummary"{% if active_run %} hidden{% endif %}>{% if not active_run %}Run #{{ display_run.short_id }} · {{ display_run.row_count }} row{{ display_run.row_count|pluralize }} · {{ display_run.size_label }} · {{ display_run.duration_label }}{% endif %}</span>
     <div class="rt-runbar-actions">
-      <form method="post" action="{% url 'run_stop' s.slug active_run.uuid %}" id="rtStopForm"
+      {% if active_run %}
+      <form method="post" action="{% url 'run_stop' s.slug display_run.uuid %}" id="rtStopForm"
             onsubmit="return confirm('Force-stop this run? The worker process will be killed immediately.');">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger btn-sm" id="rtStopBtn">
@@ -84,16 +117,23 @@
           Stop run
         </button>
       </form>
+      {% endif %}
       <div class="rt-foot-actions" id="rtFoot">
-        <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
-        <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
-        <a class="btn btn-ghost btn-sm is-disabled" id="rtCsv" data-href="{% url 'run_csv_download' s.slug active_run.uuid %}" title="Available when the run finishes">Download CSV</a>
-        <a class="btn btn-ghost btn-sm is-disabled" id="rtReq" data-href="{% url 'run_requests_download' s.slug active_run.uuid %}" title="Available when the run finishes">Requests CSV</a>
-        <a class="btn btn-ghost btn-sm is-disabled" id="rtErr" data-href="{% url 'run_errors_download' s.slug active_run.uuid %}" title="Available when the run finishes">Errors CSV</a>
-        <a class="btn btn-primary btn-sm is-disabled" id="rtAgain" data-href="?tab=real-time" title="Available when the run finishes">Run another</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug display_run.uuid %}" target="_blank" rel="noopener">Open log</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug display_run.uuid %}">Download log</a>
+        {% if active_run %}
+        <a class="btn btn-ghost btn-sm is-disabled" id="rtCsv" data-href="{% url 'run_csv_download' s.slug display_run.uuid %}" title="Available when the run finishes">Download CSV</a>
+        <a class="btn btn-ghost btn-sm is-disabled" id="rtReq" data-href="{% url 'run_requests_download' s.slug display_run.uuid %}" title="Available when the run finishes">Requests CSV</a>
+        <a class="btn btn-ghost btn-sm is-disabled" id="rtErr" data-href="{% url 'run_errors_download' s.slug display_run.uuid %}" title="Available when the run finishes">Errors CSV</a>
+        {% else %}
+        {% if display_run.has_csv %}<a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug display_run.uuid %}">Download CSV</a>{% else %}<a class="btn btn-ghost btn-sm is-disabled" id="rtCsv" title="No CSV — run produced no rows">Download CSV</a>{% endif %}
+        {% if display_run.has_requests %}<a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug display_run.uuid %}">Requests CSV</a>{% else %}<a class="btn btn-ghost btn-sm is-disabled" id="rtReq" title="No requests log for this run">Requests CSV</a>{% endif %}
+        {% if display_run.has_errors %}<a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug display_run.uuid %}">Errors CSV</a>{% else %}<a class="btn btn-ghost btn-sm is-disabled" id="rtErr" title="No errors log for this run">Errors CSV</a>{% endif %}
+        {% endif %}
       </div>
     </div>
   </div>
+  {% if active_run %}
   <div class="rt-progress" id="rtProgress" hidden>
     <div class="rt-progress-head">
       <span class="rt-progress-phase" id="rtProgPhase">Starting…</span>
@@ -103,22 +143,27 @@
       <div class="rt-progress-fill" id="rtProgFill"></div>
     </div>
   </div>
-  <div class="term-stage" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
-    <div class="terminal matrix">
+  {% endif %}
+  {% endif %}
+
+  {# Console — always attached: live stream during a run, last-run output when idle #}
+  <div class="term-stage" id="rtConsole" data-maintenance="{{ s.is_maintenance|yesno:'1,0' }}"{% if active_run %} data-events-url="{% url 'run_events' s.slug display_run.uuid %}"{% endif %}>
+    <div class="terminal{% if active_run %} matrix{% endif %}">
       <div class="term-titlebar">
         <span class="term-dots" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
-        <span class="term-title">live log · Run #{{ active_run.short_id }} · {{ s.code }}</span>
-        <span class="term-badge {{ active_run.status }}" id="rtStatus">{{ active_run.get_status_display }}</span>
+        <span class="term-title">{% if active_run %}live log · Run #{{ display_run.short_id }}{% elif display_run %}last run · Run #{{ display_run.short_id }}{% else %}console{% endif %} · {{ s.code }}</span>
+        {% if display_run %}<span class="term-badge {{ display_run.status }}" id="rtStatus">{{ display_run.get_status_display }}</span>{% endif %}
       </div>
       <div class="log-stats-bar">
-        <div class="ls-cell"><span>Status</span><b class="ls-num" id="rtStat">{{ active_run.get_status_display }}</b></div>
-        <div class="ls-cell"><span>Rows</span><b class="ls-dim" id="rtRows">—</b></div>
-        <div class="ls-cell"><span>Size</span><b class="ls-dim" id="rtSize">—</b></div>
-        <div class="ls-cell"><span>Duration</span><b class="ls-dim" id="rtDur">—</b></div>
+        <div class="ls-cell"><span>Status</span><b class="{% if display_run.status == 'success' %}ls-ok{% elif display_run.status == 'failed' %}ls-err{% elif display_run.status == 'partial' or display_run.status == 'stopped' %}ls-dim{% else %}ls-num{% endif %}" id="rtStat">{% if display_run %}{{ display_run.get_status_display }}{% else %}Idle{% endif %}</b></div>
+        <div class="ls-cell"><span>Rows</span><b class="ls-num" id="rtRows">{% if active_run %}—{% elif display_run %}{{ display_run.row_count }}{% else %}—{% endif %}</b></div>
+        <div class="ls-cell"><span>Size</span><b class="ls-dim" id="rtSize">{% if active_run %}—{% elif display_run %}{{ display_run.size_label }}{% else %}—{% endif %}</b></div>
+        <div class="ls-cell"><span>Duration</span><b class="ls-dim" id="rtDur">{% if active_run %}—{% elif display_run %}{{ display_run.duration_label }}{% else %}—{% endif %}</b></div>
       </div>
-      <pre class="term-log console-out" id="consoleOut" aria-live="polite"></pre>
+      <pre class="term-log console-out" id="consoleOut" aria-live="polite">{% if not active_run %}{% if display_run %}{{ display_log }}{% else %}No runs yet. Pick a season year above and start a scrape — its live output will stream here.{% endif %}{% endif %}</pre>
     </div>
   </div>
+  {% if active_run %}
   <script>
   (function () {
     var root = document.getElementById('rtConsole');
@@ -133,7 +178,9 @@
     var csvBtn = document.getElementById('rtCsv');
     var reqBtn = document.getElementById('rtReq');
     var errBtn = document.getElementById('rtErr');
-    var againBtn = document.getElementById('rtAgain');
+    var startBtn = document.getElementById('rtStartBtn');
+    var yearSel = document.getElementById('rtYear');
+    var startNote = document.getElementById('rtStartNote');
     var runMeta = document.getElementById('rtRunMeta');
     var stopForm = document.getElementById('rtStopForm');
     var progWrap = document.getElementById('rtProgress');
@@ -142,6 +189,8 @@
     var progBar = document.getElementById('rtProgBar');
     var progFill = document.getElementById('rtProgFill');
     var url = root.dataset.eventsUrl;
+    if (!url) return;
+    var maintenance = root.dataset.maintenance === '1';
     var last = 0, stopped = false;
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function append(lines) {
@@ -174,11 +223,17 @@
       enableBtn(csvBtn, d.has_csv, 'No CSV — run produced no rows');
       enableBtn(reqBtn, d.has_requests, 'No requests log for this run');
       enableBtn(errBtn, d.has_errors, 'No errors log for this run');
-      enableBtn(againBtn, true, '');
       if (runMeta) runMeta.hidden = true;
       if (stopForm) stopForm.hidden = true;
       if (summary) summary.hidden = false;
       if (progWrap) progWrap.hidden = true;
+      if (maintenance) {
+        if (startNote) startNote.textContent = 'Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.';
+      } else {
+        if (startBtn) startBtn.disabled = false;
+        if (yearSel) yearSel.disabled = false;
+        if (startNote) startNote.textContent = 'The run starts immediately and streams its log in the console below.';
+      }
     }
     function enableBtn(btn, ok, noDataMsg) {
       if (!btn) return;
@@ -224,48 +279,6 @@
     poll();
   })();
   </script>
-  {% else %}
-  <form class="panel rt-form" method="post" action="{% url 'scraper_run' s.slug %}">
-    {% csrf_token %}
-    <div class="panel-pad">
-      <div class="status-head">
-        <div>
-          <div class="status-eyebrow">Real-time test</div>
-          <div class="status-name">Run {{ s.code }} on demand</div>
-        </div>
-        <span class="mode-pill {{ s.mode }}">{{ s.get_mode_display }}</span>
-      </div>
-      <p class="rt-intro">
-        Trigger an on-demand scrape for a full season. Pick the year to mine; the
-        scraper runs as a background process, its log streams live on this page
-        and is saved as it goes, then the CSV and log land in
-        <a href="?tab=calls">Calls history</a>.
-      </p>
-      <div class="rt-grid">
-        <div class="rt-field">
-          <label class="field-label" for="rtYear">Season year</label>
-          <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance %}disabled{% endif %}>
-            {% for y in years %}
-            <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="panel-foot">
-      <span class="status-note">
-        {% if s.is_maintenance %}
-          Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.
-        {% else %}
-          The run starts immediately and streams its log here in real time.
-        {% endif %}
-      </span>
-      <button class="btn btn-primary" type="submit" {% if s.is_maintenance %}disabled{% endif %}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-        Run scrape
-      </button>
-    </div>
-  </form>
   {% endif %}
 
   {% elif tab == 'calls' %}
