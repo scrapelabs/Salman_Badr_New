@@ -98,6 +98,7 @@ The catalogue was deliberately trimmed to a **single** wired scraper — **Billi
 ## User preferences
 
 - Recreate the supplied designs faithfully/pixel-exact rather than improvising.
+- Always push committed changes to the GitHub repo (`scrapelabs/Salman_Badr_New`, branch `main`) automatically after finishing work — do **not** ask each time. Fast-forward push only (never force); if histories ever diverge, stop and ask.
 
 ## Gotchas
 
