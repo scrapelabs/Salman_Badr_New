@@ -13,6 +13,18 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load a local .env (if present) for development on machines without real
+# environment variables, e.g. a Windows checkout. Existing OS environment
+# variables (such as those Replit injects) always take precedence, so this is a
+# no-op in the hosted environment. python-dotenv is optional; skip if absent.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")  # artifacts/permitlify/.env
+    load_dotenv(BASE_DIR.parent.parent / ".env")  # workspace-root .env
+except ImportError:
+    pass
+
 # --- Core -----------------------------------------------------------------
 DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() != "false"
 
@@ -134,11 +146,24 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# --- Cookies (cross-site preview iframe) ----------------------------------
+# --- Cookies --------------------------------------------------------------
 # Sessions are stored in Postgres (django_session table) via the default
-# database session backend. The preview embeds the app in a cross-site iframe,
-# so cookies must be SameSite=None + Secure to be sent at all.
-SESSION_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SECURE = True
-CSRF_COOKIE_SAMESITE = "None"
+# database session backend.
+#
+# On Replit the app is embedded in a cross-site preview iframe, so cookies must
+# be SameSite=None + Secure to be sent at all. But Secure cookies are NEVER sent
+# over plain HTTP, which would break login for a local checkout served at
+# http://localhost:8000. Set DJANGO_LOCAL_HTTP=True (see .env.example) for local
+# HTTP development to fall back to ordinary Lax, non-Secure cookies. The hosted
+# Replit environment leaves this unset and keeps the secure cross-site cookies.
+LOCAL_HTTP = os.environ.get("DJANGO_LOCAL_HTTP", "False").lower() == "true"
+if LOCAL_HTTP:
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SECURE = False
+    CSRF_COOKIE_SAMESITE = "Lax"
+else:
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "None"
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = "None"

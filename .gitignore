@@ -47,3 +47,11 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Python (local / Windows venv dev)
+.venv/
+venv/
+.env
+__pycache__/
+*.py[cod]
+artifacts/permitlify/staticfiles/

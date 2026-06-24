@@ -1,0 +1,10 @@
+# MatchMiner (Django) Python dependencies.
+# Mirrors the [project.dependencies] in pyproject.toml so a plain pip / venv
+# checkout (e.g. local Windows dev via install.bat) can install everything.
+django>=5.2.15
+dj-database-url>=3.1.2
+psycopg2-binary>=2.9.12
+whitenoise>=6.12.0
+gunicorn>=26.0.0
+curl-cffi>=0.15.0
+python-dotenv>=1.0.0

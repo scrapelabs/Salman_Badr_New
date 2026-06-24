@@ -24,7 +24,11 @@ The app runs via the `artifacts/permitlify: web` workflow (do not run `pnpm dev`
 - `python3 manage.py migrate` — apply migrations (creates `auth_user`, `django_session`, etc.)
 - `python3 manage.py createsuperuser` / `manage.py shell` — manage users
 - `python3 manage.py collectstatic --noinput` — gather static files (prod build step)
-- Required env: `DATABASE_URL` (Postgres). Optional: `DJANGO_SECRET_KEY` (falls back to `SESSION_SECRET`), `DJANGO_DEBUG` (default `True`; set `False` in prod).
+- Required env: `DATABASE_URL` (Postgres). Optional: `DJANGO_SECRET_KEY` (falls back to `SESSION_SECRET`), `DJANGO_DEBUG` (default `True`; set `False` in prod), `DJANGO_LOCAL_HTTP` (default `False`; set `True` for local HTTP — see below).
+
+### Local Windows dev (root `.bat` helpers)
+
+For running the app on a local Windows machine, the **workspace root** holds double-click helpers (each uses `%~dp0`, creates/uses a root `.venv`, and `cd`s into `artifacts\permitlify`): `install.bat` (venv + `pip install -r requirements.txt` + copies `.env.example`→`.env`), `run_server.bat` (`runserver 0.0.0.0:8000`), `migrate.bat`, `collectstatic.bat`. `requirements.txt` (root) mirrors `pyproject.toml`'s deps for the pip flow. Config comes from a root `.env` (git-ignored; template is `.env.example`) loaded by `settings.py` via `python-dotenv` (`load_dotenv` of both the artifact dir and workspace root, **non-overriding** so real Replit env vars always win — a no-op when no `.env` exists). **Key gotcha:** the app's session/CSRF cookies are `Secure`+`SameSite=None` for the Replit iframe, and Secure cookies are never sent over plain `http://localhost:8000`, so login would fail locally — set `DJANGO_LOCAL_HTTP=True` (the `.env.example` default) to switch them to non-Secure `Lax`. This var is unset on Replit, so the hosted preview keeps the secure cross-site cookies.
 
 ## Where things live
 
