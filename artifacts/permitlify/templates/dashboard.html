@@ -1,44 +1,29 @@
-{% extends "base.html" %}
+{% extends "app_base.html" %}
 {% block title %}Dashboard · MatchMiner{% endblock %}
-{% block body %}
-<div class="dash-page">
-  <header class="dash-top">
-    <div class="logo">
-      {% include "partials/logo.html" with uid="dash" height=32 %}
-      <span class="dash-name">
-        <span style="color: #1C2F74">Match</span><span style="color: #49C85B">Miner</span>
-      </span>
-    </div>
-    <form method="post" action="{% url 'logout' %}">
-      {% csrf_token %}
-      <button class="logout-btn" type="submit">Log out</button>
-    </form>
-  </header>
+{% block content %}
+<main class="page">
+  <div class="eyebrow">Tennis Intelligence Platform</div>
+  <h1 class="page-title">Welcome back, {{ user.username }}</h1>
+  <p class="page-sub">
+    You're signed in. Your daily AI-scored tennis insights will surface here.
+  </p>
 
-  <main class="dash-main">
-    <div class="eyebrow">Tennis Intelligence Platform</div>
-    <h1 class="dash-title">Welcome back, {{ user.username }}</h1>
-    <p class="dash-sub">
-      You're signed in. Your daily AI-scored tennis insights will surface here.
-    </p>
-
-    <div class="dash-cards">
-      <div class="dash-card">
-        <div class="dash-card-label">Today's insights</div>
-        <div class="dash-card-value">0</div>
-        <div class="dash-card-foot">Fresh signals mined overnight</div>
-      </div>
-      <div class="dash-card">
-        <div class="dash-card-label">Tracked players</div>
-        <div class="dash-card-value">—</div>
-        <div class="dash-card-foot">Add players to start scoring</div>
-      </div>
-      <div class="dash-card">
-        <div class="dash-card-label">Avg. AI score</div>
-        <div class="dash-card-value">—</div>
-        <div class="dash-card-foot">Across your watchlist</div>
-      </div>
+  <div class="dash-cards">
+    <div class="dash-card">
+      <div class="dash-card-label">Today's insights</div>
+      <div class="dash-card-value">0</div>
+      <div class="dash-card-foot">Fresh signals mined overnight</div>
     </div>
-  </main>
-</div>
+    <div class="dash-card">
+      <div class="dash-card-label">Tracked players</div>
+      <div class="dash-card-value">—</div>
+      <div class="dash-card-foot">Add players to start scoring</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-label">Avg. AI score</div>
+      <div class="dash-card-value">—</div>
+      <div class="dash-card-foot">Across your watchlist</div>
+    </div>
+  </div>
+</main>
 {% endblock %}

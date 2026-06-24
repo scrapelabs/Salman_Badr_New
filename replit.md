@@ -31,8 +31,8 @@ The app runs via the `artifacts/permitlify: web` workflow (do not run `pnpm dev`
   - `manage.py` — Django entrypoint.
   - `matchminer/settings.py` — settings (DB, cookies, proxy, static). See "Replit integration" below.
   - `matchminer/urls.py` — root URL conf (includes `accounts`).
-  - `accounts/` — auth app: `views.py` (`login_view`, `dashboard_view` `@login_required`, `logout_view` POST-only), `urls.py`.
-  - `templates/` — `base.html`, `login.html`, `dashboard.html`, `partials/logo.html` (tennis-ball SVG logo, takes a `uid` for unique gradient IDs).
+  - `accounts/` — auth app: `views.py` (`login_view`, plus `@login_required` `dashboard_view` / `scraper_directory_view` / `run_history_view`, and POST-only `logout_view`), `urls.py`.
+  - `templates/` — `base.html` (html shell), `app_base.html` (authenticated layout with the left sidebar; defines a `content` block), `login.html`, `dashboard.html`, `scraper_directory.html`, `run_history.html`, `partials/logo.html` (tennis-ball SVG logo, takes a `uid` for unique gradient IDs). The sidebar marks the active item via `request.resolver_match.url_name`.
   - `static/css/styles.css` — brand tokens (`:root`) + login layout (ported from the old `login.css`/`index.css`) + dashboard styles.
   - `static/favicon.svg` — preserved from the original app.
   - `.replit-artifact/artifact.toml` — repurposes the `web` artifact to run Django (see below).
@@ -56,7 +56,10 @@ Django's built-in auth. Seeded login: username `salman` (the password was set ou
 
 - **Login** (`/`) — two-column page: dark sales/marketing panel left (headline with blue→green gradient, proof cards, trust badges), white sign-in form right (username/password). MatchMiner-branded (tennis-ball logo, wordmark, domain). Complete.
   - Caveat: the left-panel sales copy and proof cards are still permit-themed from the original concept (faithful port). Rewrite for tennis when updating body content.
-- **Dashboard** (`/dashboard/`) — placeholder behind login; greets the user and offers logout.
+- **Authenticated app** — pages behind login share `app_base.html`, which renders a left **sidebar**: brand, nav (Dashboard → Scraper Directory → Run History), and a footer with the user + logout.
+  - **Dashboard** (`/dashboard/`) — greets the user; three stat cards (placeholder values).
+  - **Scraper Directory** (`/scraper-directory/`) — placeholder; will list scraper endpoints (see `attached_assets/Image20260624020035_*.png` reference).
+  - **Run History** (`/run-history/`) — placeholder; will show per-run status/source/size/duration.
 
 ## Legacy / cleanup
 

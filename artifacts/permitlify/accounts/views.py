@@ -26,6 +26,16 @@ def dashboard_view(request):
     return render(request, "dashboard.html")
 
 
+@login_required
+def scraper_directory_view(request):
+    return render(request, "scraper_directory.html")
+
+
+@login_required
+def run_history_view(request):
+    return render(request, "run_history.html")
+
+
 @require_http_methods(["POST"])
 def logout_view(request):
     logout(request)
