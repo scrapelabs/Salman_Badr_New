@@ -199,14 +199,26 @@
   {% endif %}
 
   {% elif tab == 'calls' %}
+  <form id="bulkDeleteForm" method="post" action="{% url 'runs_bulk_delete' s.slug %}"
+        onsubmit="return confirm('Delete the selected run(s)? Their log and CSV files will be permanently removed.');">
+    {% csrf_token %}
+    <input type="hidden" name="page" value="{{ page_obj.number }}" />
+  </form>
   <div class="calls-head">
     <h2 class="section-title">Calls history</h2>
     <span class="calls-count">{{ run_total }} run{{ run_total|pluralize }}</span>
   </div>
+  {% if page_obj %}
+  <div class="calls-toolbar">
+    <span class="calls-sel-count"><strong id="selCount">0</strong> selected</span>
+    <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="bulkDelBtn" disabled>Delete selected</button>
+  </div>
+  {% endif %}
   <div class="tablewrap">
     <table class="tbl runs-tbl">
       <thead>
         <tr>
+          <th class="th-check"><input type="checkbox" id="selAll" aria-label="Select all runs on this page" /></th>
           <th>Run</th>
           <th>Started</th>
           <th>Tournament</th>
@@ -221,6 +233,7 @@
       <tbody>
         {% for run in page_obj %}
         <tr>
+          <td class="td-check">{% if not run.is_running %}<input type="checkbox" class="run-check" name="run_uuids" value="{{ run.uuid }}" form="bulkDeleteForm" aria-label="Select run #{{ run.short_id }}" />{% endif %}</td>
           <td><span class="run-id">#{{ run.short_id }}</span></td>
           <td class="nowrap">{{ run.started_at|date:"M j, Y · H:i" }}</td>
           <td>{{ run.tournament }}</td>
@@ -256,12 +269,37 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
+        <tr><td colspan="10" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% include "partials/pagination.html" with page_obj=page_obj base_query="tab=calls&" %}
+  <script>
+  (function () {
+    var selAll = document.getElementById('selAll');
+    var btn = document.getElementById('bulkDelBtn');
+    var countEl = document.getElementById('selCount');
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.run-check'));
+    if (!boxes.length) { if (selAll) selAll.disabled = true; return; }
+    function update() {
+      var n = 0;
+      boxes.forEach(function (b) { if (b.checked) n++; });
+      if (countEl) countEl.textContent = n;
+      if (btn) btn.disabled = n === 0;
+      if (selAll) {
+        selAll.checked = n === boxes.length;
+        selAll.indeterminate = n > 0 && n < boxes.length;
+      }
+    }
+    if (selAll) selAll.addEventListener('change', function () {
+      boxes.forEach(function (b) { b.checked = selAll.checked; });
+      update();
+    });
+    boxes.forEach(function (b) { b.addEventListener('change', update); });
+    update();
+  })();
+  </script>
 
   {% elif tab == 'status' %}
   <form class="panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=status">

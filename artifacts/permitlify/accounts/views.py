@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import uuid
 from datetime import date
 
 from django.conf import settings
@@ -357,6 +358,44 @@ def run_delete_view(request, slug, run_uuid):
     short = run.short_id
     run.delete()
     messages.success(request, f"Run #{short} and its files were deleted.")
+    return redirect(back)
+
+
+@login_required
+@require_http_methods(["POST"])
+def runs_bulk_delete_view(request, slug):
+    """Bulk-delete the selected runs (their log lines + CSVs go with them)."""
+    s = get_object_or_404(Scraper, slug=slug)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=calls"
+    page = (request.POST.get("page") or "").strip()
+    if page.isdigit():
+        back = f"{back}&page={page}"
+
+    valid = []
+    for raw in request.POST.getlist("run_uuids"):
+        try:
+            valid.append(uuid.UUID(str(raw)))
+        except (ValueError, TypeError, AttributeError):
+            continue
+
+    if not valid:
+        messages.error(request, "Select at least one run to delete.")
+        return redirect(back)
+
+    qs = Run.objects.filter(scraper=s, uuid__in=valid).exclude(
+        status=Run.Status.RUNNING
+    )
+    deleted = qs.count()
+    qs.delete()
+    if deleted:
+        messages.success(
+            request,
+            f"Deleted {deleted} run{'' if deleted == 1 else 's'} and their files.",
+        )
+    else:
+        messages.error(
+            request, "Nothing was deleted — the selected runs may be in progress."
+        )
     return redirect(back)
 
 

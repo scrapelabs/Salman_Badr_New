@@ -39,6 +39,11 @@ urlpatterns = [
         name="run_delete",
     ),
     path(
+        "scrapers/<slug:slug>/runs/bulk-delete/",
+        views.runs_bulk_delete_view,
+        name="runs_bulk_delete",
+    ),
+    path(
         "scrapers/<slug:slug>/runs/<uuid:run_uuid>/events/",
         views.run_events_view,
         name="run_events",
