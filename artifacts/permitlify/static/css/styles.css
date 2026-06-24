@@ -1574,6 +1574,58 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
   animation: term-pulse 1.1s ease-in-out infinite;
 }
 
+/* live progress bar */
+.rt-progress {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  box-shadow: var(--app-elev);
+}
+.rt-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+.rt-progress-phase {
+  font-size: 10.4px;
+  font-weight: 700;
+  color: var(--app-text);
+  letter-spacing: 0.01em;
+}
+.rt-progress-count {
+  font-size: 10.4px;
+  font-weight: 600;
+  color: var(--app-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.rt-progress-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--app-accent-bg);
+  overflow: hidden;
+}
+.rt-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--app-accent);
+  transition: width 0.4s ease;
+}
+.rt-progress-track.is-indeterminate .rt-progress-fill {
+  width: 40%;
+  transition: none;
+  animation: rt-prog-slide 1.2s ease-in-out infinite;
+}
+@keyframes rt-prog-slide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
 /* live console specifics */
 .console-out:empty::before {
   content: "Waiting for the first log line…";

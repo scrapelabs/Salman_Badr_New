@@ -165,6 +165,8 @@ class Run(models.Model):
     pid = models.PositiveIntegerField(null=True, blank=True)
     duration_ms = models.PositiveIntegerField(default=0)
     row_count = models.PositiveIntegerField(default=0)
+    progress_done = models.PositiveIntegerField(default=0)
+    progress_total = models.PositiveIntegerField(default=0)
     output_size_bytes = models.PositiveIntegerField(default=0)
     log_text = models.TextField(blank=True)
     csv_data = models.TextField(blank=True)
@@ -216,6 +218,12 @@ class Run(models.Model):
         if kb < 1024:
             return f"{kb:.1f} KB"
         return f"{kb / 1024:.1f} MB"
+
+    @property
+    def progress_percent(self):
+        if self.progress_total:
+            return min(100, round(self.progress_done / self.progress_total * 100))
+        return 0
 
     @property
     def has_csv(self):

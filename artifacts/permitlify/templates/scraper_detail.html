@@ -83,6 +83,15 @@
       </button>
     </form>
   </div>
+  <div class="rt-progress" id="rtProgress" hidden>
+    <div class="rt-progress-head">
+      <span class="rt-progress-phase" id="rtProgPhase">Starting…</span>
+      <span class="rt-progress-count" id="rtProgCount"></span>
+    </div>
+    <div class="rt-progress-track" id="rtProgBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="rt-progress-fill" id="rtProgFill"></div>
+    </div>
+  </div>
   <div class="term-stage" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
     <div class="terminal matrix">
       <div class="term-titlebar">
@@ -126,6 +135,11 @@
     var reqBtn = document.getElementById('rtReq');
     var errBtn = document.getElementById('rtErr');
     var runbar = document.getElementById('rtRunbar');
+    var progWrap = document.getElementById('rtProgress');
+    var progPhase = document.getElementById('rtProgPhase');
+    var progCount = document.getElementById('rtProgCount');
+    var progBar = document.getElementById('rtProgBar');
+    var progFill = document.getElementById('rtProgFill');
     var url = root.dataset.eventsUrl;
     var last = 0, stopped = false;
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -160,7 +174,26 @@
       if (!d.has_requests && reqBtn) { reqBtn.classList.add('is-disabled'); reqBtn.removeAttribute('href'); reqBtn.title = 'No requests log for this run'; }
       if (!d.has_errors && errBtn) { errBtn.classList.add('is-disabled'); errBtn.removeAttribute('href'); errBtn.title = 'No errors log for this run'; }
       if (runbar) runbar.hidden = true;
+      if (progWrap) progWrap.hidden = true;
       foot.hidden = false;
+    }
+    function updateProgress(d) {
+      if (!progWrap || d.done) return;
+      progWrap.hidden = false;
+      if (d.progress_total > 0) {
+        progBar.classList.remove('is-indeterminate');
+        var pct = d.progress_percent;
+        progFill.style.width = pct + '%';
+        progBar.setAttribute('aria-valuenow', pct);
+        progPhase.textContent = 'Scraping ties';
+        progCount.textContent = d.progress_done + ' / ' + d.progress_total + ' ties · ' + pct + '%';
+      } else {
+        progBar.classList.add('is-indeterminate');
+        progFill.style.width = '';
+        progBar.setAttribute('aria-valuenow', 0);
+        progPhase.textContent = 'Discovering ties…';
+        progCount.textContent = '';
+      }
     }
     function poll() {
       if (stopped) return;
@@ -168,6 +201,7 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           append(d.lines);
+          updateProgress(d);
           if (d.done) { finish(d); } else { setTimeout(poll, 1000); }
         })
         .catch(function () { setTimeout(poll, 2000); });

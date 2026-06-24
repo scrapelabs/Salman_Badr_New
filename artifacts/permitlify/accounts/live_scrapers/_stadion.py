@@ -34,6 +34,7 @@ from datetime import datetime
 from typing import Callable
 
 from curl_cffi import requests as cffi_requests
+from django.db.models import F
 from django.utils import timezone
 
 from accounts.models import Run
@@ -449,6 +450,7 @@ def run(config, run_obj, log):
         log("INFO", f"\U0001f50e {year}: {len(ties) - before} ties discovered")
 
     total = len(ties)
+    Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
     log(
         "INFO",
         f"\U0001f4cb {total} tie(s) discovered total "
@@ -465,12 +467,12 @@ def run(config, run_obj, log):
 
     def process_tie(item):
         tie_id, tie_date = item
+        with lock:
+            counter["done"] += 1
+            done = counter["done"]
         try:
             tc_link = f"{API}/custom/tieCentre/{tie_id}"
             tie_centre = _get_json(tc_link, log, tele, proxies)
-            with lock:
-                counter["done"] += 1
-                done = counter["done"]
             if not tie_centre:
                 log(
                     "INFO",
@@ -516,6 +518,10 @@ def run(config, run_obj, log):
                     f"\u26a0\ufe0f [tie] {tie_id} failed: "
                     f"{exc.__class__.__name__}: {exc}"
                 ),
+            )
+        finally:
+            Run.objects.filter(pk=run_obj.pk).update(
+                progress_done=F("progress_done") + 1
             )
 
     if ties:
