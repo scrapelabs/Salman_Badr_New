@@ -246,20 +246,35 @@
           <td class="num nowrap">{{ run.duration_label }}</td>
           <td class="td-actions run-actions">
             <a class="run-act" href="{% url 'run_log' s.slug run.uuid %}" target="_blank" rel="noopener" title="Open log in a new tab">
+              <svg class="ic-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               Open log
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
             </a>
-            <a class="run-act" href="{% url 'run_log_download' s.slug run.uuid %}" title="Download log (.txt)">Log</a>
+            <a class="run-act" href="{% url 'run_log_download' s.slug run.uuid %}" title="Download log">
+              <svg class="ic-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+              Log
+            </a>
             {% if run.has_csv %}
-            <a class="run-act" href="{% url 'run_csv_download' s.slug run.uuid %}" title="Download CSV">CSV</a>
+            <a class="run-act" href="{% url 'run_csv_download' s.slug run.uuid %}" title="Download CSV">
+              <svg class="ic-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+              CSV
+            </a>
             {% else %}
-            <span class="run-act is-disabled" title="No CSV — run failed">CSV</span>
+            <span class="run-act is-disabled" title="No CSV — run failed">
+              <svg class="ic-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+              CSV
+            </span>
             {% endif %}
             {% if run.has_requests %}
-            <a class="run-act" href="{% url 'run_requests_download' s.slug run.uuid %}" title="Download requests CSV">Requests</a>
+            <a class="run-act" href="{% url 'run_requests_download' s.slug run.uuid %}" title="Download requests CSV">
+              <svg class="ic-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+              Requests
+            </a>
             {% endif %}
             {% if run.has_errors %}
-            <a class="run-act" href="{% url 'run_errors_download' s.slug run.uuid %}" title="Download errors CSV">Errors</a>
+            <a class="run-act" href="{% url 'run_errors_download' s.slug run.uuid %}" title="Download errors CSV">
+              <svg class="ic-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+              Errors
+            </a>
             {% endif %}
             {% if not run.is_running %}
             <form class="run-del-form" method="post" action="{% url 'run_delete' s.slug run.uuid %}" onsubmit="return confirm('Delete run #{{ run.short_id }}? Its log and CSV files will be permanently removed.');">
