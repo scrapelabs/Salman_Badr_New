@@ -70,18 +70,29 @@
     <a href="?tab=calls">Calls history</a>.
   </p>
   <div class="rt-runbar" id="rtRunbar">
-    <span class="rt-run-meta">
+    <span class="rt-run-meta" id="rtRunMeta">
       <span class="rt-live-dot" aria-hidden="true"></span>
       Live · Run #{{ active_run.short_id }}{% if active_run.pid %} · PID {{ active_run.pid }}{% endif %}
     </span>
-    <form method="post" action="{% url 'run_stop' s.slug active_run.uuid %}"
-          onsubmit="return confirm('Force-stop this run? The worker process will be killed immediately.');">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-danger btn-sm" id="rtStopBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-        Stop run
-      </button>
-    </form>
+    <span class="rt-summary" id="rtSummary" hidden></span>
+    <div class="rt-runbar-actions">
+      <form method="post" action="{% url 'run_stop' s.slug active_run.uuid %}" id="rtStopForm"
+            onsubmit="return confirm('Force-stop this run? The worker process will be killed immediately.');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-sm" id="rtStopBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          Stop run
+        </button>
+      </form>
+      <div class="rt-foot-actions" id="rtFoot" hidden>
+        <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
+        <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
+        <a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug active_run.uuid %}">Requests CSV</a>
+        <a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug active_run.uuid %}">Errors CSV</a>
+        <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
+      </div>
+    </div>
   </div>
   <div class="rt-progress" id="rtProgress" hidden>
     <div class="rt-progress-head">
@@ -108,17 +119,6 @@
       <pre class="term-log console-out" id="consoleOut" aria-live="polite"></pre>
     </div>
   </div>
-  <div class="term-actions" id="rtFoot" hidden>
-    <span class="rt-summary" id="rtSummary"></span>
-    <div class="rt-foot-actions">
-      <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
-      <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
-      <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
-      <a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug active_run.uuid %}">Requests CSV</a>
-      <a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug active_run.uuid %}">Errors CSV</a>
-      <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
-    </div>
-  </div>
   <script>
   (function () {
     var root = document.getElementById('rtConsole');
@@ -134,7 +134,8 @@
     var csvBtn = document.getElementById('rtCsv');
     var reqBtn = document.getElementById('rtReq');
     var errBtn = document.getElementById('rtErr');
-    var runbar = document.getElementById('rtRunbar');
+    var runMeta = document.getElementById('rtRunMeta');
+    var stopForm = document.getElementById('rtStopForm');
     var progWrap = document.getElementById('rtProgress');
     var progPhase = document.getElementById('rtProgPhase');
     var progCount = document.getElementById('rtProgCount');
@@ -173,7 +174,9 @@
       if (!d.has_csv && csvBtn) { csvBtn.classList.add('is-disabled'); csvBtn.removeAttribute('href'); csvBtn.title = 'No CSV — run produced no rows'; }
       if (!d.has_requests && reqBtn) { reqBtn.classList.add('is-disabled'); reqBtn.removeAttribute('href'); reqBtn.title = 'No requests log for this run'; }
       if (!d.has_errors && errBtn) { errBtn.classList.add('is-disabled'); errBtn.removeAttribute('href'); errBtn.title = 'No errors log for this run'; }
-      if (runbar) runbar.hidden = true;
+      if (runMeta) runMeta.hidden = true;
+      if (stopForm) stopForm.hidden = true;
+      if (summary) summary.hidden = false;
       if (progWrap) progWrap.hidden = true;
       foot.hidden = false;
     }
