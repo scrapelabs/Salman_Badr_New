@@ -32,30 +32,6 @@
           <span class="nav-label">Proxies</span>
           <span class="nav-count">{{ counts.proxies }}</span>
         </a>
-        <a href="{% url 'apis' %}" class="nav-item {% if active_nav == 'apis' %}active{% endif %}" {% if active_nav == 'apis' %}aria-current="page"{% endif %}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg>
-          <span class="nav-label">APIs</span>
-          <span class="nav-count">{{ counts.apis }}</span>
-        </a>
-        <div class="nav-sub">
-          <a href="{% url 'apis_logs' %}" class="nav-item nav-subitem {% if active_nav == 'apis_logs' %}active{% endif %}" {% if active_nav == 'apis_logs' %}aria-current="page"{% endif %}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h5"/></svg>
-            <span class="nav-label">PDFs &amp; logs</span>
-            <span class="nav-count">{{ counts.logs }}</span>
-          </a>
-        </div>
-      </div>
-
-      <div class="nav-group">
-        <div class="nav-group-label">Portals</div>
-        <a href="{% url 'requirements' %}" class="nav-item {% if active_nav == 'requirements' %}active{% endif %}" {% if active_nav == 'requirements' %}aria-current="page"{% endif %}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 13l2 2 4-4"/></svg>
-          <span class="nav-label">Requirements</span>
-        </a>
-        <a href="{% url 'companies' %}" class="nav-item {% if active_nav == 'companies' %}active{% endif %}" {% if active_nav == 'companies' %}aria-current="page"{% endif %}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M10 21v-4h4v4"/></svg>
-          <span class="nav-label">Companies</span>
-        </a>
       </div>
 
       <div class="nav-group">
