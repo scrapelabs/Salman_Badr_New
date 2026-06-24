@@ -23,22 +23,59 @@
     <p class="h-sub">Full execution log for this run. {{ line_total }} line{{ line_total|pluralize }} total.</p>
   </div>
 
-  <div class="logmeta">
-    <span class="logchip"><b>Status</b><span class="run-status {{ run.status }}">{{ run.get_status_display }}</span></span>
-    <span class="logchip"><b>Started</b>{{ run.started_at|date:"M j, Y · H:i" }}</span>
-    <span class="logchip"><b>Tournament</b>{{ run.tournament }}</span>
-    <span class="logchip"><b>Window</b>{% if run.date_from %}{{ run.date_from|date:"Y-m-d" }} → {{ run.date_to|date:"Y-m-d" }}{% else %}full history{% endif %}</span>
-    <span class="logchip"><b>Rows</b>{{ run.row_count }}</span>
-    <span class="logchip"><b>Size</b>{{ run.size_label }}</span>
-    <span class="logchip"><b>Duration</b>{{ run.duration_label }}</span>
-    {% if run.launched_by %}<span class="logchip"><b>By</b>{{ run.launched_by.username }}</span>{% endif %}
-  </div>
+  <div class="term-stage">
+    <div class="terminal">
+      <div class="term-titlebar">
+        <span class="term-dots" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+        <span class="term-title">full log · {{ run.size_label }}</span>
+        <span class="term-badge {{ run.status }}">{{ run.get_status_display }}</span>
+      </div>
 
-  <div class="logwrap">
-    <ol class="loglines" start="{{ page_obj.start_index }}">
-      {% for line in page_obj %}<li><span class="logline">{{ line }}</span></li>{% endfor %}
-    </ol>
+      <div class="log-stats-bar">
+        <div class="ls-cell">
+          <span>Status</span>
+          <b class="{% if run.status == 'success' %}ls-ok{% elif run.status == 'failed' %}ls-err{% elif run.status == 'partial' %}ls-dim{% else %}ls-num{% endif %}">{{ run.get_status_display }}</b>
+        </div>
+        <div class="ls-cell"><span>Tournament</span><b>{{ run.tournament }}</b></div>
+        <div class="ls-cell"><span>Window</span><b class="ls-dim">{% if run.date_from %}{{ run.date_from|date:"Y-m-d" }} → {{ run.date_to|date:"Y-m-d" }}{% else %}full history{% endif %}</b></div>
+        <div class="ls-cell"><span>Rows</span><b class="ls-num">{{ run.row_count }}</b></div>
+        <div class="ls-cell"><span>Size</span><b class="ls-dim">{{ run.size_label }}</b></div>
+        <div class="ls-cell"><span>Duration</span><b class="ls-num">{{ run.duration_label }}</b></div>
+        {% if run.launched_by %}<div class="ls-cell"><span>By</span><b class="ls-dim">{{ run.launched_by.username }}</b></div>{% endif %}
+      </div>
+
+      <ol class="term-log term-log--num" id="fullLog" start="{{ page_obj.start_index }}">
+        {% for line in page_obj %}<li class="logline">{{ line }}</li>{% endfor %}
+      </ol>
+    </div>
   </div>
   {% include "partials/pagination.html" with page_obj=page_obj base_query="" %}
 </div>
+
+<script>
+  (function () {
+    var root = document.getElementById('fullLog');
+    if (!root) return;
+    var items = root.children;
+    for (var i = 0; i < items.length; i++) {
+      var li = items[i];
+      var t = (li.textContent || '').trim();
+      var cls = '';
+      if (t === '') {
+        cls = '';
+      } else if (/^[─━=*.\-\s]{8,}$/.test(t)) {
+        cls = 'lc-dim';
+      } else if (/traceback \(most recent call last\)|^(error|exception|fatal)\b|: ?error|\[error\]|\btraceback\b|\bfailed\b/i.test(t)) {
+        cls = 'lc-err';
+      } else if (/\bwarn(ing)?\b|\[warn\]/i.test(t)) {
+        cls = 'lc-warn';
+      } else if (/✓|✔|\bdone\b|\bsucceeded\b|\bsuccess\b|\bcompleted?\b|\bok\b/i.test(t)) {
+        cls = 'lc-ok';
+      } else if (/(Cup|MatchMiner)\b/.test(t) && /^[A-Za-z][A-Za-z0-9 ·\-]*$/.test(t) || /^=+$/.test(t) || /^[A-Z0-9 ·\-]{8,}$/.test(t)) {
+        cls = 'lc-banner';
+      }
+      if (cls) li.className = 'logline ' + cls;
+    }
+  })();
+</script>
 {% endblock %}

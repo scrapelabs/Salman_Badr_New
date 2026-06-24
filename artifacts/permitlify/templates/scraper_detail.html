@@ -60,35 +60,37 @@
 
   {% if tab == 'real-time' %}
   {% if active_run %}
-  <div class="panel rt-console" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
-    <div class="panel-pad">
-      <div class="status-head">
-        <div>
-          <div class="status-eyebrow">Real-time test · live</div>
-          <div class="status-name">Run #{{ active_run.short_id }} on {{ s.code }}</div>
-        </div>
-        <span class="run-status {{ active_run.status }}" id="rtStatus">
-          <span class="rt-spin" id="rtSpin" aria-hidden="true"></span>{{ active_run.get_status_display }}
-        </span>
+  <p class="rt-console-intro">
+    The scraper is running as a background process. This log streams live and is
+    saved as it goes — reload the page or open it elsewhere and you’ll see the
+    same output. When it finishes, the CSV and log are added to
+    <a href="?tab=calls">Calls history</a>.
+  </p>
+  <div class="term-stage" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
+    <div class="terminal">
+      <div class="term-titlebar">
+        <span class="term-dots" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+        <span class="term-title">live log · Run #{{ active_run.short_id }} · {{ s.code }}</span>
+        <span class="term-badge {{ active_run.status }}" id="rtStatus">{{ active_run.get_status_display }}</span>
       </div>
-      <p class="rt-intro">
-        The scraper is running as a background process. This log streams live and
-        is saved as it goes — reload the page or open it elsewhere and you’ll see
-        the same output. When it finishes, the CSV and log are added to
-        <a href="?tab=calls">Calls history</a>.
-      </p>
-      <pre class="console-out" id="consoleOut" aria-live="polite"></pre>
+      <div class="log-stats-bar">
+        <div class="ls-cell"><span>Status</span><b class="ls-num" id="rtStat">{{ active_run.get_status_display }}</b></div>
+        <div class="ls-cell"><span>Rows</span><b class="ls-dim" id="rtRows">—</b></div>
+        <div class="ls-cell"><span>Size</span><b class="ls-dim" id="rtSize">—</b></div>
+        <div class="ls-cell"><span>Duration</span><b class="ls-dim" id="rtDur">—</b></div>
+      </div>
+      <pre class="term-log console-out" id="consoleOut" aria-live="polite"></pre>
     </div>
-    <div class="panel-foot rt-foot" id="rtFoot" hidden>
-      <span class="status-note" id="rtSummary"></span>
-      <div class="rt-foot-actions">
-        <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
-        <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
-        <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
-        <a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug active_run.uuid %}">Requests CSV</a>
-        <a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug active_run.uuid %}">Errors CSV</a>
-        <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
-      </div>
+  </div>
+  <div class="term-actions" id="rtFoot" hidden>
+    <span class="rt-summary" id="rtSummary"></span>
+    <div class="rt-foot-actions">
+      <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
+      <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
+      <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
+      <a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug active_run.uuid %}">Requests CSV</a>
+      <a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug active_run.uuid %}">Errors CSV</a>
+      <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
     </div>
   </div>
   <script>
@@ -99,6 +101,10 @@
     var statusEl = document.getElementById('rtStatus');
     var foot = document.getElementById('rtFoot');
     var summary = document.getElementById('rtSummary');
+    var statCell = document.getElementById('rtStat');
+    var rowsCell = document.getElementById('rtRows');
+    var sizeCell = document.getElementById('rtSize');
+    var durCell = document.getElementById('rtDur');
     var csvBtn = document.getElementById('rtCsv');
     var reqBtn = document.getElementById('rtReq');
     var errBtn = document.getElementById('rtErr');
@@ -118,10 +124,17 @@
     }
     function finish(d) {
       stopped = true;
-      var spin = document.getElementById('rtSpin');
-      if (spin) spin.remove();
-      statusEl.className = 'run-status ' + d.status;
+      statusEl.className = 'term-badge ' + d.status;
       statusEl.textContent = d.status_display;
+      var statClass = d.status === 'success' ? 'ls-ok' : (d.status === 'failed' ? 'ls-err' : (d.status === 'partial' ? 'ls-dim' : 'ls-num'));
+      statCell.className = statClass;
+      statCell.textContent = d.status_display;
+      rowsCell.className = 'ls-num';
+      rowsCell.textContent = d.row_count;
+      sizeCell.className = 'ls-dim';
+      sizeCell.textContent = d.size_label;
+      durCell.className = 'ls-num';
+      durCell.textContent = d.duration_label;
       summary.textContent = d.row_count + ' row' + (d.row_count === 1 ? '' : 's') + ' · ' + d.size_label + ' · ' + d.duration_label;
       if (!d.has_csv && csvBtn) { csvBtn.classList.add('is-disabled'); csvBtn.removeAttribute('href'); csvBtn.title = 'No CSV — run produced no rows'; }
       if (!d.has_requests && reqBtn) { reqBtn.classList.add('is-disabled'); reqBtn.removeAttribute('href'); reqBtn.title = 'No requests log for this run'; }
