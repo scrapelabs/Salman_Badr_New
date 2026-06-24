@@ -1,5 +1,8 @@
+import os
+import signal
 import subprocess
 import sys
+import time
 import uuid
 from datetime import date, timezone as dt_timezone
 
@@ -59,20 +62,31 @@ def _scrapers_annotated():
 
 
 def _launch_run(run):
-    """Spawn the run as a detached ``manage.py run_scrape <uuid>`` subprocess."""
-    subprocess.Popen(
+    """Spawn the run as a detached ``manage.py run_scrape <uuid>`` subprocess.
+
+    ``start_new_session`` makes the child its own process-group leader; we persist
+    its PID on the Run so the real-time Stop button can force-kill the whole group.
+    """
+    proc = subprocess.Popen(
         [sys.executable, "manage.py", "run_scrape", str(run.uuid)],
         cwd=str(settings.BASE_DIR),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
+    run.pid = proc.pid
+    run.save(update_fields=["pid"])
 
 
 def _reap_stale_runs(scraper):
-    """Fail runs stuck in RUNNING past the max duration (e.g. the worker died)."""
+    """Fail runs stuck in RUNNING past the max duration (e.g. the worker died).
+
+    Also force-kills any surviving worker process group so a stuck worker can't
+    keep running — or resurface its status — after we release the RUNNING lock.
+    """
     cutoff = timezone.now() - STALE_RUNNING_AFTER
     for run in scraper.runs.filter(status=Run.Status.RUNNING, started_at__lt=cutoff):
+        _terminate_run_worker(run, settle=0)
         run.status = Run.Status.FAILED
         run.finished_at = timezone.now()
         run.duration_ms = run.duration_ms or int(
@@ -243,6 +257,90 @@ def scraper_run_view(request, slug):
     messages.success(
         request, f"Run #{run.short_id} started — streaming the live log below."
     )
+    return redirect(back)
+
+
+def _terminate_run_worker(run, settle=0.2):
+    """Force-kill a run's worker process group, then best-effort reap the zombie.
+
+    Returns True when the worker was killed or was already gone, False only when a
+    live process could not be signalled (e.g. EPERM / no PID). ``ProcessLookupError``
+    counts as success: the worker is already dead. ``settle`` is how long to wait
+    after the SIGKILL before reaping — the process needs a beat to die before
+    ``waitpid`` can collect it; pass 0 from hot paths that must not block.
+    """
+    pid = run.pid
+    if not pid:
+        return False
+    killed = True
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # already gone — treat as killed
+    except PermissionError:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            killed = False
+    except OSError:
+        killed = False
+    if settle:
+        time.sleep(settle)
+    # Best-effort reap so we don't leave a zombie when this process is the worker's
+    # parent (dev runserver / same gunicorn worker). ChildProcessError means it
+    # isn't our child — its owner reaps it on its next subprocess launch.
+    try:
+        os.waitpid(pid, os.WNOHANG)
+    except (ChildProcessError, OSError):
+        pass
+    return killed
+
+
+@login_required
+@require_http_methods(["POST"])
+def stop_run_view(request, slug, run_uuid):
+    """Force-stop an in-flight run: kill its worker PID and mark it STOPPED."""
+    run = _get_run(slug, run_uuid)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+
+    if run.status != Run.Status.RUNNING:
+        messages.info(request, "That run is no longer in progress.")
+        return redirect(back)
+
+    # SIGKILL + reap the worker before we touch the row, so its own final save
+    # can't race past our STOPPED write.
+    killed = _terminate_run_worker(run)
+    run.refresh_from_db()
+
+    if run.status != Run.Status.RUNNING:
+        # The worker finalised itself in the meantime (rare race) — keep its result.
+        messages.info(request, f"Run #{run.short_id} had already finished.")
+        return redirect(back)
+
+    if not killed:
+        # Couldn't signal a live worker (no PID / EPERM). Don't fake a STOPPED state
+        # — the worker is still going and would overwrite us. Let it finish or the
+        # stale-run reaper clean it up.
+        messages.error(
+            request,
+            "Couldn't stop the run — the worker didn't respond. It will be "
+            "cleaned up automatically if it gets stuck.",
+        )
+        return redirect(back)
+
+    run.status = Run.Status.STOPPED
+    run.finished_at = timezone.now()
+    if run.started_at:
+        run.duration_ms = int(
+            (run.finished_at - run.started_at).total_seconds() * 1000
+        )
+    lines = list(run.log_lines.order_by("seq").values_list("text", flat=True))
+    lines.append("[stopped] Run force-stopped by user — worker process killed.")
+    run.log_text = "\n".join(lines) + "\n"
+    run.save(update_fields=["status", "finished_at", "duration_ms", "log_text"])
+    messages.success(request, f"Run #{run.short_id} stopped.")
     return redirect(back)
 
 

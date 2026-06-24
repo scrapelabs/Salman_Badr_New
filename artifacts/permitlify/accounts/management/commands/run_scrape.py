@@ -12,6 +12,7 @@ There is no simulated/demo data: a scraper either has a real implementation in
 honestly with a clear message — it never fabricates rows.
 """
 
+import os
 import threading
 import time
 import traceback
@@ -76,7 +77,8 @@ class Command(BaseCommand):
 
         run.started_at = timezone.now()
         run.status = Run.Status.RUNNING
-        run.save(update_fields=["started_at", "status"])
+        run.pid = os.getpid()
+        run.save(update_fields=["started_at", "status", "pid"])
 
         log = _RunLogger(run)
         t0 = time.time()
@@ -129,4 +131,19 @@ class Command(BaseCommand):
         run.duration_ms = int((time.time() - t0) * 1000)
         run.finished_at = timezone.now()
         run.log_text = log.full_text()
-        run.save()
+        # Explicit fields so a late finish can never clobber pid / started_at — and,
+        # critically, can't silently undo a STOPPED/FAILED status set elsewhere when
+        # this worker survived (it normally won't: the Stop path SIGKILLs it first).
+        run.save(
+            update_fields=[
+                "status",
+                "row_count",
+                "csv_data",
+                "requests_csv",
+                "errors_csv",
+                "output_size_bytes",
+                "duration_ms",
+                "finished_at",
+                "log_text",
+            ]
+        )

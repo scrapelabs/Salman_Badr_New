@@ -116,6 +116,7 @@ class Run(models.Model):
         PARTIAL = "partial", "Partial"
         FAILED = "failed", "Failed"
         RUNNING = "running", "Running"
+        STOPPED = "stopped", "Stopped"
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     scraper = models.ForeignKey(
@@ -136,6 +137,7 @@ class Run(models.Model):
     )
     started_at = models.DateTimeField(default=timezone.now)
     finished_at = models.DateTimeField(null=True, blank=True)
+    pid = models.PositiveIntegerField(null=True, blank=True)
     duration_ms = models.PositiveIntegerField(default=0)
     row_count = models.PositiveIntegerField(default=0)
     output_size_bytes = models.PositiveIntegerField(default=0)

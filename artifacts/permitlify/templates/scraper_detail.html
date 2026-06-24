@@ -66,6 +66,20 @@
     same output. When it finishes, the CSV and log are added to
     <a href="?tab=calls">Calls history</a>.
   </p>
+  <div class="rt-runbar" id="rtRunbar">
+    <span class="rt-run-meta">
+      <span class="rt-live-dot" aria-hidden="true"></span>
+      Live · Run #{{ active_run.short_id }}{% if active_run.pid %} · PID {{ active_run.pid }}{% endif %}
+    </span>
+    <form method="post" action="{% url 'run_stop' s.slug active_run.uuid %}"
+          onsubmit="return confirm('Force-stop this run? The worker process will be killed immediately.');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger btn-sm" id="rtStopBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        Stop run
+      </button>
+    </form>
+  </div>
   <div class="term-stage" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
     <div class="terminal matrix">
       <div class="term-titlebar">
@@ -108,6 +122,7 @@
     var csvBtn = document.getElementById('rtCsv');
     var reqBtn = document.getElementById('rtReq');
     var errBtn = document.getElementById('rtErr');
+    var runbar = document.getElementById('rtRunbar');
     var url = root.dataset.eventsUrl;
     var last = 0, stopped = false;
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -128,7 +143,7 @@
       if (term) term.classList.remove('matrix');
       statusEl.className = 'term-badge ' + d.status;
       statusEl.textContent = d.status_display;
-      var statClass = d.status === 'success' ? 'ls-ok' : (d.status === 'failed' ? 'ls-err' : (d.status === 'partial' ? 'ls-dim' : 'ls-num'));
+      var statClass = d.status === 'success' ? 'ls-ok' : (d.status === 'failed' ? 'ls-err' : (d.status === 'partial' || d.status === 'stopped' ? 'ls-dim' : 'ls-num'));
       statCell.className = statClass;
       statCell.textContent = d.status_display;
       rowsCell.className = 'ls-num';
@@ -141,6 +156,7 @@
       if (!d.has_csv && csvBtn) { csvBtn.classList.add('is-disabled'); csvBtn.removeAttribute('href'); csvBtn.title = 'No CSV — run produced no rows'; }
       if (!d.has_requests && reqBtn) { reqBtn.classList.add('is-disabled'); reqBtn.removeAttribute('href'); reqBtn.title = 'No requests log for this run'; }
       if (!d.has_errors && errBtn) { errBtn.classList.add('is-disabled'); errBtn.removeAttribute('href'); errBtn.title = 'No errors log for this run'; }
+      if (runbar) runbar.hidden = true;
       foot.hidden = false;
     }
     function poll() {

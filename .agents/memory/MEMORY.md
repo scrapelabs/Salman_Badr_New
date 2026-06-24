@@ -1,4 +1,5 @@
 - [Permitlify design recreation](permitlify-design-recreation.md) — supplied HTML/CSS mockups are an exact spec; recreate by hand (NOT design subagent), brand tokens in :root, page CSS scoped under a page-root class.
+- [Run-worker process lifecycle](run-worker-process-lifecycle.md) — MatchMiner scrape worker is a detached subprocess; SIGKILL→zombie (kill(pid,0) lies), reap after settle; worker final save must exclude pid via update_fields; stuck RUNNING + empty log = OOM kill, not a bug.
 - [Verifying full scrape runs](verifying-background-scrape-runs.md) — a full BJK run outlives the 120s bash timeout; bash-spawned workers die on call end — trigger via the live runserver over HTTP (mint a session, no password).
 - [ITF/Stadion CloudFront block](cloudfront-datacenter-block.md) — API 403-blocks datacenter IPs (incl. Replit) at the CDN edge; needs curl_cffi impersonation + a residential proxy.
 - [DB schema management](db-schema-management.md) — DATABASE_URL is Django-owned; schema only via `manage.py migrate`. NEVER run legacy Drizzle `pnpm --filter db push` against it (it drops Django tables).

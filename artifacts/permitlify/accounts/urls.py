@@ -48,6 +48,11 @@ urlpatterns = [
         views.run_events_view,
         name="run_events",
     ),
+    path(
+        "scrapers/<slug:slug>/runs/<uuid:run_uuid>/stop/",
+        views.stop_run_view,
+        name="run_stop",
+    ),
     path("schedule/", views.schedule_view, name="schedule"),
     path("proxies/", views.proxies_view, name="proxies"),
     path("apis/", views.apis_view, name="apis"),
