@@ -9,5 +9,6 @@
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
 - [MatchMiner live scrapers](matchminer-live-scrapers.md) — catalogue trimmed to ONLY BJK Cup (Davis Cup removed, re-addable via parameterised _stadion); unwired slugs fail honestly.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
+- [Confirm dialog convention](confirm-dialog-convention.md) — global #mmConfirm modal in app_base.html; destructive forms opt in via data-confirm attrs; never native confirm().
 - [QA rich-text sanitization](qa-rich-text-sanitization.md) — QA ticket/comment HTML is server-allowlisted; img src limited to attachment-prefix/https, Quill paste/drop must upload (capture phase) not base64, or content silently vanishes.
 - [WhiteNoise vendored sourcemaps](whitenoise-vendored-sourcemaps.md) — collectstatic (ManifestStaticFilesStorage) fails if a vendored JS/CSS has a sourceMappingURL/url() pointing to a file you didn't vendor; strip the comment or include the .map.

@@ -171,8 +171,16 @@ def scraper_detail_view(request, slug):
             )
             return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=schedule")
 
-        # Settings tab: save the per-scraper proxy selection.
+        # Settings tab: save the per-scraper proxy selection (admins only).
         if request.POST.get("form") == "settings":
+            if not request.user.is_superuser:
+                messages.error(
+                    request,
+                    "Only administrators can change routing & performance settings.",
+                )
+                return redirect(
+                    f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+                )
             proxy = None
             proxy_id = (request.POST.get("proxy") or "").strip()
             if proxy_id.isdigit():
@@ -205,6 +213,9 @@ def scraper_detail_view(request, slug):
     tab = request.GET.get("tab", "real-time")
     if tab not in TAB_LABELS:
         tab = "real-time"
+    # The Settings (routing & performance) tab is admin-only.
+    if tab == "settings" and not request.user.is_superuser:
+        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
 
     ctx = _app_ctx("scrapers", s=s, tab=tab, tab_label=TAB_LABELS[tab])
 
@@ -758,9 +769,12 @@ def runs_bulk_delete_view(request, slug):
     return redirect(back)
 
 
-def _placeholder(active_nav, kicker, title, sub, empty_title, empty_sub):
+def _placeholder(active_nav, kicker, title, sub, empty_title, empty_sub, superuser_only=False):
     @login_required
     def view(request):
+        if superuser_only and not request.user.is_superuser:
+            messages.error(request, "Only administrators can access that page.")
+            return redirect("overview")
         return render(
             request,
             "_placeholder.html",
@@ -816,6 +830,7 @@ settings_view = _placeholder(
     "Workspace configuration, API keys and preferences.",
     "Settings coming soon",
     "Workspace settings will live here.",
+    superuser_only=True,
 )
 def _active_superuser_count(exclude_pk=None):
     User = get_user_model()
@@ -958,6 +973,9 @@ def users_view(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def proxies_view(request):
+    if not request.user.is_superuser:
+        messages.error(request, "Only administrators can manage proxies.")
+        return redirect("overview")
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "delete":

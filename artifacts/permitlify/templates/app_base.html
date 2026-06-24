@@ -22,11 +22,13 @@
           <span class="nav-label">Scrapers</span>
           <span class="nav-count">{{ counts.scrapers }}</span>
         </a>
+        {% if user.is_superuser %}
         <a href="{% url 'proxies' %}" class="nav-item {% if active_nav == 'proxies' %}active{% endif %}" {% if active_nav == 'proxies' %}aria-current="page"{% endif %}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18"/></svg>
           <span class="nav-label">Proxies</span>
           <span class="nav-count">{{ counts.proxies }}</span>
         </a>
+        {% endif %}
         <a href="{% url 'qa_board' %}" class="nav-item {% if active_nav == 'qa' %}active{% endif %}" {% if active_nav == 'qa' %}aria-current="page"{% endif %}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
           <span class="nav-label">QA Team Tasks</span>
@@ -34,6 +36,7 @@
         </a>
       </div>
 
+      {% if user.is_superuser %}
       <div class="nav-group">
         <div class="nav-group-label">System</div>
         <a href="{% url 'settings' %}" class="nav-item {% if active_nav == 'settings' %}active{% endif %}" {% if active_nav == 'settings' %}aria-current="page"{% endif %}>
@@ -46,6 +49,7 @@
           <span class="nav-count">{{ counts.users }}</span>
         </a>
       </div>
+      {% endif %}
     </nav>
   </aside>
 
@@ -83,6 +87,21 @@
   </div>
 </div>
 
+<div class="mm-confirm" id="mmConfirm" hidden>
+  <div class="mm-confirm-backdrop" data-mmc-cancel></div>
+  <div class="mm-confirm-card" role="dialog" aria-modal="true" aria-labelledby="mmcTitle">
+    <span class="mm-confirm-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </span>
+    <h2 class="mm-confirm-title" id="mmcTitle">Please confirm</h2>
+    <p class="mm-confirm-msg" id="mmcMsg"></p>
+    <div class="mm-confirm-actions">
+      <button type="button" class="btn btn-ghost btn-sm" data-mmc-cancel>Cancel</button>
+      <button type="button" class="btn btn-danger btn-sm" id="mmcOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
   (function () {
     var html = document.documentElement;
@@ -114,6 +133,59 @@
       row.addEventListener("click", function (e) {
         if (e.target.closest("a")) return;
         window.location.href = row.getAttribute("data-href");
+      });
+    });
+  })();
+
+  (function () {
+    var modal = document.getElementById("mmConfirm");
+    if (!modal) return;
+    var msgEl = document.getElementById("mmcMsg");
+    var titleEl = document.getElementById("mmcTitle");
+    var okBtn = document.getElementById("mmcOk");
+    var pending = null;
+    function open() {
+      modal.removeAttribute("hidden");
+      document.body.classList.add("mm-modal-open");
+      okBtn.focus();
+    }
+    function close() {
+      modal.setAttribute("hidden", "");
+      document.body.classList.remove("mm-modal-open");
+      pending = null;
+    }
+    modal.querySelectorAll("[data-mmc-cancel]").forEach(function (el) {
+      el.addEventListener("click", close);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hasAttribute("hidden")) close();
+    });
+    okBtn.addEventListener("click", function () {
+      var form = pending;
+      close();
+      if (!form) return;
+      form.__mmConfirmed = true;
+      if (form.requestSubmit) form.requestSubmit();
+      else form.submit();
+    });
+    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+      form.addEventListener("submit", function (e) {
+        if (form.__mmConfirmed) {
+          form.__mmConfirmed = false;
+          return;
+        }
+        e.preventDefault();
+        titleEl.textContent =
+          form.getAttribute("data-confirm-title") || "Please confirm";
+        msgEl.textContent = form.getAttribute("data-confirm") || "Are you sure?";
+        okBtn.textContent = form.getAttribute("data-confirm-ok") || "Confirm";
+        okBtn.className =
+          "btn btn-sm " +
+          (form.getAttribute("data-confirm-tone") === "primary"
+            ? "btn-primary"
+            : "btn-danger");
+        pending = form;
+        open();
       });
     });
   })();

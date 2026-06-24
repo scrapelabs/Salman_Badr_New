@@ -2127,7 +2127,7 @@ body.qa-modal-open { overflow: hidden; }
 .qa-modal[hidden] { display: none; }
 .qa-modal-backdrop { position: absolute; inset: 0; background: rgba(8, 13, 26, 0.55); backdrop-filter: blur(2px); }
 .qa-modal-card {
-  position: relative; z-index: 1; width: 600px; max-width: 100%; max-height: 90vh; overflow-y: auto;
+  position: relative; z-index: 1; width: 760px; max-width: 100%; max-height: 90vh; overflow-y: auto;
   background: var(--app-surface); border: 1px solid var(--app-border);
   border-radius: 16px; box-shadow: 0 24px 70px rgba(8, 13, 26, 0.4);
 }
@@ -2144,6 +2144,29 @@ body.qa-modal-open { overflow: hidden; }
 .qa-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .qa-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--app-border); }
 
+/* --- global confirm dialog (replaces native confirm()) --- */
+body.mm-modal-open { overflow: hidden; }
+.mm-confirm { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.mm-confirm[hidden] { display: none; }
+.mm-confirm-backdrop { position: absolute; inset: 0; background: rgba(8, 13, 26, 0.55); backdrop-filter: blur(2px); }
+.mm-confirm-card {
+  position: relative; z-index: 1; width: 420px; max-width: 100%;
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-radius: 16px; box-shadow: 0 24px 70px rgba(8, 13, 26, 0.4);
+  padding: 26px 24px 20px; text-align: center; animation: mmConfirmIn 0.16s ease;
+}
+@keyframes mmConfirmIn { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.mm-confirm-icon {
+  width: 46px; height: 46px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--app-maint-bg); color: var(--app-maint); margin-bottom: 14px;
+}
+.mm-confirm-icon svg { width: 22px; height: 22px; }
+.mm-confirm-title { font: 800 15px "Plus Jakarta Sans", sans-serif; color: var(--app-text); letter-spacing: -0.3px; margin-bottom: 7px; }
+.mm-confirm-msg { font: 400 11.6px "DM Sans", sans-serif; line-height: 1.6; color: var(--app-text-2); margin-bottom: 20px; }
+.mm-confirm-actions { display: flex; justify-content: center; gap: 10px; }
+.mm-confirm-actions .btn { min-width: 116px; justify-content: center; }
+
 /* --- ticket detail --- */
 .qa-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
 .qa-ticket-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -2154,7 +2177,13 @@ body.qa-modal-open { overflow: hidden; }
 
 /* rendered rich text */
 .qa-rte-view { padding: 6px 2px; min-height: 0; font-family: "DM Sans", sans-serif; color: var(--app-text); font-size: 11.6px; line-height: 1.7; }
-.qa-rte-view img { max-width: 100%; height: auto; border-radius: 8px; margin: 6px 0; border: 1px solid var(--app-border); }
+.rt-quill .ql-editor img,
+.qa-rte-view img {
+  max-width: 100%; height: auto; display: block;
+  margin: 12px 0; border-radius: 12px;
+  border: 1px solid var(--app-border-2);
+  box-shadow: 0 8px 22px rgba(8, 13, 26, 0.12);
+}
 .qa-rte-view a { color: var(--app-accent); }
 .qa-rte-view h1 { font-size: 18px; }
 .qa-rte-view h2 { font-size: 15px; }
@@ -2214,8 +2243,18 @@ body.qa-modal-open { overflow: hidden; }
   .qa-detail-grid { grid-template-columns: 1fr; }
   .qa-board { grid-template-columns: 1fr; }
 }
-@media (max-width: 720px) {
+@media (max-width: 760px) {
+  .qa-head { flex-direction: column; align-items: stretch; gap: 14px; }
+  .qa-head .qa-new-btn { width: 100%; justify-content: center; }
+  .qa-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+  .qa-filter { min-width: 0; width: 100%; }
   .qa-form-grid { grid-template-columns: 1fr; }
+  .qa-modal { padding: 14px; }
+  .qa-modal-body { padding: 18px; }
+  .qa-modal-head, .qa-modal-foot { padding-left: 18px; padding-right: 18px; }
+  .mm-confirm { padding: 16px; }
+  .mm-confirm-actions { flex-direction: column-reverse; }
+  .mm-confirm-actions .btn { width: 100%; }
 }
 
 /* --- Users page --- */

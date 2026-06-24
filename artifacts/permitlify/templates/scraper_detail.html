@@ -38,9 +38,11 @@
     <a class="tab {% if tab == 'schedule' %}active{% endif %}" href="?tab=schedule" {% if tab == 'schedule' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>Schedule</span>
     </a>
+    {% if user.is_superuser %}
     <a class="tab {% if tab == 'settings' %}active{% endif %}" href="?tab=settings" {% if tab == 'settings' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Settings</span>
     </a>
+    {% endif %}
     <a class="tab {% if tab == 'status' %}active{% endif %}" href="?tab=status" {% if tab == 'status' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg><span>Status</span>
     </a>
@@ -105,7 +107,10 @@
     <div class="rt-runbar-actions">
       {% if active_run %}
       <form method="post" action="{% url 'run_stop' s.slug display_run.uuid %}" id="rtStopForm"
-            onsubmit="return confirm('Force-stop this run? The worker process will be killed immediately.');">
+            data-confirm="Force-stop this run? The worker process will be killed immediately and the partial results kept."
+            data-confirm-title="Stop this run?"
+            data-confirm-ok="Stop run"
+            data-confirm-tone="danger">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger btn-sm" id="rtStopBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -322,7 +327,10 @@
 
   {% elif tab == 'calls' %}
   <form id="bulkDeleteForm" method="post" action="{% url 'runs_bulk_delete' s.slug %}"
-        onsubmit="return confirm('Delete the selected run(s)? Their log and CSV files will be permanently removed.');">
+        data-confirm="Delete the selected run(s)? Their log and CSV files will be permanently removed."
+        data-confirm-title="Delete runs?"
+        data-confirm-ok="Delete"
+        data-confirm-tone="danger">
     {% csrf_token %}
     <input type="hidden" name="page" value="{{ page_obj.number }}" />
   </form>
@@ -397,7 +405,7 @@
             </a>
             {% endif %}
             {% if not run.is_running %}
-            <form class="run-del-form" method="post" action="{% url 'run_delete' s.slug run.uuid %}" onsubmit="return confirm('Delete run #{{ run.short_id }}? Its log and CSV files will be permanently removed.');">
+            <form class="run-del-form" method="post" action="{% url 'run_delete' s.slug run.uuid %}" data-confirm="Delete run #{{ run.short_id }}? Its log and CSV files will be permanently removed." data-confirm-title="Delete run?" data-confirm-ok="Delete" data-confirm-tone="danger">
               {% csrf_token %}
               <input type="hidden" name="page" value="{{ page_obj.number }}" />
               <button type="submit" class="run-act run-act-danger" title="Delete this run and its files">Delete</button>
@@ -650,7 +658,10 @@
     </div>
 
     <form class="panel-foot" method="post" action="{% url 'scraper_detail' s.slug %}?tab=schedule"
-          onsubmit="return confirm('Regenerate the trigger token? Any scheduler using the old token will stop working until you update its secret.');">
+          data-confirm="Regenerate the trigger token? Any scheduler using the old token will stop working until you update its secret."
+          data-confirm-title="Regenerate token?"
+          data-confirm-ok="Regenerate"
+          data-confirm-tone="danger">
       {% csrf_token %}
       <input type="hidden" name="form" value="schedule-rotate-token" />
       <span class="status-note">Regenerating invalidates the current token immediately.</span>

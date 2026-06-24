@@ -68,7 +68,10 @@
           var range = quill.getSelection(true);
           var index = range ? range.index : quill.getLength();
           quill.insertEmbed(index, "image", res.body.url, "user");
-          quill.setSelection(index + 1, "silent");
+          // Drop the cursor onto a fresh line below the image so typing
+          // continues there instead of riding alongside the image.
+          quill.insertText(index + 1, "\n", "user");
+          quill.setSelection(index + 2, "silent");
           sync();
         })
         .catch(function () {
