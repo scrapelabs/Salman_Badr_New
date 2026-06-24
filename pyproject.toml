@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
+    "curl-cffi>=0.15.0",
     "dj-database-url>=3.1.2",
     "django>=5.2.15",
     "gunicorn>=26.0.0",

@@ -4,10 +4,17 @@ The Billie Jean King Cup (Fed Cup) and sibling team competitions (e.g. the
 Davis Cup) are all served by the same public ITF / Stadion data API
 (``api.itf-production.sports-data.stadion.io``), with the same JSON shape and
 the same 60-column ITF-style item schema. This module ports that production
-spider to the Python standard library (``urllib``) — no proxies, ``curl_cffi``,
-``rich`` or ``pandas`` — and is parameterised by a small :class:`StadionConfig`,
-so each competition is a thin wrapper. Currently only ``billiejeankingcup.py``
-is wired; others can be re-added later as more thin wrappers.
+spider using ``curl_cffi`` with Chrome impersonation (matching the production
+``use_cffi=True`` client) and optional proxy routing — no ``rich`` or
+``pandas`` — and is parameterised by a small :class:`StadionConfig`, so each
+competition is a thin wrapper. Currently only ``billiejeankingcup.py`` is
+wired; others can be re-added later as more thin wrappers.
+
+Note: the upstream ITF / Stadion API sits behind CloudFront, which blocks
+cloud / datacenter IPs (including Replit's) with a 403 ("Request blocked").
+A residential proxy must be assigned to the scraper (Lab → Settings tab) for
+the scrape to reach the origin — exactly as the production framework routes
+through ``settings.PROXIES`` with ``use_proxy=True``.
 
 Every HTTP call and every failure is recorded through a :class:`Telemetry`
 instance so each run can export ``requests`` / ``errors`` CSVs next to the
@@ -19,27 +26,27 @@ items CSV, matching the formats produced by the original framework.
 
 import csv
 import io
-import json
 import threading
 import time
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
+from curl_cffi import requests as cffi_requests
 from django.utils import timezone
 
 from accounts.models import Run
 
-from .telemetry import Telemetry, sanitize_cell
+from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 API = "https://api.itf-production.sports-data.stadion.io"
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
 )
+# curl_cffi browser fingerprint to impersonate (production uses use_cffi=True).
+IMPERSONATE = "chrome"
 
 # Ties are fetched concurrently, matching the production spider's behaviour, so
 # a full season's worth of ties is processed without an artificial cap.
@@ -97,25 +104,24 @@ class StadionConfig:
     url_builder: Callable[[str, str], str]  # (tie_id, match_id) -> tournament_url
 
 
-def _build_opener(scraper, log):
-    """Build a urllib opener that honours the scraper's selected proxy.
+def _build_proxies(scraper, log):
+    """Return a curl_cffi ``proxies`` dict honouring the scraper's selected proxy.
 
     A proxy with a non-empty address routes traffic through it; otherwise the
-    scraper connects directly. The address (which may carry credentials) is
-    never logged — only the pool's name and type.
+    scraper connects directly (``None``). The address (which may carry
+    credentials) is never logged — only the pool's name and type.
     """
     proxy = getattr(scraper, "proxy", None)
     if proxy and proxy.is_active and (proxy.address or "").strip():
         addr = proxy.address.strip()
         if "://" not in addr:
             addr = "http://" + addr
-        handler = urllib.request.ProxyHandler({"http": addr, "https": addr})
         log(
             "INFO",
-            f"\U0001f50c HTTP client: urllib via {proxy.get_kind_display()} "
-            f"proxy '{proxy.name}'",
+            f"\U0001f50c HTTP client: curl_cffi (impersonate {IMPERSONATE}) via "
+            f"{proxy.get_kind_display()} proxy '{proxy.name}'",
         )
-        return urllib.request.build_opener(handler)
+        return {"http": addr, "https": addr}
     if proxy and proxy.is_active:
         log(
             "WARN",
@@ -123,42 +129,48 @@ def _build_opener(scraper, log):
             "selected but has no address \u2014 using direct connection",
         )
     else:
-        log("INFO", "\U0001f50c HTTP client: urllib (direct, no proxy)")
-    # Empty ProxyHandler => ignore any HTTP(S)_PROXY environment variables.
-    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        log(
+            "INFO",
+            f"\U0001f50c HTTP client: curl_cffi (impersonate {IMPERSONATE}, "
+            "direct \u2014 no proxy)",
+        )
+    return None
 
 
-def _get_json(url, log, tele, opener, tries=3, timeout=25):
-    """GET ``url`` as JSON, recording each attempt/failure into ``tele``."""
+def _get_json(url, log, tele, proxies, tries=3, timeout=25):
+    """GET ``url`` as JSON via curl_cffi, recording each attempt into ``tele``."""
     last_exc = None
     for attempt in range(1, tries + 1):
         start = time.time()
         try:
-            req = urllib.request.Request(
-                url, headers={"User-Agent": UA, "Accept": "application/json"}
-            )
-            with opener.open(req, timeout=timeout) as resp:
-                status = getattr(resp, "status", resp.getcode())
-                body = resp.read()
-                tele.record_request(
-                    url=url, method="GET", status=status, size=len(body),
-                    duration_ms=(time.time() - start) * 1000,
-                )
-                if 200 <= status < 300:
-                    return json.loads(body.decode("utf-8"))
-                log("WARN", f"\u26a0\ufe0f GET {url} \u2192 HTTP {status}")
-        except urllib.error.HTTPError as exc:
-            body = b""
+            # A fresh session per call (curl_cffi sessions are not safe to share
+            # across the worker threads). trust_env=False makes "direct" (no
+            # proxy) authoritative — it must not silently pick up HTTP(S)_PROXY
+            # env vars; per-scraper routing is the only source of truth.
+            session = cffi_requests.Session(trust_env=False)
             try:
-                body = exc.read()
-            except Exception:  # noqa: BLE001
-                pass
+                resp = session.get(
+                    url,
+                    headers={"User-Agent": UA, "Accept": "application/json"},
+                    impersonate=IMPERSONATE,
+                    proxies=proxies,
+                    timeout=timeout,
+                )
+                status = resp.status_code
+                body = resp.content
+            finally:
+                session.close()
             tele.record_request(
-                url=url, method="GET", status=exc.code, size=len(body),
+                url=url, method="GET", status=status, size=len(body),
                 duration_ms=(time.time() - start) * 1000,
             )
-            log("WARN", f"\u26a0\ufe0f GET {url} \u2192 HTTP {exc.code} (retry {attempt}/{tries})")
-            last_exc = exc
+            if 200 <= status < 300:
+                return resp.json()
+            log(
+                "WARN",
+                f"\u26a0\ufe0f GET {url} \u2192 HTTP {status} (retry {attempt}/{tries})",
+            )
+            last_exc = RuntimeError(f"HTTP {status}")
         except Exception as exc:  # noqa: BLE001 - log, record and retry
             tele.record_request(
                 url=url, method="GET", status=None, size=0,
@@ -166,8 +178,10 @@ def _get_json(url, log, tele, opener, tries=3, timeout=25):
             )
             log(
                 "WARN",
-                f"\u26a0\ufe0f GET {url} \u2192 {exc.__class__.__name__}: {exc} "
-                f"(retry {attempt}/{tries})",
+                redact_secrets(
+                    f"\u26a0\ufe0f GET {url} \u2192 {exc.__class__.__name__}: "
+                    f"{exc} (retry {attempt}/{tries})"
+                ),
             )
             last_exc = exc
         time.sleep(min(2 * attempt, 6))
@@ -293,9 +307,9 @@ def _match_score(match):
         return ""
 
 
-def _build_row(config, tie_id, tie_date, match_id, score, log, tele, opener):
+def _build_row(config, tie_id, tie_date, match_id, score, log, tele, proxies):
     link = f"{API}/match/{match_id}?include={_MATCH_INCLUDE}"
-    results = _get_json(link, log, tele, opener)
+    results = _get_json(link, log, tele, proxies)
     if not results:
         return None
     data = results.get("data", {}) or {}
@@ -399,7 +413,7 @@ def run(config, run_obj, log):
     tele = Telemetry()
     years = _years(run_obj)
     log("INFO", f"\U0001f3be {config.label} scraper starting \u2014 ranking years={years}")
-    opener = _build_opener(run_obj.scraper, log)
+    proxies = _build_proxies(run_obj.scraper, log)
 
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering ties \u2500\u2500\u2500\u2500")
     ties = []
@@ -407,7 +421,7 @@ def run(config, run_obj, log):
     for year in years:
         index_link = f"{API}/custom/wcotDrawsModeled/{config.draw_code}/{year}"
         log("INFO", f"\U0001f310 GET {index_link}")
-        data = _get_json(index_link, log, tele, opener)
+        data = _get_json(index_link, log, tele, proxies)
         if not data:
             log("WARN", f"\u26a0\ufe0f No draw data returned for {year}")
             continue
@@ -450,7 +464,7 @@ def run(config, run_obj, log):
         tie_id, tie_date = item
         try:
             tc_link = f"{API}/custom/tieCentre/{tie_id}"
-            tie_centre = _get_json(tc_link, log, tele, opener)
+            tie_centre = _get_json(tc_link, log, tele, proxies)
             with lock:
                 counter["done"] += 1
                 done = counter["done"]
@@ -476,7 +490,7 @@ def run(config, run_obj, log):
                     continue
                 score = _match_score(match)
                 row = _build_row(
-                    config, tie_id, tie_date, match_id, score, log, tele, opener
+                    config, tie_id, tie_date, match_id, score, log, tele, proxies
                 )
                 if not row:
                     continue
@@ -495,8 +509,10 @@ def run(config, run_obj, log):
             tele.record_error(f"Tie {tie_id} failed: {exc}", exc=exc)
             log(
                 "WARN",
-                f"\u26a0\ufe0f [tie] {tie_id} failed: "
-                f"{exc.__class__.__name__}: {exc}",
+                redact_secrets(
+                    f"\u26a0\ufe0f [tie] {tie_id} failed: "
+                    f"{exc.__class__.__name__}: {exc}"
+                ),
             )
 
     if ties:

@@ -11,6 +11,7 @@ scraping framework so the downloaded files are drop-in compatible:
 import csv
 import hashlib
 import io
+import re
 import threading
 import traceback
 import uuid
@@ -29,6 +30,22 @@ def sanitize_cell(value):
     if text[:1] in ("=", "+", "-", "@"):
         return "'" + text
     return text
+
+
+# Masks ``user:pass`` credentials embedded in any URL (e.g. a proxy address).
+_CRED_RE = re.compile(r"(?i)([a-z][a-z0-9+.\-]*://)[^/\s:@]+:[^/\s@]+@")
+
+
+def redact_secrets(value):
+    """Scrub ``user:pass`` credentials out of any URL inside ``value``.
+
+    A proxy address may embed credentials and libcurl/exception text can echo
+    the proxy URL, so this runs before anything reaches a log line or the
+    errors CSV. Never log a raw proxy address.
+    """
+    if not value:
+        return value
+    return _CRED_RE.sub(r"\1***:***@", str(value))
 
 
 def _write_csv(columns, rows):
@@ -79,8 +96,8 @@ class Telemetry:
         entry = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
             "level": level,
-            "message": message,
-            "exception": exception,
+            "message": redact_secrets(message),
+            "exception": redact_secrets(exception),
         }
         with self._lock:
             self._errors.append(entry)

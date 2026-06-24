@@ -20,7 +20,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from accounts.live_scrapers import billiejeankingcup
-from accounts.live_scrapers.telemetry import Telemetry
+from accounts.live_scrapers.telemetry import Telemetry, redact_secrets
 from accounts.models import Run, RunLogLine
 
 # Slug -> real scraper entry point. Each returns
@@ -113,7 +113,7 @@ class Command(BaseCommand):
                 run.errors_csv = errors_csv
                 run.output_size_bytes = len(items_csv.encode("utf-8"))
         except Exception as exc:  # noqa: BLE001 - surface any failure in the run log
-            tb = traceback.format_exc()
+            tb = redact_secrets(traceback.format_exc())
             log("ERROR", "\u274c Run crashed \u2014 traceback follows")
             for line in tb.splitlines():
                 log("ERROR", line)
