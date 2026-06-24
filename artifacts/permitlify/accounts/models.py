@@ -9,6 +9,7 @@ re-opened and downloaded later. Runs perform live network scrapes via
 """
 
 import re
+import secrets
 import uuid
 
 from django.conf import settings
@@ -90,6 +91,9 @@ class Scraper(models.Model):
         related_name="scrapers",
     )
     threads = models.PositiveSmallIntegerField(default=THREADS_DEFAULT)
+    # Secret bearer token for the public scheduled-trigger webhook (Schedule tab).
+    # Auto-assigned on first save and rotatable from the UI; treat it as a password.
+    trigger_token = models.CharField(max_length=128, unique=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -108,6 +112,27 @@ class Scraper(models.Model):
         """Thread count used to launch the scrape pool, clamped to a safe range."""
         value = self.threads or self.THREADS_DEFAULT
         return max(self.THREADS_MIN, min(value, self.THREADS_MAX))
+
+    @staticmethod
+    def generate_trigger_token():
+        return secrets.token_urlsafe(32)
+
+    def rotate_trigger_token(self, save=True):
+        """Issue a fresh trigger token, invalidating the previous one."""
+        self.trigger_token = self.generate_trigger_token()
+        if save:
+            self.save(update_fields=["trigger_token", "updated_at"])
+        return self.trigger_token
+
+    def save(self, *args, **kwargs):
+        # Guarantee every scraper has a unique trigger token without a hard-coded
+        # default (which would collide under the unique constraint).
+        if not self.trigger_token:
+            self.trigger_token = self.generate_trigger_token()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "trigger_token" not in update_fields:
+                kwargs["update_fields"] = list(update_fields) + ["trigger_token"]
+        super().save(*args, **kwargs)
 
 
 class Run(models.Model):

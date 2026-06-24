@@ -1,3 +1,5 @@
+import hmac
+import json
 import os
 import signal
 import subprocess
@@ -17,6 +19,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from .models import Proxy, Run, Scraper
@@ -29,6 +32,7 @@ YEAR_MAX = 2030
 TAB_LABELS = {
     "real-time": "Real-time test",
     "calls": "Calls history",
+    "schedule": "Schedule",
     "settings": "Settings",
     "status": "Status",
 }
@@ -40,7 +44,6 @@ LOG_LINES_PER_PAGE = 150
 def _counts():
     return {
         "scrapers": Scraper.objects.count(),
-        "schedule": 12,
         "proxies": Proxy.objects.count(),
         "apis": 6,
         "logs": Run.objects.count(),
@@ -142,8 +145,18 @@ def scrapers_view(request):
 def scraper_detail_view(request, slug):
     s = get_object_or_404(Scraper, slug=slug)
 
-    # POST handles two tab forms, told apart by a hidden ``form`` field.
+    # POST handles the tab forms, told apart by a hidden ``form`` field.
     if request.method == "POST":
+        # Schedule tab: rotate the webhook trigger token.
+        if request.POST.get("form") == "schedule-rotate-token":
+            s.rotate_trigger_token()
+            messages.success(
+                request,
+                "Trigger token regenerated — update the GitHub secret with the new "
+                "value or scheduled runs will start failing.",
+            )
+            return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=schedule")
+
         # Settings tab: save the per-scraper proxy selection.
         if request.POST.get("form") == "settings":
             proxy = None
@@ -193,6 +206,26 @@ def scraper_detail_view(request, slug):
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
         ctx["run_total"] = paginator.count
+    elif tab == "schedule":
+        trigger_url = request.build_absolute_uri(
+            reverse("scraper_trigger", args=[s.slug])
+        )
+        default_year = min(max(timezone.localdate().year, YEAR_MIN), YEAR_MAX)
+        secret_name = (
+            "MATCHMINER_"
+            + "".join(c if c.isalnum() else "_" for c in s.code.upper())
+            + "_TRIGGER_TOKEN"
+        )
+        ctx["trigger_url"] = trigger_url
+        ctx["default_year"] = default_year
+        ctx["secret_name"] = secret_name
+        ctx["workflow_filename"] = f"{s.slug}-schedule.yml"
+        ctx["workflow_yaml"] = _github_workflow_yaml(
+            code=s.code,
+            trigger_url=trigger_url,
+            secret_name=secret_name,
+            default_year=default_year,
+        )
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
         ctx["thread_min"] = Scraper.THREADS_MIN
@@ -201,49 +234,71 @@ def scraper_detail_view(request, slug):
     return render(request, "scraper_detail.html", ctx)
 
 
-@login_required
-@require_http_methods(["POST"])
-def scraper_run_view(request, slug):
-    s = get_object_or_404(Scraper, slug=slug)
-    back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+class RunStartError(Exception):
+    """A run could not be started; carries a machine code, message, and HTTP status.
 
-    if s.is_maintenance:
-        messages.error(
-            request, "This source is in maintenance — real-time runs are blocked."
-        )
-        return redirect(back)
+    Lets the browser form (which renders a flash message) and the trigger webhook
+    (which returns JSON + status) share one validation/launch path.
+    """
 
-    _reap_stale_runs(s)
-    if s.runs.filter(status=Run.Status.RUNNING).exists():
-        messages.error(request, "A run is already in progress for this source.")
-        return redirect(back)
+    def __init__(self, code, message, status):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status = status
 
-    raw_year = request.POST.get("year", "").strip()
+
+def _parse_year(raw, *, default_current=False):
+    """Validate a season year. Returns an int or raises RunStartError(400).
+
+    When ``default_current`` is set, an empty value falls back to the current year
+    (clamped to the supported range) — used by the webhook where year is optional.
+    """
+    raw = (raw or "").strip()
+    if not raw and default_current:
+        return min(max(timezone.localdate().year, YEAR_MIN), YEAR_MAX)
     try:
-        year = int(raw_year)
+        year = int(raw)
     except (TypeError, ValueError):
-        messages.error(request, "Select a year to run.")
-        return redirect(back)
+        raise RunStartError("invalid_year", "Select a year to run.", 400)
     if not (YEAR_MIN <= year <= YEAR_MAX):
-        messages.error(request, f"Pick a year between {YEAR_MIN} and {YEAR_MAX}.")
-        return redirect(back)
-    date_from = date(year, 1, 1)
-    date_to = date(year, 12, 31)
+        raise RunStartError(
+            "invalid_year", f"Pick a year between {YEAR_MIN} and {YEAR_MAX}.", 400
+        )
+    return year
 
+
+def _start_scraper_run(scraper, *, year, launched_by):
+    """Apply the run guards and launch the worker, returning the new Run.
+
+    Shared by the real-time browser form and the GitHub-Actions trigger webhook so
+    both honour maintenance, stale-run reaping, the single-in-flight-run rule, and
+    launch-failure handling identically. Raises RunStartError on any guard failure.
+    """
+    if scraper.is_maintenance:
+        raise RunStartError(
+            "maintenance", "This source is in maintenance — runs are blocked.", 503
+        )
+    _reap_stale_runs(scraper)
+    if scraper.runs.filter(status=Run.Status.RUNNING).exists():
+        raise RunStartError(
+            "already_running", "A run is already in progress for this source.", 409
+        )
     try:
         run = Run.objects.create(
-            scraper=s,
-            launched_by=request.user,
+            scraper=scraper,
+            launched_by=launched_by,
             tournament=ALL_TOURNAMENTS,
-            date_from=date_from,
-            date_to=date_to,
+            date_from=date(year, 1, 1),
+            date_to=date(year, 12, 31),
             status=Run.Status.RUNNING,
             started_at=timezone.now(),
         )
     except IntegrityError:
         # Lost the race to the partial-unique constraint: another run is live.
-        messages.error(request, "A run is already in progress for this source.")
-        return redirect(back)
+        raise RunStartError(
+            "already_running", "A run is already in progress for this source.", 409
+        )
     try:
         _launch_run(run)
     except Exception:  # noqa: BLE001
@@ -251,13 +306,129 @@ def scraper_run_view(request, slug):
         run.finished_at = timezone.now()
         run.log_text = "Failed to launch the scraper process.\n"
         run.save(update_fields=["status", "finished_at", "log_text"])
-        messages.error(request, "Could not start the run. Please try again.")
+        raise RunStartError(
+            "launch_failed", "Could not start the run. Please try again.", 503
+        )
+    return run
+
+
+@login_required
+@require_http_methods(["POST"])
+def scraper_run_view(request, slug):
+    s = get_object_or_404(Scraper, slug=slug)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+    try:
+        year = _parse_year(request.POST.get("year"))
+        run = _start_scraper_run(s, year=year, launched_by=request.user)
+    except RunStartError as exc:
+        messages.error(request, exc.message)
         return redirect(back)
 
     messages.success(
         request, f"Run #{run.short_id} started — streaming the live log below."
     )
     return redirect(back)
+
+
+def _extract_bearer_token(request):
+    """Read the trigger token from the Authorization: Bearer <token> header only."""
+    header = request.META.get("HTTP_AUTHORIZATION", "") or ""
+    if header[:7].lower() == "bearer ":
+        return header[7:].strip()
+    return ""
+
+
+def _trigger_year_param(request):
+    """Read the optional ``year`` from a JSON body or a form-encoded POST."""
+    if "application/json" in (request.content_type or ""):
+        try:
+            data = json.loads((request.body or b"").decode("utf-8") or "{}")
+        except (ValueError, TypeError, UnicodeDecodeError):
+            return ""
+        if isinstance(data, dict) and data.get("year") is not None:
+            return str(data.get("year")).strip()
+        return ""
+    return (request.POST.get("year") or "").strip()
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def scraper_trigger_view(request, slug):
+    """Token-authenticated webhook to launch a run (e.g. from a GitHub Actions cron).
+
+    Auth is a per-scraper bearer token (``Authorization: Bearer <token>``) compared
+    in constant time. It is deliberately not login/CSRF protected because the caller
+    is an external machine, not a cookie-authenticated browser. The token is never
+    logged or echoed back. The same guards as the browser form apply (maintenance,
+    single-in-flight run). Documented and managed from the scraper's Schedule tab.
+    """
+    s = get_object_or_404(Scraper, slug=slug)
+    token = _extract_bearer_token(request)
+    if (
+        not s.trigger_token
+        or not token
+        or not hmac.compare_digest(token, s.trigger_token)
+    ):
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
+
+    try:
+        year = _parse_year(_trigger_year_param(request), default_current=True)
+        run = _start_scraper_run(s, year=year, launched_by=None)
+    except RunStartError as exc:
+        return JsonResponse(
+            {"ok": False, "error": exc.code, "detail": exc.message}, status=exc.status
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "run_id": run.short_id,
+            "run_uuid": str(run.uuid),
+            "status": run.status,
+            "year": year,
+            "events_url": request.build_absolute_uri(
+                reverse("run_events", args=[s.slug, run.uuid])
+            ),
+        },
+        status=201,
+    )
+
+
+def _github_workflow_yaml(*, code, trigger_url, secret_name, default_year):
+    """Render the copy-ready GitHub Actions workflow shown on the Schedule tab.
+
+    Built in Python (not the template) so the GitHub ``${{ ... }}`` expressions and
+    JSON braces don't collide with Django's template syntax.
+    """
+    return (
+        f"name: MatchMiner — {code} scheduled scrape\n"
+        f"\n"
+        f"on:\n"
+        f"  schedule:\n"
+        f"    # 06:00 UTC daily. Edit this cron to change the cadence.\n"
+        f'    - cron: "0 6 * * *"\n'
+        f"  workflow_dispatch:\n"
+        f"    inputs:\n"
+        f"      year:\n"
+        f'        description: "Season year to scrape (2000-2030)"\n'
+        f"        required: false\n"
+        f'        default: "{default_year}"\n'
+        f"\n"
+        f"jobs:\n"
+        f"  trigger:\n"
+        f"    runs-on: ubuntu-latest\n"
+        f"    steps:\n"
+        f"      - name: Start the {code} scrape\n"
+        f"        env:\n"
+        f'          TRIGGER_URL: "{trigger_url}"\n'
+        f"          TRIGGER_TOKEN: ${{{{ secrets.{secret_name} }}}}\n"
+        f"          YEAR: ${{{{ github.event.inputs.year || '{default_year}' }}}}\n"
+        f"        run: |\n"
+        f'          curl -fsS -X POST "$TRIGGER_URL" \\\n'
+        f'            -H "Authorization: Bearer $TRIGGER_TOKEN" \\\n'
+        f'            -H "Content-Type: application/json" \\\n'
+        f'            --data "{{\\"year\\":\\"$YEAR\\"}}"\n'
+    )
 
 
 def _terminate_run_worker(run, settle=0.2):
@@ -546,14 +717,6 @@ def _placeholder(active_nav, kicker, title, sub, empty_title, empty_sub):
     return view
 
 
-schedule_view = _placeholder(
-    "schedule",
-    "Workspace",
-    "Schedule",
-    "Cron windows and run cadence for every scraper in the workspace.",
-    "No schedules yet",
-    "Scheduled runs will appear here once you set cadences for your scrapers.",
-)
 apis_view = _placeholder(
     "apis",
     "Workspace",

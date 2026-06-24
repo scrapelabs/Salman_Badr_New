@@ -35,6 +35,9 @@
     <a class="tab {% if tab == 'calls' %}active{% endif %}" href="?tab=calls" {% if tab == 'calls' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg><span>Calls history</span>
     </a>
+    <a class="tab {% if tab == 'schedule' %}active{% endif %}" href="?tab=schedule" {% if tab == 'schedule' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>Schedule</span>
+    </a>
     <a class="tab {% if tab == 'settings' %}active{% endif %}" href="?tab=settings" {% if tab == 'settings' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Settings</span>
     </a>
@@ -448,6 +451,144 @@
       <button class="btn btn-primary" type="submit">Save settings</button>
     </div>
   </form>
+
+  {% elif tab == 'schedule' %}
+  <div class="panel">
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Automation</div>
+          <div class="status-name">Schedule with GitHub Actions</div>
+        </div>
+        <span class="ptype direct">Webhook</span>
+      </div>
+
+      <p class="rt-intro">
+        MatchMiner doesn't run scrapes on a timer itself — it exposes a secure
+        <strong>trigger endpoint</strong> that any scheduler can call. The steps below wire up a
+        free <strong>GitHub Actions</strong> cron job that launches <strong>{{ s.code }}</strong> on
+        whatever cadence you choose. Each call starts exactly one run — the same as pressing
+        “Start” on the Real-time tab — and respects maintenance mode and the one-run-at-a-time rule.
+      </p>
+
+      <div class="sch-cred">
+        <div class="rt-field">
+          <label class="field-label" for="schUrl">Trigger URL</label>
+          <div class="sch-copyrow">
+            <input class="rt-input" id="schUrl" type="text" readonly value="{{ trigger_url }}" />
+            <button class="btn btn-ghost btn-sm sch-copy" type="button" data-copy="#schUrl">Copy</button>
+          </div>
+          <p class="status-note">A <code>POST</code> here launches a run. Authenticate with the token below.</p>
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="schToken">Trigger token (secret)</label>
+          <div class="sch-copyrow">
+            <input class="rt-input sch-secret" id="schToken" type="password" readonly value="{{ s.trigger_token }}" />
+            <button class="btn btn-ghost btn-sm sch-reveal" type="button" data-target="#schToken" aria-pressed="false">Reveal</button>
+            <button class="btn btn-ghost btn-sm sch-copy" type="button" data-copy="#schToken">Copy</button>
+          </div>
+          <p class="status-note">Treat this like a password — anyone with it can start a run. Rotate it below if it leaks.</p>
+        </div>
+      </div>
+
+      <ol class="sch-steps">
+        <li>
+          <div class="sch-step-h">Add the token as a repository secret</div>
+          <p>
+            In your GitHub repo open <strong>Settings → Secrets and variables → Actions →
+            New repository secret</strong>. Name it <code>{{ secret_name }}</code> and paste the
+            trigger token above as the value.
+          </p>
+        </li>
+        <li>
+          <div class="sch-step-h">Add the workflow file</div>
+          <p>
+            Create <code>.github/workflows/{{ workflow_filename }}</code> in your repo with the
+            contents below, then commit it to your default branch.
+          </p>
+          <div class="sch-codewrap">
+            <button class="btn btn-ghost btn-sm sch-copy sch-copy-code" type="button" data-copy="#schYaml">Copy</button>
+            <pre class="sch-code"><code id="schYaml">{{ workflow_yaml }}</code></pre>
+          </div>
+        </li>
+        <li>
+          <div class="sch-step-h">Pick your cadence</div>
+          <p>
+            The <code>cron</code> line controls when it runs (UTC). <code>"0 6 * * *"</code> is daily at
+            06:00. Other examples: <code>"0 * * * *"</code> hourly, <code>"0 6 * * 1"</code> Mondays at
+            06:00, <code>"0 6,18 * * *"</code> twice a day. Build one at
+            <a href="https://crontab.guru" target="_blank" rel="noopener">crontab.guru</a>.
+          </p>
+        </li>
+        <li>
+          <div class="sch-step-h">Run it on demand to test</div>
+          <p>
+            Open the <strong>Actions</strong> tab in your repo, choose
+            <em>MatchMiner — {{ s.code }} scheduled scrape</em>, and click <strong>Run workflow</strong>
+            (you can set the year). A new run appears under
+            <a href="?tab=calls">Calls history</a> within a minute.
+          </p>
+        </li>
+      </ol>
+
+      <div class="sch-aside">
+        <div class="sch-step-h">No GitHub? Trigger it from any scheduler or shell</div>
+        <div class="sch-codewrap">
+          <button class="btn btn-ghost btn-sm sch-copy sch-copy-code" type="button" data-copy="#schCurl">Copy</button>
+          <pre class="sch-code"><code id="schCurl">curl -fsS -X POST "{{ trigger_url }}" \
+  -H "Authorization: Bearer YOUR_TRIGGER_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{"year":"{{ default_year }}"}'</code></pre>
+        </div>
+        <p class="status-note">
+          <code>year</code> is optional (defaults to the current season). Responses:
+          <code>201</code> started, <code>401</code> bad token, <code>409</code> a run is already in
+          progress, <code>503</code> in maintenance.
+        </p>
+      </div>
+    </div>
+
+    <form class="panel-foot" method="post" action="{% url 'scraper_detail' s.slug %}?tab=schedule"
+          onsubmit="return confirm('Regenerate the trigger token? Any scheduler using the old token will stop working until you update its secret.');">
+      {% csrf_token %}
+      <input type="hidden" name="form" value="schedule-rotate-token" />
+      <span class="status-note">Regenerating invalidates the current token immediately.</span>
+      <button class="btn btn-danger" type="submit">Regenerate token</button>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      function flash(btn) {
+        var old = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('is-copied');
+        setTimeout(function () { btn.textContent = old; btn.classList.remove('is-copied'); }, 1400);
+      }
+      document.querySelectorAll('.sch-copy').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var el = document.querySelector(btn.dataset.copy);
+          if (!el) return;
+          var text = el.value !== undefined && el.tagName === 'INPUT' ? el.value : el.textContent;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { flash(btn); });
+          } else if (el.select) {
+            el.select(); document.execCommand('copy'); flash(btn);
+          }
+        });
+      });
+      document.querySelectorAll('.sch-reveal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var el = document.querySelector(btn.dataset.target);
+          if (!el) return;
+          var hidden = el.type === 'password';
+          el.type = hidden ? 'text' : 'password';
+          btn.textContent = hidden ? 'Hide' : 'Reveal';
+          btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+        });
+      });
+    })();
+  </script>
 
   {% else %}
   <div class="panel">

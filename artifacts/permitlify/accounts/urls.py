@@ -53,7 +53,11 @@ urlpatterns = [
         views.stop_run_view,
         name="run_stop",
     ),
-    path("schedule/", views.schedule_view, name="schedule"),
+    path(
+        "scrapers/<slug:slug>/trigger/",
+        views.scraper_trigger_view,
+        name="scraper_trigger",
+    ),
     path("proxies/", views.proxies_view, name="proxies"),
     path("apis/", views.apis_view, name="apis"),
     path("apis/logs/", views.apis_logs_view, name="apis_logs"),
