@@ -2127,7 +2127,7 @@ body.qa-modal-open { overflow: hidden; }
 .qa-modal[hidden] { display: none; }
 .qa-modal-backdrop { position: absolute; inset: 0; background: rgba(8, 13, 26, 0.55); backdrop-filter: blur(2px); }
 .qa-modal-card {
-  position: relative; z-index: 1; width: 760px; max-width: 100%; max-height: 90vh; overflow-y: auto;
+  position: relative; z-index: 1; width: 1240px; max-width: 100%; max-height: 92vh; overflow-y: auto;
   background: var(--app-surface); border: 1px solid var(--app-border);
   border-radius: 16px; box-shadow: 0 24px 70px rgba(8, 13, 26, 0.4);
 }
