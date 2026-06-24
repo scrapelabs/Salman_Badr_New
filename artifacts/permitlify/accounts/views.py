@@ -1,158 +1,17 @@
-from django.contrib.auth import authenticate, login, logout
+from django.contrib import messages
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
-from django.shortcuts import redirect, render
+from django.core.paginator import Paginator
+from django.db.models import Count, Max
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
-DEFAULT_MAINT_MSG = (
-    "Auto-paused after 5 consecutive failures. An operator must re-enable "
-    "this source once the upstream is healthy again."
-)
-
-# In-memory sample catalogue of scraper scripts (each one mirrors a real
-# spider like `billiejeankingcup`). Mutated in place by the status form so the
-# Production/Maintenance toggle behaves for the rest of the server process.
-SCRAPERS = [
-    {
-        "slug": "billiejeankingcup",
-        "code": "BJK",
-        "name": "Billie Jean King Cup",
-        "tour": "ITF",
-        "domain": "billiejeankingcup.com",
-        "vendor": "https://www.billiejeankingcup.com",
-        "desc": "Women's national-team competition — ties, results and per-round "
-        "draws scraped via pure HTTP. Session cookies are cached per spider run "
-        "to skip the login step.",
-        "mode": "production",
-        "calls": 1240,
-        "returns": "CSV",
-        "last_run": "2h ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "daviscup",
-        "code": "DC",
-        "name": "Davis Cup",
-        "tour": "ITF",
-        "domain": "daviscup.com",
-        "vendor": "https://www.daviscup.com",
-        "desc": "Men's national-team competition — group ties, knockout draws and "
-        "live tie scores mined per round.",
-        "mode": "production",
-        "calls": 980,
-        "returns": "CSV",
-        "last_run": "3h ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "atp-rankings",
-        "code": "ATP",
-        "name": "ATP Rankings",
-        "tour": "ATP Tour",
-        "domain": "atptour.com",
-        "vendor": "https://www.atptour.com/en/rankings",
-        "desc": "Weekly singles and doubles rankings with points, movement and "
-        "tournaments-played fields.",
-        "mode": "production",
-        "calls": 4120,
-        "returns": "JSON",
-        "last_run": "12m ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "wta-rankings",
-        "code": "WTA",
-        "name": "WTA Rankings",
-        "tour": "WTA Tour",
-        "domain": "wtatennis.com",
-        "vendor": "https://www.wtatennis.com/rankings",
-        "desc": "Weekly singles and doubles rankings, including race-to-finals "
-        "standings and country breakdowns.",
-        "mode": "production",
-        "calls": 3870,
-        "returns": "JSON",
-        "last_run": "18m ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "ausopen",
-        "code": "AO",
-        "name": "Australian Open",
-        "tour": "Grand Slam",
-        "domain": "ausopen.com",
-        "vendor": "https://www.ausopen.com",
-        "desc": "Grand Slam draws, schedules and match statistics across all "
-        "events.",
-        "mode": "production",
-        "calls": 640,
-        "returns": "CSV",
-        "last_run": "1h ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "rolandgarros",
-        "code": "RG",
-        "name": "Roland-Garros",
-        "tour": "Grand Slam",
-        "domain": "rolandgarros.com",
-        "vendor": "https://www.rolandgarros.com",
-        "desc": "Clay-court Grand Slam draws and results. Vendor markup changed "
-        "and the parser is being updated.",
-        "mode": "maintenance",
-        "calls": 0,
-        "returns": "CSV",
-        "last_run": "5d ago",
-        "maintenance_message": "Source layout changed on the vendor site. Parser "
-        "is being rebuilt — re-enable once details.py is updated and verified.",
-    },
-    {
-        "slug": "wimbledon",
-        "code": "WIM",
-        "name": "Wimbledon",
-        "tour": "Grand Slam",
-        "domain": "wimbledon.com",
-        "vendor": "https://www.wimbledon.com",
-        "desc": "Grass-court Grand Slam draws, order of play and completed match "
-        "results.",
-        "mode": "production",
-        "calls": 510,
-        "returns": "CSV",
-        "last_run": "4h ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "usopen",
-        "code": "USO",
-        "name": "US Open",
-        "tour": "Grand Slam",
-        "domain": "usopen.org",
-        "vendor": "https://www.usopen.org",
-        "desc": "Hard-court Grand Slam draws, schedules and detailed match "
-        "statistics.",
-        "mode": "production",
-        "calls": 720,
-        "returns": "CSV",
-        "last_run": "2h ago",
-        "maintenance_message": DEFAULT_MAINT_MSG,
-    },
-    {
-        "slug": "atp-live",
-        "code": "LIVE",
-        "name": "ATP Live Scores",
-        "tour": "ATP Tour",
-        "domain": "atptour.com",
-        "vendor": "https://www.atptour.com/en/scores",
-        "desc": "Real-time live match scores polled at a high cadence during "
-        "tournament play.",
-        "mode": "maintenance",
-        "calls": 30,
-        "returns": "JSON",
-        "last_run": "20m ago",
-        "maintenance_message": "Upstream rate-limited the live feed. Paused to "
-        "avoid bans — re-enable when the cooldown window clears.",
-    },
-]
+from .models import Run, Scraper
+from .runs import ALL_TOURNAMENTS, create_run
 
 TAB_LABELS = {
     "real-time": "Real-time test",
@@ -163,22 +22,18 @@ TAB_LABELS = {
     "status": "Status",
 }
 
-
-def _get_scraper(slug):
-    for s in SCRAPERS:
-        if s["slug"] == slug:
-            return s
-    return None
+CALLS_PER_PAGE = 12
+LOG_LINES_PER_PAGE = 150
 
 
 def _counts():
     return {
-        "scrapers": len(SCRAPERS),
+        "scrapers": Scraper.objects.count(),
         "schedule": 12,
         "proxies": 48,
         "apis": 6,
-        "logs": 9,
-        "users": 4,
+        "logs": Run.objects.count(),
+        "users": get_user_model().objects.count(),
     }
 
 
@@ -186,6 +41,13 @@ def _app_ctx(active_nav, **extra):
     ctx = {"counts": _counts(), "active_nav": active_nav}
     ctx.update(extra)
     return ctx
+
+
+def _scrapers_annotated():
+    return Scraper.objects.annotate(
+        run_count=Count("runs"),
+        last_run_at=Max("runs__started_at"),
+    )
 
 
 def login_view(request):
@@ -207,42 +69,143 @@ def login_view(request):
 
 @login_required
 def overview_view(request):
-    calls_today = sum(s["calls"] for s in SCRAPERS)
-    maint_count = sum(1 for s in SCRAPERS if s["mode"] == "maintenance")
+    today = timezone.localdate()
     ctx = _app_ctx(
         "overview",
-        calls_today=f"{calls_today:,}",
-        maint_count=maint_count,
-        recent=SCRAPERS[:4],
+        active_scrapers=Scraper.objects.filter(mode=Scraper.Mode.PRODUCTION).count(),
+        runs_today=Run.objects.filter(started_at__date=today).count(),
+        maint_count=Scraper.objects.filter(mode=Scraper.Mode.MAINTENANCE).count(),
+        recent=_scrapers_annotated().order_by("-last_run_at")[:4],
     )
     return render(request, "overview.html", ctx)
 
 
 @login_required
 def scrapers_view(request):
-    return render(request, "scrapers.html", _app_ctx("scrapers", scrapers=SCRAPERS))
+    scrapers = _scrapers_annotated().order_by("name")
+    return render(request, "scrapers.html", _app_ctx("scrapers", scrapers=scrapers))
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def scraper_detail_view(request, slug):
-    s = _get_scraper(slug)
-    if s is None:
-        raise Http404("Scraper not found")
+    s = get_object_or_404(Scraper, slug=slug)
 
+    # POST = save Production/Maintenance status from the Status tab.
     if request.method == "POST":
-        mode = request.POST.get("mode", s["mode"])
-        if mode in ("production", "maintenance"):
-            s["mode"] = mode
-        s["maintenance_message"] = request.POST.get(
-            "maintenance_message", s["maintenance_message"]
+        mode = request.POST.get("mode", s.mode)
+        if mode in (Scraper.Mode.PRODUCTION, Scraper.Mode.MAINTENANCE):
+            s.mode = mode
+        s.maintenance_message = request.POST.get(
+            "maintenance_message", s.maintenance_message
         )
+        s.save(update_fields=["mode", "maintenance_message", "updated_at"])
+        messages.success(request, "Status updated.")
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=status")
 
-    tab = request.GET.get("tab", "status")
+    tab = request.GET.get("tab", "real-time")
     if tab not in TAB_LABELS:
-        tab = "status"
+        tab = "real-time"
+
     ctx = _app_ctx("scrapers", s=s, tab=tab, tab_label=TAB_LABELS[tab])
+
+    if tab == "real-time":
+        today = timezone.localdate()
+        ctx["tournaments"] = [ALL_TOURNAMENTS] + list(s.tournaments or [])
+        ctx["default_to"] = today.isoformat()
+        ctx["default_from"] = (today - timezone.timedelta(days=7)).isoformat()
+    elif tab == "calls":
+        paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
+        ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
+        ctx["run_total"] = paginator.count
+
     return render(request, "scraper_detail.html", ctx)
+
+
+@login_required
+@require_http_methods(["POST"])
+def scraper_run_view(request, slug):
+    s = get_object_or_404(Scraper, slug=slug)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+
+    if s.is_maintenance:
+        messages.error(
+            request, "This source is in maintenance — real-time runs are blocked."
+        )
+        return redirect(back)
+
+    tournament = request.POST.get("tournament", ALL_TOURNAMENTS).strip()
+    valid = {ALL_TOURNAMENTS} | set(s.tournaments or [])
+    if tournament not in valid:
+        messages.error(request, "Unknown tournament for this source.")
+        return redirect(back)
+
+    raw_from = request.POST.get("date_from", "").strip()
+    raw_to = request.POST.get("date_to", "").strip()
+    date_from = parse_date(raw_from) if raw_from else None
+    date_to = parse_date(raw_to) if raw_to else None
+
+    if bool(raw_from) != bool(raw_to):
+        messages.error(request, "Provide both a start and end date, or leave both empty.")
+        return redirect(back)
+    if (raw_from and not date_from) or (raw_to and not date_to):
+        messages.error(request, "Enter valid dates (YYYY-MM-DD).")
+        return redirect(back)
+    if date_from and date_to and date_from > date_to:
+        messages.error(request, "The start date must be on or before the end date.")
+        return redirect(back)
+
+    run = create_run(
+        s,
+        tournament=tournament,
+        date_from=date_from,
+        date_to=date_to,
+        user=request.user,
+        allow_failure=False,
+    )
+    messages.success(
+        request,
+        f"Run #{run.short_id} {run.get_status_display().lower()} — "
+        f"{run.row_count} rows ({run.size_label}).",
+    )
+    return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=calls")
+
+
+def _get_run(slug, run_uuid):
+    return get_object_or_404(Run, uuid=run_uuid, scraper__slug=slug)
+
+
+@login_required
+def run_log_view(request, slug, run_uuid):
+    run = _get_run(slug, run_uuid)
+    lines = run.log_text.splitlines()
+    paginator = Paginator(lines, LOG_LINES_PER_PAGE)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    ctx = _app_ctx(
+        "scrapers",
+        s=run.scraper,
+        run=run,
+        page_obj=page_obj,
+        line_total=len(lines),
+    )
+    return render(request, "run_log.html", ctx)
+
+
+@login_required
+def run_log_download_view(request, slug, run_uuid):
+    run = _get_run(slug, run_uuid)
+    resp = HttpResponse(run.log_text, content_type="text/plain; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{slug}-{run.short_id}.log"'
+    return resp
+
+
+@login_required
+def run_csv_download_view(request, slug, run_uuid):
+    run = _get_run(slug, run_uuid)
+    body = run.csv_data or ""
+    resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{slug}-{run.short_id}.csv"'
+    return resp
 
 
 def _placeholder(active_nav, kicker, title, sub, empty_title, empty_sub):

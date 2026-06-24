@@ -1,0 +1,42 @@
+{% extends "app_base.html" %}
+{% block title %}Run #{{ run.short_id }} log · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <a class="crumb" href="{% url 'scrapers' %}">Scrapers</a>
+  <span class="crumb-sep">/</span>
+  <a class="crumb" href="{% url 'scraper_detail' s.slug %}?tab=calls">{{ s.code }}</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">Run #{{ run.short_id }}</span>
+{% endblock %}
+{% block topbar_actions %}
+  <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug run.uuid %}">Download log</a>
+  {% if run.has_csv %}<a class="btn btn-ghost btn-sm" href="{% url 'run_csv_download' s.slug run.uuid %}">Download CSV</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="content-narrow">
+  <div class="page-head">
+    <div class="kicker">Run log</div>
+    <h1 class="h-title">#{{ run.short_id }} · {{ s.name }}</h1>
+    <p class="h-sub">Full execution log for this run. {{ line_total }} line{{ line_total|pluralize }} total.</p>
+  </div>
+
+  <div class="logmeta">
+    <span class="logchip"><b>Status</b><span class="run-status {{ run.status }}">{{ run.get_status_display }}</span></span>
+    <span class="logchip"><b>Started</b>{{ run.started_at|date:"M j, Y · H:i" }}</span>
+    <span class="logchip"><b>Tournament</b>{{ run.tournament }}</span>
+    <span class="logchip"><b>Window</b>{% if run.date_from %}{{ run.date_from|date:"Y-m-d" }} → {{ run.date_to|date:"Y-m-d" }}{% else %}full history{% endif %}</span>
+    <span class="logchip"><b>Rows</b>{{ run.row_count }}</span>
+    <span class="logchip"><b>Size</b>{{ run.size_label }}</span>
+    <span class="logchip"><b>Duration</b>{{ run.duration_label }}</span>
+    {% if run.launched_by %}<span class="logchip"><b>By</b>{{ run.launched_by.username }}</span>{% endif %}
+  </div>
+
+  <div class="logwrap">
+    <ol class="loglines" start="{{ page_obj.start_index }}">
+      {% for line in page_obj %}<li><span class="logline">{{ line }}</span></li>{% endfor %}
+    </ol>
+  </div>
+  {% include "partials/pagination.html" with page_obj=page_obj base_query="" %}
+</div>
+{% endblock %}

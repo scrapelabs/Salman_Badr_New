@@ -9,7 +9,7 @@ MatchMiner is a Tennis Intelligence Platform SaaS that delivers daily, AI-scored
 The app was rebuilt from scratch in **Django** (Python), replacing the previous React+Vite frontend and the Express API. Django now serves every page and handles authentication directly.
 
 - Python 3.11, Django 5.2
-- DB: PostgreSQL (Django ORM). Users in `auth_user`, sessions in `django_session`.
+- DB: PostgreSQL (Django ORM). Users in `auth_user`, sessions in `django_session`. App data in `accounts_scraper` (the 9 tennis sources) and `accounts_run` (per-run history, logs, CSV output).
 - Server: gunicorn (production), `manage.py runserver` (development)
 - Static: WhiteNoise (`CompressedManifestStaticFilesStorage`)
 - Config helpers: `dj-database-url` (reads `DATABASE_URL`), `psycopg2-binary`
@@ -31,9 +31,14 @@ The app runs via the `artifacts/permitlify: web` workflow (do not run `pnpm dev`
   - `manage.py` — Django entrypoint.
   - `matchminer/settings.py` — settings (DB, cookies, proxy, static). See "Replit integration" below.
   - `matchminer/urls.py` — root URL conf (includes `accounts`).
-  - `accounts/` — auth app: `views.py` (`login_view`, plus `@login_required` `dashboard_view` / `scraper_directory_view` / `run_history_view`, and POST-only `logout_view`), `urls.py`.
-  - `templates/` — `base.html` (html shell), `app_base.html` (authenticated layout with the left sidebar; defines a `content` block), `login.html`, `dashboard.html`, `scraper_directory.html`, `run_history.html`, `partials/logo.html` (tennis-ball SVG logo, takes a `uid` for unique gradient IDs). The sidebar marks the active item via `request.resolver_match.url_name`.
-  - `static/css/styles.css` — brand tokens (`:root`) + login layout (ported from the old `login.css`/`index.css`) + dashboard styles.
+  - `accounts/` — the app:
+    - `models.py` — `Scraper` (slug/code/name/tour/domain/vendor_url/description/returns/`tournaments` JSON/`mode`/`maintenance_message`) and `Run` (uuid, FK `scraper`, `launched_by` FK→user SET_NULL, tournament, date_from/to, status, started/finished, duration_ms, row_count, output_size_bytes, `log_text`, `csv_data`). Helper props: `is_maintenance`, `short_id`, `duration_label`, `size_label`, `has_csv`. **Do not** add `run_count`/`last_run_at` as model props — they're query annotations.
+    - `runs.py` — simulated run generator (`create_run`, `build_log`, `build_csv`, `ALL_TOURNAMENTS`). No live scraping: a "run" is generated from its inputs. `build_csv` uses `csv.writer` (player names contain commas) and `_sanitize` guards spreadsheet formula injection. Stored `csv_data`/`log_text` are **snapshots** — regenerate via `seed_demo_runs --reset` after changing generators.
+    - `management/commands/seed_demo_runs.py` — idempotent demo-run seeder (`--reset`, `--per`).
+    - `migrations/0002_seed_scrapers.py` — inline idempotent data migration seeding the 9 scrapers.
+    - `views.py` (`login_view`; `@login_required` `overview_view` / `scrapers_view` / `scraper_detail_view` / `scraper_run_view` / `run_log_view` / `run_log_download_view` / `run_csv_download_view` + placeholder pages; POST-only `logout_view`), `urls.py`.
+  - `templates/` — `base.html` (html shell), `app_base.html` (authenticated layout: left sidebar + topbar with `breadcrumb`/`topbar_actions` blocks + theme toggle + `tr[data-href]` row-click that ignores anchors; defines a `content` block), `login.html`, `overview.html`, `scrapers.html`, `scraper_detail.html` (the Lab — tabbed), `run_log.html` (paginated log viewer), `_placeholder.html`, `partials/` (`logo.html`, `scraper_table.html`, `pagination.html`). The sidebar marks the active item via `active_nav`.
+  - `static/css/styles.css` — brand tokens + `--app-*` theme tokens (light `:root` + `html[data-theme="dark"]`) + login layout + app/lab component styles. Append new component CSS using the `--app-*` tokens.
   - `static/favicon.svg` — preserved from the original app.
   - `.replit-artifact/artifact.toml` — repurposes the `web` artifact to run Django (see below).
 - `attached_assets/dailypermit_*.html` — original supplied design mockups (source of truth for each page's look).
@@ -50,16 +55,20 @@ The Replit artifacts framework has no Python/Django kind, so the existing `web` 
 
 ## Auth & seed account
 
-Django's built-in auth. Seeded login: username `salman` (the password was set out-of-band, not stored in the repo). Flow verified end-to-end: login → `/dashboard/`, protected route redirects to `/` when unauthenticated, wrong password shows an inline error, logout returns to `/`.
+Django's built-in auth. Seeded login: username `salman` (the password was set out-of-band, not stored in the repo). Flow verified end-to-end: login → `/overview/`, protected route redirects to `/` when unauthenticated, wrong password shows an inline error, logout returns to `/`.
 
 ## Product
 
 - **Login** (`/`) — two-column page: dark sales/marketing panel left (headline with blue→green gradient, proof cards, trust badges), white sign-in form right (username/password). MatchMiner-branded (tennis-ball logo, wordmark, domain). Complete.
   - Caveat: the left-panel sales copy and proof cards are still permit-themed from the original concept (faithful port). Rewrite for tennis when updating body content.
-- **Authenticated app** — pages behind login share `app_base.html`, which renders a left **sidebar**: brand, nav (Dashboard → Scraper Directory → Run History), and a footer with the user + logout.
-  - **Dashboard** (`/dashboard/`) — greets the user; three stat cards (placeholder values).
-  - **Scraper Directory** (`/scraper-directory/`) — placeholder; will list scraper endpoints (see `attached_assets/Image20260624020035_*.png` reference).
-  - **Run History** (`/run-history/`) — placeholder; will show per-run status/source/size/duration.
+- **Authenticated app** — pages behind login share `app_base.html` (left sidebar + topbar). DB-backed.
+  - **Overview** (`/overview/`) — greets the user; three live stat cards (active scrapers, runs today, in maintenance) + a "Recently active" scraper table.
+  - **Scrapers** (`/scrapers/`) — lists the 9 scrapers with Tour/Mode/Runs/Last-run (counts from query annotations) and an **Open lab** button → the detail page.
+  - **Scraper Lab** (`/scrapers/<slug>/?tab=…`) — tabbed detail page, the core feature:
+    - **Real-time test** — form (from/to dates + single tournament or "All tournaments") that POSTs to `scraper_run` and creates a `Run`. Server-side validated (date order, both-or-neither dates, tournament must belong to the scraper) and **blocked when the scraper is in maintenance**. Redirects to the Calls tab with a flash message.
+    - **Calls history** — paginated (12/page) list of runs: id, started, tournament, window, status pill, rows, size, duration, and per-run **Open log** (new tab), **Log** (.txt download), **CSV** (download). Routes are scoped by `uuid + scraper__slug` (no IDOR).
+    - **Status** — Production/Maintenance radio + maintenance message, persisted to `Scraper.mode`; gates real-time runs. Other tabs (Code samples, Settings, Enhancements) are placeholders.
+  - **Run log viewer** (`/scrapers/<slug>/runs/<uuid>/log/`) — paginated (150 lines/page) log with metadata chips and Download log/CSV; opened via `target="_blank"`.
 
 ## Legacy / cleanup
 
@@ -73,8 +82,9 @@ Django's built-in auth. Seeded login: username `salman` (the password was set ou
 ## Gotchas
 
 - Run the app via the workflow, not `pnpm dev`. The workflow's cwd is the artifact dir.
-- After model/settings changes, restart the `artifacts/permitlify: web` workflow.
-- Keep brand tokens global in `static/css/styles.css` `:root`; scope new-page CSS under that page's root class.
+- After model/settings changes, restart the `artifacts/permitlify: web` workflow. The server runs `--noreload`, so changes to Python (incl. `runs.py`) only take effect after a restart.
+- `Run.csv_data`/`log_text` are snapshots taken at creation. After editing the generators in `runs.py`, run `python3 manage.py seed_demo_runs --reset` to regenerate existing demo rows (and restart the workflow).
+- Keep brand tokens global in `static/css/styles.css` `:root`; scope new-page CSS under that page's root class. App/lab styles use the `--app-*` light/dark tokens.
 
 ## Pointers
 

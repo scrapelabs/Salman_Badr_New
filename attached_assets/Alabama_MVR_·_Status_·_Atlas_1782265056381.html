@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<!-- saved from url=(0041)http://atlas.truckbase.ai/apis/al/status/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alabama MVR · Status · Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com/">
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+  <link href="./Alabama MVR · Status · Atlas_files/css2" rel="stylesheet">
+  <link rel="stylesheet" href="./Alabama MVR · Status · Atlas_files/spotter.css">
+  
+  <link rel="icon" type="image/svg+xml" href="http://atlas.truckbase.ai/static/img/atlas-favicon.svg">
+  <link rel="apple-touch-icon" href="http://atlas.truckbase.ai/static/img/atlas-favicon.svg">
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('spotter-theme');
+        if (t === 'dark') document.documentElement.classList.add('dark');
+      } catch(e){}
+    })();
+  </script>
+  <script src="./Alabama MVR · Status · Atlas_files/htmx.org@1.9.12"></script>
+<style>                      .htmx-indicator{opacity:0}                      .htmx-request .htmx-indicator{opacity:1; transition: opacity 200ms ease-in;}                      .htmx-request.htmx-indicator{opacity:1; transition: opacity 200ms ease-in;}                    </style></head>
+<body>
+
+<div class="mesh" aria-hidden="true"><i class="b3"></i><i class="b4"></i></div>
+<div class="grain" aria-hidden="true"></div>
+
+
+
+
+<div class="app-shell">
+  <div class="sb-backdrop" data-close-sidebar="" aria-hidden="true"></div>
+  <aside class="sidebar" id="sidebar">
+   <div class="sb-head">
+    <div class="brand">
+      
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 19 L12 5 L19 19"></path>
+          <path d="M8.5 14 L15.5 14"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="name">Atlas</div>
+        <span class="ver">v1.0 · production</span>
+      </div>
+    </div>
+    <!-- removed: workspace card / new-scraper-run CTA / quick action icons -->
+    <div style="display:none">
+    <div class="ws-card ws-static" role="group" aria-label="Workspace: Mudflap Pipeline">
+      <div class="ws-avatar" aria-hidden="true">M</div>
+      <div class="ws-meta">
+        <div class="top">Mudflap Pipeline</div>
+        <div class="sub">Residential · Postgres</div>
+      </div>
+    </div>
+
+    <a class="side-cta" href="http://atlas.truckbase.ai/scraper/">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      New scraper run
+    </a>
+
+    <div class="side-actions" role="toolbar" aria-label="Quick actions">
+      <a href="http://atlas.truckbase.ai/scraper/" title="Open scraper" aria-label="Open scraper">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+      </a>
+      <a href="http://atlas.truckbase.ai/schedule/" title="Schedule" aria-label="Schedule">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+      </a>
+      <a href="http://atlas.truckbase.ai/" title="Refresh" aria-label="Refresh dashboard">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15A9 9 0 116.7 5.3L23 10"></path></svg>
+      </a>
+      <a href="http://atlas.truckbase.ai/settings/" title="Settings" aria-label="Settings">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
+      </a>
+    </div>
+    </div>
+
+   </div>
+
+   <nav class="sb-nav">
+    <div class="nav-section">Workspace</div>
+    <a class="nav-item " href="http://atlas.truckbase.ai/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+      <span class="grow">Overview</span>
+    </a>
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/scrapers/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+      <span class="grow">Scrapers</span>
+      <span class="nav-badge">18</span>
+    </a>
+    
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/schedule/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+      <span class="grow">Schedule</span>
+      <span class="nav-badge">OFF</span>
+    </a>
+    
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/proxies/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="3"></circle></svg>
+      <span class="grow">Proxies</span>
+      <span class="nav-badge" style="text-transform:uppercase;">RES</span>
+    </a>
+    
+    
+    
+    <a class="nav-item active" href="http://atlas.truckbase.ai/apis/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+      <span class="grow">APIs</span>
+      <span class="nav-badge">10</span>
+    </a>
+    
+    
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/apis/pdfs/" style="padding-left:36px;">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+      <span class="grow">PDFs &amp; logs</span>
+    </a>
+    
+    
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/portals/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      <span class="grow">Portals</span>
+    </a>
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/portals-requirements/" style="padding-left:36px;">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg>
+      <span class="grow">Requirements</span>
+    </a>
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/companies/" style="padding-left:36px;">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18M3 9h6M3 15h6"></path></svg>
+      <span class="grow">Companies</span>
+    </a>
+    
+    
+    
+
+    <div class="nav-section">System</div>
+    <a class="nav-item " href="http://atlas.truckbase.ai/settings/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
+      <span class="grow">Settings</span>
+    </a>
+    
+    
+    <a class="nav-item " href="http://atlas.truckbase.ai/users/">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg>
+      <span class="grow">Users</span>
+      <span class="nav-badge">11</span>
+    </a>
+    
+
+   </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="sb-toggle" id="sbToggle" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <div class="crumbs">
+        <span class="crumb-root">Mudflap</span>
+        <span class="sep">/</span>
+        <b>APIs / AL / Status</b>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="pills">
+        <div class="bell-wrap" id="bellWrap" hx-get="/notifications/recent/" hx-trigger="load, every 15s" hx-target="#bellPanel" hx-swap="innerHTML">
+          <button class="btn bell-btn" type="button" id="bellBtn" title="Notifications" aria-label="Notifications" aria-haspopup="menu" aria-expanded="false">
+            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 01-3.4 0"></path></svg>
+            
+          </button>
+          <div class="bell-panel" id="bellPanel" role="menu" aria-label="Notifications">
+
+<div class="bell-head">
+  <div class="bell-title">
+    Notifications
+    
+  </div>
+  
+</div>
+
+<div class="bell-list">
+  
+    <div class="bell-empty">No notifications yet.</div>
+  
+</div>
+
+<div class="bell-foot">
+  <a href="http://atlas.truckbase.ai/settings/?tab=notifications" class="btn-info btn-xs">View all in Settings →</a>
+</div>
+</div>
+        </div>
+        <button class="theme-pill" id="themeToggle" type="button">
+          <svg id="themeIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"></path></svg>
+          <span id="themeLabel">Dark</span>
+        </button>
+
+        <div class="user-pill" id="userPill" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">
+          <span class="avatar">K</span>
+          <span class="meta">
+            <b>khemiri@spotter.ai</b>
+            <em>Super admin</em>
+          </span>
+          <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <div class="user-menu" role="menu" aria-label="Account">
+            <a class="user-menu-item" href="http://atlas.truckbase.ai/" role="menuitem">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+              Dashboard
+            </a>
+            <a class="user-menu-item" href="http://atlas.truckbase.ai/settings/" role="menuitem">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
+              Settings
+            </a>
+            <form method="post" action="http://atlas.truckbase.ai/logout/" role="none">
+              <input type="hidden" name="csrfmiddlewaretoken" value="eNkblEbEQFJY77StCLZMv0sqYR5MefxvB6Hla9yf7L3OJDu1l3j5XehxFZrkOlVn">
+              <button class="user-menu-item danger" type="submit" role="menuitem">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                Sign out
+              </button>
+            </form>
+          </div>
+        </div>
+
+        
+      </div>
+    </div>
+
+    
+    
+<div class="page-header">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <span class="api-badge" style="height:36px; min-width:54px; font-size:14px;">AL</span>
+    <div>
+      <h1 style="margin:0;">Alabama MVR</h1>
+      <div class="sub">Alabama Law Enforcement Agency MVR — pure HTTP scrape of the ALEA vendor portal via curl_cffi (Chrome impersonation), no browser. Session cookies cached per-username in VendorSession so subsequent runs skip the login step. Returns a PDF driver abstract.</div>
+      
+      
+      <a class="api-website-link" href="https://www.alabamainteractive.org/mvr_search/" target="_blank" rel="noopener noreferrer">
+        Open vendor site ↗ <span class="api-website-url">https://www.alabamainteractive.org/mvr_search/</span>
+      </a>
+      
+    </div>
+  </div>
+  <a class="btn-ghost btn-xs" href="http://atlas.truckbase.ai/apis/">← All APIs</a>
+</div>
+
+
+
+<div class="lab-subnav">
+  <a class="lab-subtab " href="http://atlas.truckbase.ai/apis/al/">
+    <span class="lab-subtab-ico">⌁</span> Real-time test
+  </a>
+  <a class="lab-subtab " href="http://atlas.truckbase.ai/apis/al/code/">
+    <span class="lab-subtab-ico">{ }</span> Code samples
+  </a>
+  <a class="lab-subtab " href="http://atlas.truckbase.ai/apis/al/history/">
+    <span class="lab-subtab-ico">⟳</span> Calls history
+    <span class="lab-subtab-count">115</span>
+  </a>
+  
+  
+  <a class="lab-subtab " href="http://atlas.truckbase.ai/apis/al/settings/">
+    <span class="lab-subtab-ico">⚙</span> Settings
+    
+  </a>
+  
+  <a class="lab-subtab " href="http://atlas.truckbase.ai/apis/al/enhancements/">
+    <span class="lab-subtab-ico">✦</span> Enhancements
+  </a>
+  <a class="lab-subtab active" href="http://atlas.truckbase.ai/apis/al/status/">
+    <span class="lab-subtab-ico">◉</span> Status
+    
+  </a>
+</div>
+
+
+
+<div class="lab-status-wrap">
+  
+<form id="api-mode-wrap" class="glass card api-mode-panel  " hx-post="/apis/al/mode/" hx-target="#api-mode-wrap" hx-swap="outerHTML" method="post" autocomplete="off">
+  <input type="hidden" name="csrfmiddlewaretoken" value="eNkblEbEQFJY77StCLZMv0sqYR5MefxvB6Hla9yf7L3OJDu1l3j5XehxFZrkOlVn">
+
+  <div class="api-mode-panel-head">
+    <div class="api-mode-panel-title">
+      <span class="api-mode-panel-eyebrow">API status</span>
+      <span class="api-mode-panel-name">AL · Alabama MVR</span>
+    </div>
+    <span class="api-mode-panel-tag is-prod">
+      <span class="api-mode-panel-tag-dot"></span>
+      Production
+    </span>
+  </div>
+
+  <div class="api-mode-panel-row">
+    <div class="api-mode-seg" role="radiogroup" aria-label="API mode" data-mode-seg="" onclick="(function(e){var l=e.target.closest(&#39;.api-mode-seg-opt&#39;);if(!l)return;var inp=l.querySelector(&#39;input[type=radio]&#39;);if(!inp||inp.disabled)return;l.parentNode.querySelectorAll(&#39;.api-mode-seg-opt&#39;).forEach(function(o){o.classList.remove(&#39;sel&#39;);});l.classList.add(&#39;sel&#39;);inp.checked=true;})(event)">
+      <label class="api-mode-seg-opt sel">
+        <input type="radio" name="mode" value="production" checked="">
+        <span class="api-mode-seg-dot good"></span>
+        <span>Production</span>
+      </label>
+      <label class="api-mode-seg-opt ">
+        <input type="radio" name="mode" value="maintenance">
+        <span class="api-mode-seg-dot warn"></span>
+        <span>Maintenance</span>
+      </label>
+    </div>
+
+    <div class="api-mode-msg-wrap">
+      <label class="api-mode-msg-label" for="api-mode-msg-al">
+        Message shown when in maintenance
+      </label>
+      <textarea id="api-mode-msg-al" name="maintenance_message" rows="2" maxlength="400" class="api-mode-msg" placeholder="Optional. Shown in the alert banner and returned in the public API error response.">Auto-paused after 5 consecutive failures (at 2026-05-13 11:52 UTC). An operator must re-enable this source from /apis/al/mode/ once the upstream is healthy again.</textarea>
+    </div>
+  </div>
+
+  <div class="api-mode-panel-foot">
+    <span class="api-mode-panel-hint">
+      
+        This API is live — calls run normally.
+      
+    </span>
+    
+      <button type="submit" class="btn-info btn-xs">Save changes</button>
+    
+  </div>
+</form>
+
+
+  <div class="glass card lab-status-explainer">
+    <h3 class="lab-status-h3">What each mode does</h3>
+    <div class="lab-status-modes">
+      <div class="lab-status-mode is-prod">
+        <div class="lab-status-mode-head">
+          <span class="api-mode-panel-tag is-prod">
+            <span class="api-mode-panel-tag-dot"></span>Production
+          </span>
+        </div>
+        <ul class="lab-status-list">
+          <li><strong>Real-time test</strong> button submits jobs normally.</li>
+          <li><strong>Public API</strong> <code>POST /api/safety/search</code> accepts new jobs and returns <code>202</code> with a <code>task_id</code>.</li>
+          <li>This is the default for every API.</li>
+        </ul>
+      </div>
+      <div class="lab-status-mode is-maint">
+        <div class="lab-status-mode-head">
+          <span class="api-mode-panel-tag is-maint">
+            <span class="api-mode-panel-tag-dot"></span>Maintenance
+          </span>
+        </div>
+        <ul class="lab-status-list">
+          <li><strong>Real-time test</strong> button is blocked with a clear message.</li>
+          <li><strong>Public API</strong> returns <code>HTTP 503</code> with <code>{"errors":[…], "maintenance":true, "message":…}</code>.</li>
+          <li>An amber strip appears on every other tab so the state can't be missed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="modal-mount"></div>
+<script>
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      var m = document.getElementById("modal-mount");
+      if (m) m.innerHTML = "";
+    }
+  });
+</script>
+
+  </main>
+</div>
+
+
+<script>
+  (function(){
+    var body = document.body;
+    var toggle = document.getElementById('sbToggle');
+    var sidebar = document.getElementById('sidebar');
+    var mqMobile = window.matchMedia('(max-width: 1024px)');
+
+    function setOpen(open){
+      body.classList.toggle('sidebar-open', open);
+      if (toggle) {
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      }
+      if (open && sidebar) {
+        var first = sidebar.querySelector('a, button');
+        if (first) first.focus({ preventScroll: true });
+      } else if (!open && toggle && document.activeElement &&
+                 sidebar && sidebar.contains(document.activeElement)) {
+        toggle.focus({ preventScroll: true });
+      }
+    }
+    if (toggle) toggle.addEventListener('click', function(){
+      setOpen(!body.classList.contains('sidebar-open'));
+    });
+    document.querySelectorAll('[data-close-sidebar]').forEach(function(el){
+      el.addEventListener('click', function(){ setOpen(false); });
+    });
+    document.querySelectorAll('.sidebar .nav-item, .sidebar .side-cta').forEach(function(el){
+      el.addEventListener('click', function(){
+        if (mqMobile.matches) setOpen(false);
+      });
+    });
+    window.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && body.classList.contains('sidebar-open')) setOpen(false);
+    });
+    // Reset state when leaving mobile breakpoint so backdrop can't strand on desktop
+    function onMqChange(){ if (!mqMobile.matches) setOpen(false); }
+    if (mqMobile.addEventListener) mqMobile.addEventListener('change', onMqChange);
+    else mqMobile.addListener(onMqChange);
+  })();
+</script>
+<script>
+  // Bell dropdown toggle (notifications)
+  (function(){
+    var wrap = document.getElementById('bellWrap');
+    if (!wrap) return;
+    var btn = document.getElementById('bellBtn');
+    function setOpen(open){
+      wrap.classList.toggle('open', open);
+      if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      setOpen(!wrap.classList.contains('open'));
+    });
+    document.addEventListener('click', function(e){
+      if (!wrap.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') setOpen(false);
+    });
+  })();
+</script>
+<script>
+  // User-pill dropdown
+  (function(){
+    var pill = document.getElementById('userPill');
+    if (!pill) return;
+    function setOpen(open){
+      pill.classList.toggle('open', open);
+      pill.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    pill.addEventListener('click', function(e){
+      if (e.target.closest('.user-menu')) return;  // let inner clicks through
+      setOpen(!pill.classList.contains('open'));
+    });
+    pill.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!pill.classList.contains('open')); }
+      if (e.key === 'Escape') setOpen(false);
+    });
+    document.addEventListener('click', function(e){
+      if (!pill.contains(e.target)) setOpen(false);
+    });
+  })();
+</script>
+<script>
+  (function(){
+    var html = document.documentElement;
+    var icon = document.getElementById('themeIcon');
+    var label = document.getElementById('themeLabel');
+    function sync(){
+      var dark = html.classList.contains('dark');
+      label.textContent = dark ? 'Light' : 'Dark';
+      icon.innerHTML = dark
+        ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+        : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
+    }
+    sync();
+    document.getElementById('themeToggle').addEventListener('click', function(){
+      html.classList.toggle('dark');
+      try { localStorage.setItem('spotter-theme', html.classList.contains('dark') ? 'dark' : 'light'); } catch(e){}
+      sync();
+    });
+  })();
+</script>
+
+
+</body></html>

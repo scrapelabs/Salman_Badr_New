@@ -1265,3 +1265,158 @@ code {
     padding: 22px 16px 44px;
   }
 }
+
+/* ===================== LAB: runs, real-time, log viewer ===================== */
+.muted { color: var(--app-text-3); }
+.tbl .num, .tbl th.num { text-align: right; }
+.th-actions, .td-actions { text-align: right; white-space: nowrap; }
+
+/* Detail vendor link sits under the description */
+.detail-titlewrap .detail-vendor { margin-top: 8px; }
+
+/* Real-time test form */
+.rt-form .rt-intro {
+  margin: 4px 0 18px;
+  color: var(--app-text-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.rt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.rt-field { display: flex; flex-direction: column; gap: 6px; }
+.rt-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 10px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-size: 14px;
+  font-family: inherit;
+}
+.rt-input:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px var(--app-accent-bg);
+}
+.rt-input:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn:disabled, .btn[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+/* Calls history */
+.calls-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.calls-count { color: var(--app-text-3); font-size: 13px; font-weight: 600; }
+.runs-tbl .run-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--app-text-2); }
+.runs-tbl .run-window { font-size: 13px; color: var(--app-text-2); white-space: nowrap; }
+.runs-empty { text-align: center; color: var(--app-text-3); padding: 28px 12px; }
+
+.run-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.run-status.success { color: var(--app-prod); background: var(--app-prod-bg); }
+.run-status.failed  { color: var(--app-maint); background: var(--app-maint-bg); }
+.run-status.partial { color: var(--app-amber); background: var(--app-amber-bg); }
+.run-status.running { color: var(--app-accent); background: var(--app-accent-bg); }
+
+.run-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+.run-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-2);
+  text-decoration: none;
+  background: var(--app-surface);
+}
+.run-act:hover { color: var(--app-accent); border-color: var(--app-accent); background: var(--app-accent-bg); }
+.run-act svg { width: 13px; height: 13px; }
+.run-act.is-disabled { opacity: 0.4; cursor: not-allowed; }
+.run-act.is-disabled:hover { color: var(--app-text-2); border-color: var(--app-border-2); background: var(--app-surface); }
+
+/* Flash messages */
+.msg-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.msg {
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.msg-success { color: var(--app-prod); background: var(--app-prod-bg); border-color: var(--app-prod-bg); }
+.msg-error { color: var(--app-maint); background: var(--app-maint-bg); border-color: var(--app-maint-bg); }
+
+/* Pagination */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+.pager-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 9px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.pager-btn:hover { border-color: var(--app-accent); color: var(--app-accent); background: var(--app-accent-bg); }
+.pager-btn.is-disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.pager-info { color: var(--app-text-2); font-size: 13px; font-weight: 600; }
+
+/* Log viewer */
+.logmeta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.logchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface);
+  font-size: 12.5px;
+  color: var(--app-text);
+}
+.logchip b { color: var(--app-text-3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; }
+.logwrap {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-code-bg);
+  box-shadow: var(--app-elev);
+  overflow: auto;
+}
+.loglines {
+  margin: 0;
+  padding: 14px 16px 14px 56px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--app-text);
+}
+.loglines li { white-space: pre-wrap; word-break: break-word; color: var(--app-text-3); }
+.loglines li::marker { color: var(--app-text-3); font-size: 11px; }
+.loglines .logline { color: var(--app-text); }
+
+@media (max-width: 720px) {
+  .rt-grid { grid-template-columns: 1fr; }
+}

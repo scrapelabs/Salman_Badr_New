@@ -1,0 +1,16 @@
+{% comment %}Pager. Pass `page_obj` and `base_query` (a query prefix ending in '&' or empty).{% endcomment %}
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Pagination">
+  {% if page_obj.has_previous %}
+    <a class="pager-btn" href="?{{ base_query }}page={{ page_obj.previous_page_number }}" rel="prev">← Prev</a>
+  {% else %}
+    <span class="pager-btn is-disabled" aria-disabled="true">← Prev</span>
+  {% endif %}
+  <span class="pager-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}
+    <a class="pager-btn" href="?{{ base_query }}page={{ page_obj.next_page_number }}" rel="next">Next →</a>
+  {% else %}
+    <span class="pager-btn is-disabled" aria-disabled="true">Next →</span>
+  {% endif %}
+</nav>
+{% endif %}
