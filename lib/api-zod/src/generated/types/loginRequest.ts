@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export * from './authUser';
-export * from './error';
-export * from './healthStatus';
-export * from './loginRequest';
+export interface LoginRequest {
+  /** @minLength 1 */
+  username: string;
+  /** @minLength 1 */
+  password: string;
+}

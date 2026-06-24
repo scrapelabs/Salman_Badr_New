@@ -1,16 +1,25 @@
 import { useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
+import { useLogin } from "@workspace/api-client-react";
 import LogoMark from "@/components/LogoMark";
 import "./login.css";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const login = useLogin();
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setLocation("/dashboard");
+    setError("");
+    try {
+      await login.mutateAsync({ data: { username, password } });
+      setLocation("/dashboard");
+    } catch {
+      setError("Invalid username or password.");
+    }
   }
 
   return (
@@ -134,14 +143,14 @@ export default function Login() {
           </div>
           <h1 className="form-title">Welcome back</h1>
           <div className="field">
-            <label htmlFor="email">Email Address</label>
+            <label htmlFor="username">Username</label>
             <input
-              id="email"
-              type="email"
-              placeholder="you@company.com"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="username"
+              type="text"
+              placeholder="Your username"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
           <div className="field">
@@ -155,8 +164,17 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <button className="submit-btn" type="submit">
-            Sign In
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
+          <button
+            className="submit-btn"
+            type="submit"
+            disabled={login.isPending}
+          >
+            {login.isPending ? "Signing in…" : "Sign In"}
           </button>
         </form>
       </div>
