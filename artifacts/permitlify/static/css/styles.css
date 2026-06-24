@@ -2171,6 +2171,14 @@ body.mm-modal-open { overflow: hidden; }
 .qa-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
 .qa-ticket-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .qa-ticket-title { font: 800 22px "Plus Jakarta Sans", sans-serif; color: var(--app-text); letter-spacing: -0.6px; line-height: 1.25; margin-bottom: 10px; }
+.qa-ticket-titlebar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.qa-ticket-titlebar .qa-ticket-title { flex: 1 1 auto; }
+.qa-edit-btn { flex: none; gap: 6px; }
+.qa-edit-btn svg { width: 15px; height: 15px; }
+@media (max-width: 760px) {
+  .qa-ticket-titlebar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .qa-edit-btn { align-self: flex-start; }
+}
 .qa-ticket-by { display: flex; align-items: center; gap: 8px; font-size: 10.6px; color: var(--app-text-2); margin-bottom: 20px; }
 .qa-ticket-by strong { color: var(--app-text); font-weight: 700; }
 .qa-body-panel { margin-bottom: 8px; }

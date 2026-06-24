@@ -32,7 +32,13 @@
         <span class="qa-chip qa-chip--scraper">{{ ticket.scraper.name }}</span>
         <span class="qa-card-id">#{{ ticket.short_id }}</span>
       </div>
-      <h1 class="qa-ticket-title">{{ ticket.title }}</h1>
+      <div class="qa-ticket-titlebar">
+        <h1 class="qa-ticket-title">{{ ticket.title }}</h1>
+        <button class="btn btn-ghost btn-sm qa-edit-btn" id="editTicketBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Edit ticket
+        </button>
+      </div>
       <div class="qa-ticket-by">
         <span class="qa-avatar qa-avatar--sm">{{ ticket.created_by.username|first|upper|default:"?" }}</span>
         Filed by <strong>{{ ticket.created_by.username|default:"—" }}</strong> · {{ ticket.created_at|date:"M j, Y · g:i a" }}
@@ -129,4 +135,75 @@
     </aside>
   </div>
 </div>
+
+<div class="qa-modal" id="editTicketModal" hidden>
+  <div class="qa-modal-backdrop" data-close></div>
+  <div class="qa-modal-card" role="dialog" aria-modal="true" aria-label="Edit QA ticket">
+    <div class="qa-modal-head">
+      <h2 class="qa-modal-title">Edit ticket</h2>
+      <button class="qa-modal-x" type="button" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{% url 'qa_ticket_edit' ticket.uuid %}">
+      {% csrf_token %}
+      <div class="qa-modal-body">
+        <div class="rt-grid qa-form-grid">
+          <div class="rt-field">
+            <label class="field-label" for="eScraper">Scraper</label>
+            <select class="rt-input" id="eScraper" name="scraper" required>
+              {% for s in scrapers %}
+              <option value="{{ s.slug }}" {% if s.slug == ticket.scraper.slug %}selected{% endif %}>{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="rt-field">
+            <label class="field-label" for="eStatus">Status</label>
+            <select class="rt-input" id="eStatus" name="status">
+              {% for v, label in statuses %}<option value="{{ v }}" {% if v == ticket.status %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="rt-field">
+            <label class="field-label" for="ePriority">Priority</label>
+            <select class="rt-input" id="ePriority" name="priority">
+              {% for v, label in priorities %}<option value="{{ v }}" {% if v == ticket.priority %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="rt-field qa-title-field">
+          <label class="field-label" for="eTitle">Title</label>
+          <input class="rt-input" id="eTitle" name="title" maxlength="200" required value="{{ ticket.title }}" placeholder="Short summary of the issue" />
+        </div>
+        <div class="rt-field">
+          <label class="field-label">Details</label>
+          <div class="rt-quill"
+               data-target="#eBody"
+               data-upload-url="{% url 'qa_attachment_upload' %}"
+               data-csrf="{{ csrf_token }}"
+               data-placeholder="Describe the bug, steps to reproduce, and attach screenshots…"></div>
+          <textarea id="eBody" name="body_html" hidden>{{ ticket.body_html }}</textarea>
+        </div>
+      </div>
+      <div class="qa-modal-foot">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById("editTicketModal");
+    var openBtn = document.getElementById("editTicketBtn");
+    if (!modal || !openBtn) return;
+    function open() { modal.removeAttribute("hidden"); document.body.classList.add("qa-modal-open"); }
+    function close() { modal.setAttribute("hidden", ""); document.body.classList.remove("qa-modal-open"); }
+    openBtn.addEventListener("click", open);
+    modal.querySelectorAll("[data-close]").forEach(function (el) { el.addEventListener("click", close); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hasAttribute("hidden")) close();
+    });
+  })();
+</script>
 {% endblock %}

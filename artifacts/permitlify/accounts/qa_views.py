@@ -190,8 +190,66 @@ def ticket_detail(request, uuid):
         statuses=Ticket.Status.choices,
         priorities=Ticket.Priority.choices,
         assignable=User.objects.filter(is_active=True).order_by("username"),
+        scrapers=Scraper.objects.order_by("name"),
     )
     return render(request, "qa_ticket.html", ctx)
+
+
+@login_required
+@require_POST
+def ticket_edit(request, uuid):
+    """Full edit of an existing ticket: scraper, title, priority, status, body.
+
+    Mirrors :func:`ticket_create`'s validation and re-sanitises the rich-text
+    body. Like the sidebar :func:`ticket_update`, a status change fans out a
+    notification; other edits stay quiet to avoid noise.
+    """
+    ticket = get_object_or_404(Ticket, uuid=uuid)
+    scraper_slug = (request.POST.get("scraper") or "").strip()
+    title = (request.POST.get("title") or "").strip()
+    status = request.POST.get("status") or ticket.status
+    priority = request.POST.get("priority") or ticket.priority
+    body_html = clean_html(request.POST.get("body_html") or "")
+
+    scraper = Scraper.objects.filter(slug=scraper_slug).first()
+    if not scraper:
+        messages.error(request, "Pick a scraper for this ticket.")
+        return redirect("qa_ticket", uuid=ticket.uuid)
+    if not title:
+        messages.error(request, "Give the ticket a title.")
+        return redirect("qa_ticket", uuid=ticket.uuid)
+    if status not in Ticket.Status.values:
+        status = ticket.status
+    if priority not in Ticket.Priority.values:
+        priority = ticket.priority
+
+    status_changed = status != ticket.status
+
+    ticket.scraper = scraper
+    ticket.title = title[:200]
+    ticket.body_html = body_html
+    ticket.status = status
+    ticket.priority = priority
+    ticket.save(
+        update_fields=[
+            "scraper",
+            "title",
+            "body_html",
+            "status",
+            "priority",
+            "updated_at",
+        ]
+    )
+
+    if status_changed:
+        _notify(
+            request.user,
+            ticket,
+            Notification.Kind.STATUS_CHANGED,
+            f"{request.user.username} moved “{ticket.title[:50]}” to {ticket.get_status_display()}",
+        )
+    messages.success(request, "Ticket updated.")
+    return redirect("qa_ticket", uuid=ticket.uuid)
 
 
 @login_required
