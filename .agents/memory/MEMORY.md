@@ -2,5 +2,5 @@
 - [DB schema management](db-schema-management.md) — DATABASE_URL is Django-owned; schema only via `manage.py migrate`. NEVER run legacy Drizzle `pnpm --filter db push` against it (it drops Django tables).
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
-- [MatchMiner live scrapers](matchminer-live-scrapers.md) — only BJK Cup + Davis Cup are scrapeable live (shared public Stadion API, no proxy); other sources need unavailable proxy/curl_cffi infra, so fail honestly, never simulate.
+- [MatchMiner live scrapers](matchminer-live-scrapers.md) — catalogue trimmed to ONLY BJK Cup (Davis Cup removed, re-addable via parameterised _stadion); unwired slugs fail honestly.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.

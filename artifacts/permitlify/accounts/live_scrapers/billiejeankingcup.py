@@ -1,8 +1,9 @@
 """Billie Jean King Cup (ITF Fed Cup) scraper.
 
 Thin wrapper over the shared :mod:`accounts.live_scrapers._stadion` logic — the
-BJK Cup and Davis Cup are the same public ITF / Stadion API with a different
-draw code and a few constant fields. ``run(run_obj, log)`` returns
+BJK Cup and its sibling team competitions (e.g. Davis Cup) share one public ITF
+/ Stadion API, differing only by draw code and a few constant fields.
+``run(run_obj, log)`` returns
 ``(items_csv, requests_csv, errors_csv, row_count, status)``.
 """
 

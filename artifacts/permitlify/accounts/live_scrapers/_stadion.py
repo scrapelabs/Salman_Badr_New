@@ -1,12 +1,13 @@
 """Shared scraper for ITF / Stadion team-competition data.
 
-The Billie Jean King Cup (Fed Cup) and the Davis Cup are both served by the same
-public ITF / Stadion data API (``api.itf-production.sports-data.stadion.io``),
-with the same JSON shape and the same 60-column ITF-style item schema. This
-module ports that production spider to the Python standard library
-(``urllib``) — no proxies, ``curl_cffi``, ``rich`` or ``pandas`` — and is
-parameterised by a small :class:`StadionConfig`, so each competition is a thin
-wrapper (see ``billiejeankingcup.py`` / ``daviscup.py``).
+The Billie Jean King Cup (Fed Cup) and sibling team competitions (e.g. the
+Davis Cup) are all served by the same public ITF / Stadion data API
+(``api.itf-production.sports-data.stadion.io``), with the same JSON shape and
+the same 60-column ITF-style item schema. This module ports that production
+spider to the Python standard library (``urllib``) — no proxies, ``curl_cffi``,
+``rich`` or ``pandas`` — and is parameterised by a small :class:`StadionConfig`,
+so each competition is a thin wrapper. Currently only ``billiejeankingcup.py``
+is wired; others can be re-added later as more thin wrappers.
 
 Every HTTP call and every failure is recorded through a :class:`Telemetry`
 instance so each run can export ``requests`` / ``errors`` CSVs next to the

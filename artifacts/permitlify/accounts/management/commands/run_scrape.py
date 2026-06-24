@@ -19,7 +19,7 @@ import traceback
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from accounts.live_scrapers import billiejeankingcup, daviscup
+from accounts.live_scrapers import billiejeankingcup
 from accounts.live_scrapers.telemetry import Telemetry
 from accounts.models import Run, RunLogLine
 
@@ -27,7 +27,6 @@ from accounts.models import Run, RunLogLine
 # (items_csv, requests_csv, errors_csv, row_count, status).
 LIVE_SCRAPERS = {
     "billiejeankingcup": billiejeankingcup.run,
-    "daviscup": daviscup.run,
 }
 
 
