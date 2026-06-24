@@ -1,7 +1,7 @@
 import subprocess
 import sys
 import uuid
-from datetime import date
+from datetime import date, timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib import messages
@@ -313,11 +313,28 @@ def run_log_view(request, slug, run_uuid):
     return render(request, "run_log.html", ctx)
 
 
+def _download_filename(slug, run, kind):
+    """Standard download name shared by every scraper:
+
+    ``<scraper slug>__<UTC start timestamp>_<kind>.csv`` where ``kind`` is one of
+    ``log`` / ``item`` / ``request`` / ``error``. Keeping one convention across
+    all scrapers makes the files predictable and chronologically sortable.
+    """
+    ts = run.started_at
+    if timezone.is_naive(ts):
+        stamp = ts.strftime("%Y%m%d-%H%M%S")
+    else:
+        stamp = ts.astimezone(dt_timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return f"{slug}__{stamp}_{kind}.csv"
+
+
 @login_required
 def run_log_download_view(request, slug, run_uuid):
     run = _get_run(slug, run_uuid)
     resp = HttpResponse(_run_log_text(run), content_type="text/plain; charset=utf-8")
-    resp["Content-Disposition"] = f'attachment; filename="{slug}-{run.short_id}.log"'
+    resp["Content-Disposition"] = (
+        f'attachment; filename="{_download_filename(slug, run, "log")}"'
+    )
     return resp
 
 
@@ -326,7 +343,9 @@ def run_csv_download_view(request, slug, run_uuid):
     run = _get_run(slug, run_uuid)
     body = run.csv_data or ""
     resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = f'attachment; filename="{slug}-{run.short_id}.csv"'
+    resp["Content-Disposition"] = (
+        f'attachment; filename="{_download_filename(slug, run, "item")}"'
+    )
     return resp
 
 
@@ -336,7 +355,7 @@ def run_requests_download_view(request, slug, run_uuid):
     body = run.requests_csv or ""
     resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = (
-        f'attachment; filename="{slug}-{run.short_id}-requests.csv"'
+        f'attachment; filename="{_download_filename(slug, run, "request")}"'
     )
     return resp
 
@@ -347,7 +366,7 @@ def run_errors_download_view(request, slug, run_uuid):
     body = run.errors_csv or ""
     resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = (
-        f'attachment; filename="{slug}-{run.short_id}-errors.csv"'
+        f'attachment; filename="{_download_filename(slug, run, "error")}"'
     )
     return resp
 
