@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import qa_views, views
 
 urlpatterns = [
     path("", views.login_view, name="login"),
@@ -65,5 +65,32 @@ urlpatterns = [
     path("companies/", views.companies_view, name="companies"),
     path("settings/", views.settings_view, name="settings"),
     path("users/", views.users_view, name="users"),
+    # QA Team Tasks
+    path("qa/", qa_views.board, name="qa_board"),
+    path("qa/new/", qa_views.ticket_create, name="qa_ticket_create"),
+    path("qa/t/<uuid:uuid>/", qa_views.ticket_detail, name="qa_ticket"),
+    path("qa/t/<uuid:uuid>/update/", qa_views.ticket_update, name="qa_ticket_update"),
+    path("qa/t/<uuid:uuid>/comment/", qa_views.comment_add, name="qa_comment_add"),
+    path("qa/attachments/", qa_views.attachment_upload, name="qa_attachment_upload"),
+    path(
+        "qa/attachments/<uuid:uuid>/",
+        qa_views.attachment_serve,
+        name="qa_attachment",
+    ),
+    path(
+        "qa/notifications/poll/",
+        qa_views.notifications_poll,
+        name="qa_notifications_poll",
+    ),
+    path(
+        "qa/notifications/read-all/",
+        qa_views.notifications_read_all,
+        name="qa_notifications_read_all",
+    ),
+    path(
+        "qa/notifications/<int:pk>/open/",
+        qa_views.notification_open,
+        name="qa_notification_open",
+    ),
     path("logout/", views.logout_view, name="logout"),
 ]

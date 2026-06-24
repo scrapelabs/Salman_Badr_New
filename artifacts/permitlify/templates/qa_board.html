@@ -1,0 +1,165 @@
+{% extends "app_base.html" %}
+{% load static %}
+{% block title %}QA Team Tasks · MatchMiner{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'vendor/quill/quill.snow.css' %}" />
+  <script defer src="{% static 'vendor/quill/quill.js' %}"></script>
+  <script defer src="{% static 'js/qa_rich_text.js' %}"></script>
+{% endblock %}
+
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">QA Team Tasks</span>
+{% endblock %}
+
+{% block content %}
+<div class="qa-page">
+  <div class="page-head qa-head">
+    <div>
+      <div class="kicker">Workspace</div>
+      <h1 class="h-title">QA Team Tasks</h1>
+      <p class="h-sub">File scraper bugs and data-quality issues, attach screenshots, and move them across the board as the team works through them.</p>
+    </div>
+    <button class="btn btn-primary qa-new-btn" id="newTicketBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      New ticket
+    </button>
+  </div>
+
+  {% if messages %}
+  <div class="msg-stack">
+    {% for m in messages %}<div class="msg msg-{{ m.tags }}">{{ m }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="qa-toolbar">
+    <form method="get" class="qa-filter" id="qaFilter">
+      <label class="field-label" for="qaScraper">Scraper</label>
+      <select class="rt-input" id="qaScraper" name="scraper" onchange="document.getElementById('qaFilter').submit()">
+        <option value="">All scrapers</option>
+        {% for s in scrapers %}
+        <option value="{{ s.slug }}" {% if s.slug == active_scraper %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <span class="qa-total">{{ total_tickets }} ticket{{ total_tickets|pluralize }}</span>
+  </div>
+
+  <div class="qa-board">
+    {% for col in columns %}
+    <section class="qa-col qa-col--{{ col.status }}">
+      <header class="qa-col-head">
+        <span class="qa-col-dot"></span>
+        <span class="qa-col-title">{{ col.label }}</span>
+        <span class="qa-col-count">{{ col.count }}</span>
+      </header>
+      <div class="qa-col-body">
+        {% for t in col.items %}
+        <a class="qa-card" href="{% url 'qa_ticket' t.uuid %}">
+          <div class="qa-card-top">
+            <span class="qa-pri qa-pri--{{ t.priority }}">{{ t.get_priority_display }}</span>
+            <span class="qa-card-id">#{{ t.short_id }}</span>
+          </div>
+          <h3 class="qa-card-title">{{ t.title }}</h3>
+          <div class="qa-card-meta">
+            <span class="qa-chip qa-chip--scraper">{{ t.scraper.name }}</span>
+          </div>
+          <div class="qa-card-foot">
+            <span class="qa-card-by">
+              <span class="qa-avatar qa-avatar--xs">{{ t.created_by.username|first|upper|default:"?" }}</span>
+              {{ t.created_by.username|default:"—" }}
+            </span>
+            <span class="qa-card-stats">
+              {% if t.n_comments %}
+              <span class="qa-card-comments" title="{{ t.n_comments }} comment{{ t.n_comments|pluralize }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                {{ t.n_comments }}
+              </span>
+              {% endif %}
+              <span class="qa-card-ago">{{ t.created_at|timesince }} ago</span>
+            </span>
+          </div>
+        </a>
+        {% empty %}
+        <div class="qa-col-empty">No tickets here</div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="qa-modal" id="ticketModal" hidden>
+  <div class="qa-modal-backdrop" data-close></div>
+  <div class="qa-modal-card" role="dialog" aria-modal="true" aria-label="New QA ticket">
+    <div class="qa-modal-head">
+      <h2 class="qa-modal-title">New QA ticket</h2>
+      <button class="qa-modal-x" type="button" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{% url 'qa_ticket_create' %}">
+      {% csrf_token %}
+      <div class="qa-modal-body">
+        <div class="rt-grid qa-form-grid">
+          <div class="rt-field">
+            <label class="field-label" for="tScraper">Scraper</label>
+            <select class="rt-input" id="tScraper" name="scraper" required>
+              <option value="" disabled {% if not active_scraper %}selected{% endif %}>Choose a scraper…</option>
+              {% for s in scrapers %}
+              <option value="{{ s.slug }}" {% if s.slug == active_scraper %}selected{% endif %}>{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="rt-field">
+            <label class="field-label" for="tStatus">Status</label>
+            <select class="rt-input" id="tStatus" name="status">
+              {% for v, label in statuses %}<option value="{{ v }}">{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="rt-field">
+            <label class="field-label" for="tPriority">Priority</label>
+            <select class="rt-input" id="tPriority" name="priority">
+              {% for v, label in priorities %}<option value="{{ v }}" {% if v == "medium" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="rt-field qa-title-field">
+          <label class="field-label" for="tTitle">Title</label>
+          <input class="rt-input" id="tTitle" name="title" maxlength="200" required placeholder="Short summary of the issue" />
+        </div>
+        <div class="rt-field">
+          <label class="field-label">Details</label>
+          <div class="rt-quill"
+               data-target="#tBody"
+               data-upload-url="{% url 'qa_attachment_upload' %}"
+               data-csrf="{{ csrf_token }}"
+               data-placeholder="Describe the bug, steps to reproduce, and attach screenshots…"></div>
+          <textarea id="tBody" name="body_html" hidden></textarea>
+        </div>
+      </div>
+      <div class="qa-modal-foot">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Create ticket</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById("ticketModal");
+    var openBtn = document.getElementById("newTicketBtn");
+    if (!modal || !openBtn) return;
+    function open() { modal.removeAttribute("hidden"); document.body.classList.add("qa-modal-open"); }
+    function close() { modal.setAttribute("hidden", ""); document.body.classList.remove("qa-modal-open"); }
+    openBtn.addEventListener("click", open);
+    modal.querySelectorAll("[data-close]").forEach(function (el) { el.addEventListener("click", close); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hasAttribute("hidden")) close();
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% load static %}
+<div class="bell" id="bellRoot"
+     data-poll-url="{% url 'qa_notifications_poll' %}"
+     data-read-url="{% url 'qa_notifications_read_all' %}"
+     data-csrf="{{ csrf_token }}">
+  <button type="button" class="bell-btn" id="bellBtn" aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span class="bell-badge{% if not nav_unread_count %} is-hidden{% endif %}" id="bellBadge">{{ nav_unread_count }}</span>
+  </button>
+  <div class="bell-panel" id="bellPanel" hidden>
+    <div class="bell-head">
+      <span class="bell-title">Notifications</span>
+      <button type="button" class="bell-readall" id="bellReadAll">Mark all read</button>
+    </div>
+    <div class="bell-list" id="bellList">
+      {% for n in nav_notifications %}
+      <a class="bell-item{% if not n.is_read %} unread{% endif %}" href="{% url 'qa_notification_open' n.id %}">
+        <span class="bell-dot"></span>
+        <span class="bell-item-body">
+          <span class="bell-text">{{ n.text }}</span>
+          <span class="bell-ago">{{ n.created_at|timesince }} ago</span>
+        </span>
+      </a>
+      {% empty %}
+      <div class="bell-empty">You're all caught up.</div>
+      {% endfor %}
+    </div>
+    <a class="bell-foot" href="{% url 'qa_board' %}">Open QA Team Tasks</a>
+  </div>
+</div>
+<script>
+  (function () {
+    var root = document.getElementById("bellRoot");
+    if (!root) return;
+    var btn = document.getElementById("bellBtn");
+    var panel = document.getElementById("bellPanel");
+    var badge = document.getElementById("bellBadge");
+    var list = document.getElementById("bellList");
+    var readAll = document.getElementById("bellReadAll");
+    var pollUrl = root.getAttribute("data-poll-url");
+    var readUrl = root.getAttribute("data-read-url");
+    var csrf = root.getAttribute("data-csrf");
+
+    function esc(s) {
+      var d = document.createElement("div");
+      d.textContent = s == null ? "" : s;
+      return d.innerHTML;
+    }
+    function setBadge(n) {
+      if (n > 0) {
+        badge.textContent = n > 99 ? "99+" : n;
+        badge.classList.remove("is-hidden");
+      } else {
+        badge.classList.add("is-hidden");
+      }
+    }
+    function render(items) {
+      if (!items || !items.length) {
+        list.innerHTML = '<div class="bell-empty">You\'re all caught up.</div>';
+        return;
+      }
+      list.innerHTML = items
+        .map(function (it) {
+          return (
+            '<a class="bell-item' + (it.is_read ? "" : " unread") + '" href="' + it.url + '">' +
+            '<span class="bell-dot"></span><span class="bell-item-body">' +
+            '<span class="bell-text">' + esc(it.text) + "</span>" +
+            '<span class="bell-ago">' + esc(it.ago) + "</span></span></a>"
+          );
+        })
+        .join("");
+    }
+    function poll() {
+      fetch(pollUrl, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d) { setBadge(d.unread); render(d.items); } })
+        .catch(function () {});
+    }
+    function toggle(open) {
+      var show = open === undefined ? panel.hasAttribute("hidden") : open;
+      if (show) {
+        panel.removeAttribute("hidden");
+        btn.setAttribute("aria-expanded", "true");
+        poll();
+      } else {
+        panel.setAttribute("hidden", "");
+        btn.setAttribute("aria-expanded", "false");
+      }
+    }
+    btn.addEventListener("click", function (e) { e.stopPropagation(); toggle(); });
+    document.addEventListener("click", function (e) { if (!root.contains(e.target)) toggle(false); });
+    readAll.addEventListener("click", function (e) {
+      e.stopPropagation();
+      fetch(readUrl, {
+        method: "POST",
+        headers: { "X-CSRFToken": csrf, "X-Requested-With": "fetch" },
+        credentials: "same-origin",
+      }).then(function () { setBadge(0); poll(); });
+    });
+    poll();
+    setInterval(poll, 30000);
+  })();
+</script>

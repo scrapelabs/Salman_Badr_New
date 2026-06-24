@@ -275,3 +275,173 @@ class RunLogLine(models.Model):
 
     def __str__(self):
         return f"{self.run.short_id} #{self.seq}"
+
+
+class Ticket(models.Model):
+    """A QA ticket: a bug / missing-data report the test team files for a scraper.
+
+    ``body_html`` is rich text produced by the in-browser editor and **always**
+    re-sanitised server-side before save (see :mod:`accounts.sanitize`), so it is
+    safe to render with ``|safe``. Inline screenshots live in ``TicketAttachment``
+    and are referenced from the HTML by URL, never embedded as base64.
+    """
+
+    class Status(models.TextChoices):
+        TODO = "todo", "To Do"
+        IN_PROGRESS = "in_progress", "In Progress"
+        DONE = "done", "Done"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    scraper = models.ForeignKey(
+        Scraper, related_name="tickets", on_delete=models.CASCADE
+    )
+    title = models.CharField(max_length=200)
+    body_html = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.TODO
+    )
+    priority = models.CharField(
+        max_length=8, choices=Priority.choices, default=Priority.MEDIUM
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tickets_created",
+    )
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tickets_assigned",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["scraper", "-created_at"]),
+            models.Index(fields=["uuid"]),
+        ]
+
+    def __str__(self):
+        return f"#{self.short_id} · {self.title}"
+
+    @property
+    def short_id(self):
+        return self.uuid.hex[:8]
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+
+class TicketComment(models.Model):
+    """One rich-text comment on a ticket (Jira-style thread)."""
+
+    ticket = models.ForeignKey(
+        Ticket, related_name="comments", on_delete=models.CASCADE
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ticket_comments",
+    )
+    body_html = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["ticket", "created_at"])]
+
+    def __str__(self):
+        return f"comment on {self.ticket.short_id}"
+
+
+class TicketAttachment(models.Model):
+    """An uploaded image (screenshot) referenced inline from ticket/comment HTML.
+
+    Bytes live in the DB (the project has no media/object storage) and are served
+    by an auth-gated view. Only real raster images pass upload validation — never
+    SVG (it can carry script).
+    """
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    ticket = models.ForeignKey(
+        Ticket,
+        null=True,
+        blank=True,
+        related_name="attachments",
+        on_delete=models.SET_NULL,
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ticket_attachments",
+    )
+    content_type = models.CharField(max_length=64)
+    data = models.BinaryField()
+    byte_size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["uuid"])]
+
+    def __str__(self):
+        return f"attachment {self.uuid.hex[:8]} ({self.content_type})"
+
+
+class Notification(models.Model):
+    """An in-app notification shown in the topbar bell.
+
+    One row per recipient (fan-out): when a QA member files a ticket or comments,
+    every other active user gets their own row with an independent read state.
+    """
+
+    class Kind(models.TextChoices):
+        TICKET_CREATED = "ticket_created", "New ticket"
+        COMMENT_ADDED = "comment_added", "New comment"
+        STATUS_CHANGED = "status_changed", "Status changed"
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="notifications",
+        on_delete=models.CASCADE,
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    ticket = models.ForeignKey(
+        Ticket, null=True, blank=True, related_name="notifications", on_delete=models.CASCADE
+    )
+    kind = models.CharField(
+        max_length=20, choices=Kind.choices, default=Kind.TICKET_CREATED
+    )
+    text = models.CharField(max_length=255)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["recipient", "is_read", "-created_at"])]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} → {self.recipient_id}"

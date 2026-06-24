@@ -1,0 +1,217 @@
+{% extends "app_base.html" %}
+{% block title %}Users · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">Users</span>
+{% endblock %}
+{% block content %}
+<div class="content-narrow users-page">
+  <div class="page-head">
+    <div class="kicker">System</div>
+    <h1 class="h-title">Users</h1>
+    <p class="h-sub">Team members with access to this workspace. Admins can manage the catalogue, proxies, users and run scrapers.</p>
+  </div>
+
+  {% if messages %}
+  <div class="msg-stack">
+    {% for m in messages %}
+    <div class="msg msg-{{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="proxy-stats">
+    <div class="pstat"><span class="pstat-num">{{ total_users }}</span><span class="pstat-lbl">Total</span></div>
+    <div class="pstat"><span class="pstat-num">{{ active_count }}</span><span class="pstat-lbl">Active</span></div>
+    <div class="pstat"><span class="pstat-num">{{ admin_count }}</span><span class="pstat-lbl">Admins</span></div>
+  </div>
+
+  <form class="panel" method="post" action="{% url 'users' %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add" />
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Add a user</div>
+          <div class="status-name">New team member</div>
+        </div>
+      </div>
+      <div class="rt-grid users-add-grid">
+        <div class="rt-field">
+          <label class="field-label" for="uName">Username</label>
+          <input class="rt-input" id="uName" name="username" placeholder="e.g. jordan" maxlength="150" autocomplete="off" required />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="uEmail">Email <span class="field-opt">optional</span></label>
+          <input class="rt-input" id="uEmail" name="email" type="email" placeholder="jordan@example.com" maxlength="254" autocomplete="off" />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="uRole">Role</label>
+          <select class="rt-input" id="uRole" name="role">
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="rt-field users-add-pass">
+          <label class="field-label" for="uPass">Password</label>
+          <input class="rt-input" id="uPass" name="password" type="password" placeholder="At least 8 characters" autocomplete="new-password" required />
+        </div>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <span class="status-note">Members can use the dashboard and QA board. Admins also manage scrapers, proxies and users.</span>
+      <button class="btn btn-primary" type="submit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add user
+      </button>
+    </div>
+  </form>
+
+  <div class="calls-head">
+    <h2 class="section-title">Team members</h2>
+    <span class="calls-count">{{ total_users }} total</span>
+  </div>
+  <div class="tablewrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Last login</th>
+          <th class="th-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users_list %}
+        <tr>
+          <td>
+            <span class="u-cell">
+              <span class="qa-avatar qa-avatar--sm">{{ u.username|first|upper }}</span>
+              <span class="u-name">{{ u.username }}{% if u.pk == user.pk %} <span class="u-you">you</span>{% endif %}</span>
+            </span>
+          </td>
+          <td>{% if u.email %}{{ u.email }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{% if u.is_superuser %}<span class="u-role admin">Admin</span>{% else %}<span class="u-role member">Member</span>{% endif %}</td>
+          <td>{% if u.is_active %}<span class="run-status success">Active</span>{% else %}<span class="run-status failed">Off</span>{% endif %}</td>
+          <td>{% if u.last_login %}{{ u.last_login|date:"M j, Y" }}{% else %}<span class="muted">Never</span>{% endif %}</td>
+          <td class="td-actions">
+            <div class="u-actions">
+              <button type="button" class="run-act u-edit"
+                      data-id="{{ u.pk }}"
+                      data-username="{{ u.username }}"
+                      data-email="{{ u.email }}"
+                      data-role="{% if u.is_superuser %}admin{% else %}member{% endif %}">Edit</button>
+              {% if u.pk != user.pk %}
+                {% if u.is_active %}
+                <form method="post" action="{% url 'users' %}" class="u-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="deactivate" />
+                  <input type="hidden" name="user_id" value="{{ u.pk }}" />
+                  <button type="submit" class="run-act">Deactivate</button>
+                </form>
+                {% else %}
+                <form method="post" action="{% url 'users' %}" class="u-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="activate" />
+                  <input type="hidden" name="user_id" value="{{ u.pk }}" />
+                  <button type="submit" class="run-act">Activate</button>
+                </form>
+                {% endif %}
+                <form method="post" action="{% url 'users' %}" class="u-inline"
+                      onsubmit="return confirm('Delete “{{ u.username|escapejs }}”? This cannot be undone.');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="user_id" value="{{ u.pk }}" />
+                  <button type="submit" class="run-act proxy-del">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="runs-empty">No users yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="qa-modal" id="editUserModal" hidden>
+  <div class="qa-modal-backdrop" data-close></div>
+  <div class="qa-modal-card" role="dialog" aria-modal="true" aria-labelledby="euTitle">
+    <form method="post" action="{% url 'users' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit" />
+      <input type="hidden" name="user_id" id="euId" />
+      <div class="qa-modal-head">
+        <span class="qa-modal-title" id="euTitle">Edit user</span>
+        <button type="button" class="qa-modal-x" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="qa-modal-body">
+        <div class="rt-field">
+          <label class="field-label">Username</label>
+          <input class="rt-input" id="euUsername" disabled />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="euEmail">Email <span class="field-opt">optional</span></label>
+          <input class="rt-input" id="euEmail" name="email" type="email" maxlength="254" autocomplete="off" />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="euRole">Role</label>
+          <select class="rt-input" id="euRole" name="role">
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="euPass">New password <span class="field-opt">leave blank to keep current</span></label>
+          <input class="rt-input" id="euPass" name="password" type="password" placeholder="At least 8 characters" autocomplete="new-password" />
+        </div>
+      </div>
+      <div class="qa-modal-foot">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal = document.getElementById("editUserModal");
+  if (!modal) return;
+  function open(d) {
+    document.getElementById("euId").value = d.id;
+    document.getElementById("euUsername").value = d.username;
+    document.getElementById("euEmail").value = d.email || "";
+    document.getElementById("euRole").value = d.role || "member";
+    document.getElementById("euPass").value = "";
+    document.getElementById("euTitle").textContent = "Edit " + d.username;
+    modal.hidden = false;
+    document.body.classList.add("qa-modal-open");
+  }
+  function close() { modal.hidden = true; document.body.classList.remove("qa-modal-open"); }
+  document.querySelectorAll(".u-edit").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      open({
+        id: btn.dataset.id,
+        username: btn.dataset.username,
+        email: btn.dataset.email,
+        role: btn.dataset.role,
+      });
+    });
+  });
+  modal.querySelectorAll("[data-close]").forEach(function (el) {
+    el.addEventListener("click", close);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !modal.hidden) close();
+  });
+})();
+</script>
+{% endblock %}

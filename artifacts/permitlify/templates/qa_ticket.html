@@ -1,0 +1,132 @@
+{% extends "app_base.html" %}
+{% load static %}
+{% block title %}#{{ ticket.short_id }} {{ ticket.title }} · MatchMiner{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'vendor/quill/quill.snow.css' %}" />
+  <script defer src="{% static 'vendor/quill/quill.js' %}"></script>
+  <script defer src="{% static 'js/qa_rich_text.js' %}"></script>
+{% endblock %}
+
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <a class="crumb" href="{% url 'qa_board' %}">QA Team Tasks</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">#{{ ticket.short_id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="qa-page qa-detail">
+  {% if messages %}
+  <div class="msg-stack">
+    {% for m in messages %}<div class="msg msg-{{ m.tags }}">{{ m }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="qa-detail-grid">
+    <main class="qa-detail-main">
+      <div class="qa-ticket-tags">
+        <span class="qa-pri qa-pri--{{ ticket.priority }}">{{ ticket.get_priority_display }}</span>
+        <span class="qa-status qa-status--{{ ticket.status }}">{{ ticket.get_status_display }}</span>
+        <span class="qa-chip qa-chip--scraper">{{ ticket.scraper.name }}</span>
+        <span class="qa-card-id">#{{ ticket.short_id }}</span>
+      </div>
+      <h1 class="qa-ticket-title">{{ ticket.title }}</h1>
+      <div class="qa-ticket-by">
+        <span class="qa-avatar qa-avatar--sm">{{ ticket.created_by.username|first|upper|default:"?" }}</span>
+        Filed by <strong>{{ ticket.created_by.username|default:"—" }}</strong> · {{ ticket.created_at|date:"M j, Y · g:i a" }}
+      </div>
+
+      <div class="panel qa-body-panel">
+        <div class="panel-pad">
+          {% if ticket.body_html %}
+          <div class="ql-snow"><div class="ql-editor qa-rte-view">{{ ticket.body_html|safe }}</div></div>
+          {% else %}
+          <p class="muted">No description was provided for this ticket.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="qa-comments" id="comments">
+        <h2 class="section-title">Comments <span class="qa-comments-count">{{ comments|length }}</span></h2>
+
+        {% for c in comments %}
+        <div class="qa-comment">
+          <span class="qa-avatar">{{ c.author.username|first|upper|default:"?" }}</span>
+          <div class="qa-comment-main">
+            <div class="qa-comment-head">
+              <span class="qa-comment-author">{{ c.author.username|default:"Unknown" }}</span>
+              <span class="qa-comment-ago">{{ c.created_at|timesince }} ago</span>
+            </div>
+            <div class="ql-snow"><div class="ql-editor qa-rte-view">{{ c.body_html|safe }}</div></div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="qa-comment-empty">No comments yet — start the conversation.</div>
+        {% endfor %}
+
+        <form method="post" action="{% url 'qa_comment_add' ticket.uuid %}" class="qa-comment-form">
+          {% csrf_token %}
+          <label class="field-label">Add a comment</label>
+          <div class="rt-quill"
+               data-target="#cBody"
+               data-upload-url="{% url 'qa_attachment_upload' %}"
+               data-csrf="{{ csrf_token }}"
+               data-placeholder="Write a comment, paste or attach a screenshot…"></div>
+          <textarea id="cBody" name="body_html" hidden></textarea>
+          <div class="qa-comment-actions">
+            <button type="submit" class="btn btn-primary">Post comment</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <aside class="qa-detail-side">
+      <form method="post" action="{% url 'qa_ticket_update' ticket.uuid %}" class="panel qa-side-panel">
+        {% csrf_token %}
+        <div class="panel-pad">
+          <div class="qa-side-field">
+            <label class="field-label" for="sStatus">Status</label>
+            <select class="rt-input" id="sStatus" name="status">
+              {% for v, label in statuses %}<option value="{{ v }}" {% if v == ticket.status %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="qa-side-field">
+            <label class="field-label" for="sPriority">Priority</label>
+            <select class="rt-input" id="sPriority" name="priority">
+              {% for v, label in priorities %}<option value="{{ v }}" {% if v == ticket.priority %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="qa-side-field">
+            <label class="field-label" for="sAssignee">Assignee</label>
+            <select class="rt-input" id="sAssignee" name="assignee">
+              <option value="">Unassigned</option>
+              {% for u in assignable %}<option value="{{ u.id }}" {% if ticket.assignee_id == u.id %}selected{% endif %}>{{ u.username }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <span class="qa-side-hint">Changes notify the team</span>
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </div>
+      </form>
+
+      <div class="panel qa-meta-panel">
+        <div class="panel-pad">
+          <div class="qa-meta-row"><span class="qa-meta-k">Scraper</span><span class="qa-meta-v">{{ ticket.scraper.name }}</span></div>
+          <div class="qa-meta-row"><span class="qa-meta-k">Reporter</span><span class="qa-meta-v">{{ ticket.created_by.username|default:"—" }}</span></div>
+          <div class="qa-meta-row"><span class="qa-meta-k">Created</span><span class="qa-meta-v">{{ ticket.created_at|date:"M j, Y" }}</span></div>
+          <div class="qa-meta-row"><span class="qa-meta-k">Updated</span><span class="qa-meta-v">{{ ticket.updated_at|timesince }} ago</span></div>
+          <div class="qa-meta-row"><span class="qa-meta-k">Ticket ID</span><span class="qa-meta-v">#{{ ticket.short_id }}</span></div>
+        </div>
+      </div>
+
+      <a class="qa-back" href="{% url 'qa_board' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        Back to board
+      </a>
+    </aside>
+  </div>
+</div>
+{% endblock %}

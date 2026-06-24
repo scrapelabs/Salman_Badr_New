@@ -12,6 +12,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Count, Max
@@ -22,7 +24,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .models import Proxy, Run, Scraper
+from .models import Proxy, Run, Scraper, Ticket
 from .runs import ALL_TOURNAMENTS
 
 STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
@@ -52,6 +54,7 @@ def _counts():
         "apis": 6,
         "logs": Run.objects.count(),
         "users": get_user_model().objects.count(),
+        "qa_open": Ticket.objects.exclude(status=Ticket.Status.DONE).count(),
     }
 
 
@@ -814,14 +817,142 @@ settings_view = _placeholder(
     "Settings coming soon",
     "Workspace settings will live here.",
 )
-users_view = _placeholder(
-    "users",
-    "System",
-    "Users",
-    "Team members with access to this workspace.",
-    "Just you for now",
-    "Invite teammates to collaborate in MatchMiner.",
-)
+def _active_superuser_count(exclude_pk=None):
+    User = get_user_model()
+    qs = User.objects.filter(is_active=True, is_superuser=True)
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    return qs.count()
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def users_view(request):
+    User = get_user_model()
+    if not request.user.is_superuser:
+        messages.error(request, "Only administrators can manage users.")
+        return redirect("overview")
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "add":
+            username = (request.POST.get("username") or "").strip()
+            email = (request.POST.get("email") or "").strip()
+            password = request.POST.get("password") or ""
+            is_super = (request.POST.get("role") or "member") == "admin"
+            if not username:
+                messages.error(request, "Username is required.")
+            elif User.objects.filter(username__iexact=username).exists():
+                messages.error(request, f"A user named “{username}” already exists.")
+            else:
+                candidate = User(
+                    username=username,
+                    email=email,
+                    is_superuser=is_super,
+                    is_staff=is_super,
+                    is_active=True,
+                )
+                try:
+                    validate_password(password, candidate)
+                except ValidationError as exc:
+                    messages.error(request, " ".join(exc.messages))
+                else:
+                    candidate.set_password(password)
+                    candidate.save()
+                    messages.success(request, f"Added user “{username}”.")
+            return redirect("users")
+
+        user_id = (request.POST.get("user_id") or "").strip()
+        if not user_id.isdigit():
+            messages.error(request, "Invalid user.")
+            return redirect("users")
+        target = User.objects.filter(pk=int(user_id)).first()
+        if target is None:
+            messages.error(request, "That user no longer exists.")
+            return redirect("users")
+        is_self = target.pk == request.user.pk
+
+        if action == "edit":
+            email = (request.POST.get("email") or "").strip()
+            password = request.POST.get("password") or ""
+            new_super = (request.POST.get("role") or "member") == "admin"
+            losing_admin = target.is_superuser and not new_super
+            if losing_admin and is_self:
+                messages.error(request, "You can't remove your own admin role.")
+                return redirect("users")
+            if (
+                losing_admin
+                and target.is_active
+                and _active_superuser_count(exclude_pk=target.pk) == 0
+            ):
+                messages.error(request, "At least one active admin must remain.")
+                return redirect("users")
+            if password:
+                try:
+                    validate_password(password, target)
+                except ValidationError as exc:
+                    messages.error(request, " ".join(exc.messages))
+                    return redirect("users")
+                target.set_password(password)
+            target.email = email
+            target.is_superuser = new_super
+            target.is_staff = new_super
+            target.save()
+            messages.success(request, f"Updated “{target.username}”.")
+            return redirect("users")
+
+        if action in ("activate", "deactivate"):
+            if action == "deactivate":
+                if is_self:
+                    messages.error(request, "You can't deactivate your own account.")
+                    return redirect("users")
+                if (
+                    target.is_superuser
+                    and _active_superuser_count(exclude_pk=target.pk) == 0
+                ):
+                    messages.error(request, "At least one active admin must remain.")
+                    return redirect("users")
+                target.is_active = False
+                target.save(update_fields=["is_active"])
+                messages.success(request, f"Deactivated “{target.username}”.")
+            else:
+                target.is_active = True
+                target.save(update_fields=["is_active"])
+                messages.success(request, f"Reactivated “{target.username}”.")
+            return redirect("users")
+
+        if action == "delete":
+            if is_self:
+                messages.error(request, "You can't delete your own account.")
+                return redirect("users")
+            if (
+                target.is_superuser
+                and target.is_active
+                and _active_superuser_count(exclude_pk=target.pk) == 0
+            ):
+                messages.error(request, "At least one active admin must remain.")
+                return redirect("users")
+            name = target.username
+            target.delete()
+            messages.success(request, f"Deleted “{name}”.")
+            return redirect("users")
+
+        messages.error(request, "Unknown action.")
+        return redirect("users")
+
+    users = User.objects.order_by("-is_active", "-is_superuser", "username")
+    total = users.count()
+    admins = sum(1 for u in users if u.is_superuser)
+    active = sum(1 for u in users if u.is_active)
+    ctx = _app_ctx(
+        "users",
+        users_list=users,
+        total_users=total,
+        admin_count=admins,
+        active_count=active,
+    )
+    return render(request, "users.html", ctx)
 
 
 @login_required
