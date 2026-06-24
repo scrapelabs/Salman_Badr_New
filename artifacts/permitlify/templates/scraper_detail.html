@@ -85,6 +85,8 @@
         <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
         <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
         <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
+        <a class="btn btn-ghost btn-sm" id="rtReq" href="{% url 'run_requests_download' s.slug active_run.uuid %}">Requests CSV</a>
+        <a class="btn btn-ghost btn-sm" id="rtErr" href="{% url 'run_errors_download' s.slug active_run.uuid %}">Errors CSV</a>
         <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
       </div>
     </div>
@@ -98,6 +100,8 @@
     var foot = document.getElementById('rtFoot');
     var summary = document.getElementById('rtSummary');
     var csvBtn = document.getElementById('rtCsv');
+    var reqBtn = document.getElementById('rtReq');
+    var errBtn = document.getElementById('rtErr');
     var url = root.dataset.eventsUrl;
     var last = 0, stopped = false;
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -120,6 +124,8 @@
       statusEl.textContent = d.status_display;
       summary.textContent = d.row_count + ' row' + (d.row_count === 1 ? '' : 's') + ' · ' + d.size_label + ' · ' + d.duration_label;
       if (!d.has_csv && csvBtn) { csvBtn.classList.add('is-disabled'); csvBtn.removeAttribute('href'); csvBtn.title = 'No CSV — run produced no rows'; }
+      if (!d.has_requests && reqBtn) { reqBtn.classList.add('is-disabled'); reqBtn.removeAttribute('href'); reqBtn.title = 'No requests log for this run'; }
+      if (!d.has_errors && errBtn) { errBtn.classList.add('is-disabled'); errBtn.removeAttribute('href'); errBtn.title = 'No errors log for this run'; }
       foot.hidden = false;
     }
     function poll() {
@@ -147,18 +153,19 @@
         <span class="mode-pill {{ s.mode }}">{{ s.get_mode_display }}</span>
       </div>
       <p class="rt-intro">
-        Trigger an on-demand scrape for a date window. The scraper runs as a
-        background process; its log streams live on this page and is saved as it
-        goes, then the CSV and log land in <a href="?tab=calls">Calls history</a>.
+        Trigger an on-demand scrape for a full season. Pick the year to mine; the
+        scraper runs as a background process, its log streams live on this page
+        and is saved as it goes, then the CSV and log land in
+        <a href="?tab=calls">Calls history</a>.
       </p>
       <div class="rt-grid">
         <div class="rt-field">
-          <label class="field-label" for="rtFrom">From date</label>
-          <input class="rt-input" type="date" id="rtFrom" name="date_from" value="{{ default_from }}" {% if s.is_maintenance %}disabled{% endif %}>
-        </div>
-        <div class="rt-field">
-          <label class="field-label" for="rtTo">To date</label>
-          <input class="rt-input" type="date" id="rtTo" name="date_to" value="{{ default_to }}" {% if s.is_maintenance %}disabled{% endif %}>
+          <label class="field-label" for="rtYear">Season year</label>
+          <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance %}disabled{% endif %}>
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
         </div>
       </div>
     </div>
@@ -219,6 +226,12 @@
             <a class="run-act" href="{% url 'run_csv_download' s.slug run.uuid %}" title="Download CSV">CSV</a>
             {% else %}
             <span class="run-act is-disabled" title="No CSV — run failed">CSV</span>
+            {% endif %}
+            {% if run.has_requests %}
+            <a class="run-act" href="{% url 'run_requests_download' s.slug run.uuid %}" title="Download requests CSV">Requests</a>
+            {% endif %}
+            {% if run.has_errors %}
+            <a class="run-act" href="{% url 'run_errors_download' s.slug run.uuid %}" title="Download errors CSV">Errors</a>
             {% endif %}
           </td>
         </tr>

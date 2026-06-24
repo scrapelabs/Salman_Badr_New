@@ -1,2 +1,3 @@
 - [Permitlify design recreation](permitlify-design-recreation.md) — supplied HTML/CSS mockups are an exact spec; recreate by hand (NOT design subagent), brand tokens in :root, page CSS scoped under a page-root class.
+- [MatchMiner live scrapers](matchminer-live-scrapers.md) — only BJK Cup + Davis Cup are scrapeable live (shared public Stadion API, no proxy); other sources need unavailable proxy/curl_cffi infra, so fail honestly, never simulate.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.

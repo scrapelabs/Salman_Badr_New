@@ -1,8 +1,8 @@
 """Seed the catalogue of 9 tennis scrapers (idempotent).
 
 Inline, self-contained data so the migration's behaviour never drifts with app
-code. Run definitions (logs/CSV) are seeded separately by the
-``seed_demo_runs`` management command.
+code. Runs are not seeded — they are produced live by the real scrapers in
+``accounts.live_scrapers`` when a user starts a scrape.
 """
 
 from django.db import migrations

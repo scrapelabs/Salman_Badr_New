@@ -12,6 +12,8 @@
 {% block topbar_actions %}
   <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug run.uuid %}">Download log</a>
   {% if run.has_csv %}<a class="btn btn-ghost btn-sm" href="{% url 'run_csv_download' s.slug run.uuid %}">Download CSV</a>{% endif %}
+  {% if run.has_requests %}<a class="btn btn-ghost btn-sm" href="{% url 'run_requests_download' s.slug run.uuid %}">Requests CSV</a>{% endif %}
+  {% if run.has_errors %}<a class="btn btn-ghost btn-sm" href="{% url 'run_errors_download' s.slug run.uuid %}">Errors CSV</a>{% endif %}
 {% endblock %}
 {% block content %}
 <div class="content-narrow">

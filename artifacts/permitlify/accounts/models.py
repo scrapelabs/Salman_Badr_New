@@ -2,9 +2,10 @@
 
 A `Scraper` is one mining script (mirrors a real spider like
 `billiejeankingcup`). A `Run` is one execution of that scraper for a date
-window / tournament, capturing the full log and the CSV it produced so both can
-be re-opened and downloaded later. MatchMiner ships with sample data, so runs
-are simulated rather than performing live network scrapes.
+window / tournament, capturing the full log and the CSVs it produced (items
+data, plus per-run ``requests`` and ``errors`` telemetry) so all can be
+re-opened and downloaded later. Runs perform live network scrapes via
+:mod:`accounts.live_scrapers`.
 """
 
 import uuid
@@ -77,6 +78,8 @@ class Run(models.Model):
     output_size_bytes = models.PositiveIntegerField(default=0)
     log_text = models.TextField(blank=True)
     csv_data = models.TextField(blank=True)
+    requests_csv = models.TextField(blank=True)
+    errors_csv = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -127,6 +130,19 @@ class Run(models.Model):
     @property
     def has_csv(self):
         return bool(self.csv_data)
+
+    @property
+    def has_requests(self):
+        return bool(self.requests_csv)
+
+    @property
+    def has_errors(self):
+        return bool(self.errors_csv)
+
+    @property
+    def request_count(self):
+        # requests CSV has no embedded newlines, so a line count is exact.
+        return max(0, len(self.requests_csv.splitlines()) - 1) if self.requests_csv else 0
 
     @property
     def is_running(self):

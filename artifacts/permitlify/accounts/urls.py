@@ -24,6 +24,16 @@ urlpatterns = [
         name="run_csv_download",
     ),
     path(
+        "scrapers/<slug:slug>/runs/<uuid:run_uuid>/requests.csv",
+        views.run_requests_download_view,
+        name="run_requests_download",
+    ),
+    path(
+        "scrapers/<slug:slug>/runs/<uuid:run_uuid>/errors.csv",
+        views.run_errors_download_view,
+        name="run_errors_download",
+    ),
+    path(
         "scrapers/<slug:slug>/runs/<uuid:run_uuid>/events/",
         views.run_events_view,
         name="run_events",

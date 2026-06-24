@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from datetime import date
 
 from django.conf import settings
 from django.contrib import messages
@@ -12,14 +13,14 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
 from .models import Run, Scraper
 from .runs import ALL_TOURNAMENTS
 
 STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
-MAX_RUN_SPAN_DAYS = 366
+YEAR_MIN = 2000
+YEAR_MAX = 2030
 
 TAB_LABELS = {
     "real-time": "Real-time test",
@@ -146,12 +147,12 @@ def scraper_detail_view(request, slug):
 
     if tab == "real-time":
         _reap_stale_runs(s)
-        today = timezone.localdate()
         ctx["active_run"] = (
             s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
         )
-        ctx["default_to"] = today.isoformat()
-        ctx["default_from"] = (today - timezone.timedelta(days=7)).isoformat()
+        current_year = timezone.localdate().year
+        ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
+        ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)
     elif tab == "calls":
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
@@ -177,26 +178,17 @@ def scraper_run_view(request, slug):
         messages.error(request, "A run is already in progress for this source.")
         return redirect(back)
 
-    raw_from = request.POST.get("date_from", "").strip()
-    raw_to = request.POST.get("date_to", "").strip()
-    date_from = parse_date(raw_from) if raw_from else None
-    date_to = parse_date(raw_to) if raw_to else None
-
-    if bool(raw_from) != bool(raw_to):
-        messages.error(request, "Provide both a start and end date, or leave both empty.")
+    raw_year = request.POST.get("year", "").strip()
+    try:
+        year = int(raw_year)
+    except (TypeError, ValueError):
+        messages.error(request, "Select a year to run.")
         return redirect(back)
-    if (raw_from and not date_from) or (raw_to and not date_to):
-        messages.error(request, "Enter valid dates (YYYY-MM-DD).")
+    if not (YEAR_MIN <= year <= YEAR_MAX):
+        messages.error(request, f"Pick a year between {YEAR_MIN} and {YEAR_MAX}.")
         return redirect(back)
-    if date_from and date_to and date_from > date_to:
-        messages.error(request, "The start date must be on or before the end date.")
-        return redirect(back)
-    if date_from and date_to and (date_to - date_from).days > MAX_RUN_SPAN_DAYS:
-        messages.error(
-            request,
-            f"Pick a window of {MAX_RUN_SPAN_DAYS} days or fewer.",
-        )
-        return redirect(back)
+    date_from = date(year, 1, 1)
+    date_to = date(year, 12, 31)
 
     try:
         run = Run.objects.create(
@@ -273,6 +265,8 @@ def run_events_view(request, slug, run_uuid):
             "size_label": run.size_label,
             "duration_label": run.duration_label,
             "has_csv": run.has_csv,
+            "has_requests": run.has_requests,
+            "has_errors": run.has_errors,
         }
     )
 
@@ -307,6 +301,28 @@ def run_csv_download_view(request, slug, run_uuid):
     body = run.csv_data or ""
     resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{slug}-{run.short_id}.csv"'
+    return resp
+
+
+@login_required
+def run_requests_download_view(request, slug, run_uuid):
+    run = _get_run(slug, run_uuid)
+    body = run.requests_csv or ""
+    resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = (
+        f'attachment; filename="{slug}-{run.short_id}-requests.csv"'
+    )
+    return resp
+
+
+@login_required
+def run_errors_download_view(request, slug, run_uuid):
+    run = _get_run(slug, run_uuid)
+    body = run.errors_csv or ""
+    resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = (
+        f'attachment; filename="{slug}-{run.short_id}-errors.csv"'
+    )
     return resp
 
 
