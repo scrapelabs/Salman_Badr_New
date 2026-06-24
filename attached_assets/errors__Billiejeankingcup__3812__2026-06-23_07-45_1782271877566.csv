@@ -1,0 +1,70 @@
+timestamp,level,message,exception
+2026-06-23 07:48:31.725377,ERROR,"Request failed for https://api.itf-production.sports-data.stadion.io/match/7f44667c-c46b-46db-9496-11663aaa6b80?include=sides.sidePlayer.player.person.country.images,sides.sidePlayer.player.person.images,sides.sideSets.set,matchStatus,scoringType,court,round.draw.event.venue.country,round.draw.event.surface,round.draw.event.discipline,round.draw.event.eventCategory.images,round.draw.event.venue.country.images,round.draw.discipline,tie.teams.country,tie.tieStatus,tie.teams.country.images,tie.round.draw.event,tie.round.draw.event.surface,tie.round.draw.event.venue.country.images: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+Traceback (most recent call last):
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 732, in _request_once
+    c.perform()
+  File ""C:\Python310\lib\site-packages\curl_cffi\curl.py"", line 505, in perform
+    self._check_error(ret, ""perform"")
+  File ""C:\Python310\lib\site-packages\curl_cffi\curl.py"", line 269, in _check_error
+    raise error
+curl_cffi.curl.CurlError: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ""C:\Users\vmadmin\Desktop\Salman_Bader\spiders_app\assets\requests\fctrequest.py"", line 187, in get_simple
+    response = self.session.request(method='GET', url=link, params=params, impersonate=""chrome"", proxies=proxies, verify=verify, headers=headers, cookies=cookies, allow_redirects=allow_redirects, timeout=timeout)
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\__init__.py"", line 140, in request
+    return s.request(method=method, url=url, **kwargs)
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 795, in request
+    return self._request_once(
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 739, in _request_once
+    raise error(str(e), e.code, rsp) from e
+curl_cffi.requests.exceptions.Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+",
+2026-06-23 07:49:03.236414,ERROR,"Request failed for https://api.itf-production.sports-data.stadion.io/custom/tieCentre/2fdf5e51-0f71-40a9-80dc-039457b7eddc: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+Traceback (most recent call last):
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 732, in _request_once
+    c.perform()
+  File ""C:\Python310\lib\site-packages\curl_cffi\curl.py"", line 505, in perform
+    self._check_error(ret, ""perform"")
+  File ""C:\Python310\lib\site-packages\curl_cffi\curl.py"", line 269, in _check_error
+    raise error
+curl_cffi.curl.CurlError: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ""C:\Users\vmadmin\Desktop\Salman_Bader\spiders_app\assets\requests\fctrequest.py"", line 187, in get_simple
+    response = self.session.request(method='GET', url=link, params=params, impersonate=""chrome"", proxies=proxies, verify=verify, headers=headers, cookies=cookies, allow_redirects=allow_redirects, timeout=timeout)
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\__init__.py"", line 140, in request
+    return s.request(method=method, url=url, **kwargs)
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 795, in request
+    return self._request_once(
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 739, in _request_once
+    raise error(str(e), e.code, rsp) from e
+curl_cffi.requests.exceptions.Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+",
+2026-06-23 07:50:02.569439,ERROR,"Request failed for https://api.itf-production.sports-data.stadion.io/custom/tieCentre/eedef74e-486d-49fd-9b1a-903b7874e8e9: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+Traceback (most recent call last):
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 732, in _request_once
+    c.perform()
+  File ""C:\Python310\lib\site-packages\curl_cffi\curl.py"", line 505, in perform
+    self._check_error(ret, ""perform"")
+  File ""C:\Python310\lib\site-packages\curl_cffi\curl.py"", line 269, in _check_error
+    raise error
+curl_cffi.curl.CurlError: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ""C:\Users\vmadmin\Desktop\Salman_Bader\spiders_app\assets\requests\fctrequest.py"", line 187, in get_simple
+    response = self.session.request(method='GET', url=link, params=params, impersonate=""chrome"", proxies=proxies, verify=verify, headers=headers, cookies=cookies, allow_redirects=allow_redirects, timeout=timeout)
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\__init__.py"", line 140, in request
+    return s.request(method=method, url=url, **kwargs)
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 795, in request
+    return self._request_once(
+  File ""C:\Python310\lib\site-packages\curl_cffi\requests\session.py"", line 739, in _request_once
+    raise error(str(e), e.code, rsp) from e
+curl_cffi.requests.exceptions.Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+",
