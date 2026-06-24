@@ -67,7 +67,7 @@
     <a href="?tab=calls">Calls history</a>.
   </p>
   <div class="term-stage" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
-    <div class="terminal">
+    <div class="terminal matrix">
       <div class="term-titlebar">
         <span class="term-dots" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
         <span class="term-title">live log · Run #{{ active_run.short_id }} · {{ s.code }}</span>
@@ -124,6 +124,8 @@
     }
     function finish(d) {
       stopped = true;
+      var term = root.querySelector('.terminal');
+      if (term) term.classList.remove('matrix');
       statusEl.className = 'term-badge ' + d.status;
       statusEl.textContent = d.status_display;
       var statClass = d.status === 'success' ? 'ls-ok' : (d.status === 'failed' ? 'ls-err' : (d.status === 'partial' ? 'ls-dim' : 'ls-num'));

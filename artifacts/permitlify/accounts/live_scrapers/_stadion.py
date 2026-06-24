@@ -112,18 +112,18 @@ def _build_opener(scraper, log):
         handler = urllib.request.ProxyHandler({"http": addr, "https": addr})
         log(
             "INFO",
-            f"HTTP client: urllib via {proxy.get_kind_display()} proxy "
-            f"'{proxy.name}'",
+            f"\U0001f50c HTTP client: urllib via {proxy.get_kind_display()} "
+            f"proxy '{proxy.name}'",
         )
         return urllib.request.build_opener(handler)
     if proxy and proxy.is_active:
         log(
-            "INFO",
-            f"Proxy '{proxy.name}' ({proxy.get_kind_display()}) selected but has "
-            "no address \u2014 using direct connection",
+            "WARN",
+            f"\u26a0\ufe0f Proxy '{proxy.name}' ({proxy.get_kind_display()}) "
+            "selected but has no address \u2014 using direct connection",
         )
     else:
-        log("INFO", "HTTP client: urllib (direct, no proxy)")
+        log("INFO", "\U0001f50c HTTP client: urllib (direct, no proxy)")
     # Empty ProxyHandler => ignore any HTTP(S)_PROXY environment variables.
     return urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -146,7 +146,7 @@ def _get_json(url, log, tele, opener, tries=3, timeout=25):
                 )
                 if 200 <= status < 300:
                     return json.loads(body.decode("utf-8"))
-                log("WARN", f"GET {url} -> HTTP {status}")
+                log("WARN", f"\u26a0\ufe0f GET {url} \u2192 HTTP {status}")
         except urllib.error.HTTPError as exc:
             body = b""
             try:
@@ -157,7 +157,7 @@ def _get_json(url, log, tele, opener, tries=3, timeout=25):
                 url=url, method="GET", status=exc.code, size=len(body),
                 duration_ms=(time.time() - start) * 1000,
             )
-            log("WARN", f"GET {url} -> HTTP {exc.code} (try {attempt}/{tries})")
+            log("WARN", f"\u26a0\ufe0f GET {url} \u2192 HTTP {exc.code} (retry {attempt}/{tries})")
             last_exc = exc
         except Exception as exc:  # noqa: BLE001 - log, record and retry
             tele.record_request(
@@ -166,8 +166,8 @@ def _get_json(url, log, tele, opener, tries=3, timeout=25):
             )
             log(
                 "WARN",
-                f"GET {url} -> {exc.__class__.__name__}: {exc} "
-                f"(try {attempt}/{tries})",
+                f"\u26a0\ufe0f GET {url} \u2192 {exc.__class__.__name__}: {exc} "
+                f"(retry {attempt}/{tries})",
             )
             last_exc = exc
         time.sleep(min(2 * attempt, 6))
@@ -398,17 +398,18 @@ def run(config, run_obj, log):
     """
     tele = Telemetry()
     years = _years(run_obj)
-    log("INFO", f"{config.label} scraper starting \u2014 rank years={years}")
+    log("INFO", f"\U0001f3be {config.label} scraper starting \u2014 ranking years={years}")
     opener = _build_opener(run_obj.scraper, log)
 
+    log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering ties \u2500\u2500\u2500\u2500")
     ties = []
     seen = set()
     for year in years:
         index_link = f"{API}/custom/wcotDrawsModeled/{config.draw_code}/{year}"
-        log("INFO", f"GET {index_link}")
+        log("INFO", f"\U0001f310 GET {index_link}")
         data = _get_json(index_link, log, tele, opener)
         if not data:
-            log("WARN", f"No draw data returned for {year}")
+            log("WARN", f"\u26a0\ufe0f No draw data returned for {year}")
             continue
         before = len(ties)
         for entry in data.get("data", []):
@@ -428,14 +429,15 @@ def run(config, run_obj, log):
                             ties.append(
                                 (tid, _parse_dates(tie.get("formattedDate", "")))
                             )
-        log("INFO", f"  {year}: {len(ties) - before} ties discovered")
+        log("INFO", f"\U0001f50e {year}: {len(ties) - before} ties discovered")
 
     total = len(ties)
     log(
         "INFO",
-        f"Total ties discovered: {total} "
-        f"(processing all with {MAX_WORKERS} workers)",
+        f"\U0001f4cb {total} tie(s) discovered total "
+        f"\u2014 processing all with {MAX_WORKERS} workers",
     )
+    log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping ties \u2500\u2500\u2500\u2500")
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -455,7 +457,7 @@ def run(config, run_obj, log):
             if not tie_centre:
                 log(
                     "INFO",
-                    f"[tie {done}/{total}] {tie_id} "
+                    f"\u2796 [tie {done}/{total}] {tie_id} "
                     f"({tie_date or 'n/a'}) \u2014 no data",
                 )
                 return
@@ -465,7 +467,7 @@ def run(config, run_obj, log):
             )
             log(
                 "INFO",
-                f"[tie {done}/{total}] {tie_id} "
+                f"\U0001f3af [tie {done}/{total}] {tie_id} "
                 f"({tie_date or 'n/a'}) \u2014 {len(matches)} match(es)",
             )
             for match in matches:
@@ -484,7 +486,7 @@ def run(config, run_obj, log):
                     counter["rows"] += 1
                 log(
                     "INFO",
-                    f"  + {row.get('draw_team_type', '')}: "
+                    f"   \U0001f3c6 {row.get('draw_team_type', '')}: "
                     f"{row.get('winner_1_name') or '?'} def. "
                     f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
                     f"@ {row.get('tournament_name') or config.label}",
@@ -493,7 +495,8 @@ def run(config, run_obj, log):
             tele.record_error(f"Tie {tie_id} failed: {exc}", exc=exc)
             log(
                 "WARN",
-                f"[tie] {tie_id} failed: {exc.__class__.__name__}: {exc}",
+                f"\u26a0\ufe0f [tie] {tie_id} failed: "
+                f"{exc.__class__.__name__}: {exc}",
             )
 
     if ties:
@@ -501,12 +504,15 @@ def run(config, run_obj, log):
             list(executor.map(process_tie, ties))
 
     row_count = counter["rows"]
-    log("INFO", f"Writing {row_count} row(s) to CSV")
+    log("INFO", "\u2500\u2500\u2500\u2500 summary \u2500\u2500\u2500\u2500")
+    log("INFO", f"\U0001f4be Writing {row_count} row(s) to CSV")
     log(
         "INFO",
-        f"Telemetry: {tele.request_count} request(s), {tele.error_count} error(s)",
+        f"\U0001f4ca Telemetry: {tele.request_count} request(s), "
+        f"{tele.error_count} error(s)",
     )
     status = Run.Status.SUCCESS if row_count else Run.Status.FAILED
-    log("INFO", f"Run finished \u2014 status={status}, rows={row_count}")
+    icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
+    log("INFO", f"{icon} Run finished \u2014 status={status}, rows={row_count}")
     items_csv = buf.getvalue() if row_count else ""
     return items_csv, tele.requests_csv(), tele.errors_csv(), row_count, status

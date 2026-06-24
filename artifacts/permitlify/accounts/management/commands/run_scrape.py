@@ -82,6 +82,11 @@ class Command(BaseCommand):
         t0 = time.time()
         try:
             scraper = run.scraper
+            log(
+                "INFO",
+                f"\U0001f680 Worker online \u2014 Run #{run.short_id} "
+                f"\u00b7 {scraper.code}",
+            )
             runner = LIVE_SCRAPERS.get(scraper.slug)
             if runner is None:
                 tele = Telemetry()
@@ -89,7 +94,7 @@ class Command(BaseCommand):
                     f"No live scraper is wired for '{scraper.slug}' in this "
                     f"environment yet."
                 )
-                log("ERROR", msg)
+                log("ERROR", "\u274c " + msg)
                 tele.record_error(msg)
                 run.status = Run.Status.FAILED
                 run.row_count = 0
@@ -109,6 +114,7 @@ class Command(BaseCommand):
                 run.output_size_bytes = len(items_csv.encode("utf-8"))
         except Exception as exc:  # noqa: BLE001 - surface any failure in the run log
             tb = traceback.format_exc()
+            log("ERROR", "\u274c Run crashed \u2014 traceback follows")
             for line in tb.splitlines():
                 log("ERROR", line)
             tele = Telemetry()
