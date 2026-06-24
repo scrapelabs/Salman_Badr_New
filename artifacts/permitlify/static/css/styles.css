@@ -652,8 +652,7 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   padding: 30px 36px 56px;
 }
 .content-narrow {
-  max-width: 1080px;
-  margin: 0 auto;
+  max-width: none;
 }
 
 /* page header */
