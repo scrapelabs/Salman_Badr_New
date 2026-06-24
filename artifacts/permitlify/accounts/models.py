@@ -86,6 +86,15 @@ class Run(models.Model):
             models.Index(fields=["uuid"]),
             models.Index(fields=["status"]),
         ]
+        constraints = [
+            # At most one in-flight run per scraper, enforced atomically so two
+            # concurrent POSTs can't both launch a worker.
+            models.UniqueConstraint(
+                fields=["scraper"],
+                condition=models.Q(status="running"),
+                name="uniq_running_run_per_scraper",
+            ),
+        ]
 
     def __str__(self):
         return f"Run {self.short_id} · {self.scraper.code}"
@@ -118,3 +127,37 @@ class Run(models.Model):
     @property
     def has_csv(self):
         return bool(self.csv_data)
+
+    @property
+    def is_running(self):
+        return self.status == self.Status.RUNNING
+
+
+class RunLogLine(models.Model):
+    """One streamed log line for a Run.
+
+    Written incrementally by the ``run_scrape`` background command so the live
+    console (and any concurrent viewer) can poll for new lines. The full log is
+    also materialised onto ``Run.log_text`` when the run finishes, so legacy and
+    completed runs read from a single snapshot.
+    """
+
+    run = models.ForeignKey(
+        Run, related_name="log_lines", on_delete=models.CASCADE
+    )
+    seq = models.PositiveIntegerField()
+    level = models.CharField(max_length=8, default="INFO")
+    text = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["seq"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "seq"], name="uniq_run_logline_seq"
+            ),
+        ]
+        indexes = [models.Index(fields=["run", "seq"])]
+
+    def __str__(self):
+        return f"{self.run.short_id} #{self.seq}"

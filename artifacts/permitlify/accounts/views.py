@@ -1,9 +1,14 @@
+import subprocess
+import sys
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import IntegrityError
 from django.db.models import Count, Max
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -11,14 +16,15 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
 from .models import Run, Scraper
-from .runs import ALL_TOURNAMENTS, create_run
+from .runs import ALL_TOURNAMENTS
+
+STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
+MAX_RUN_SPAN_DAYS = 366
 
 TAB_LABELS = {
     "real-time": "Real-time test",
-    "code": "Code samples",
     "calls": "Calls history",
     "settings": "Settings",
-    "enhancements": "Enhancements",
     "status": "Status",
 }
 
@@ -48,6 +54,35 @@ def _scrapers_annotated():
         run_count=Count("runs"),
         last_run_at=Max("runs__started_at"),
     )
+
+
+def _launch_run(run):
+    """Spawn the run as a detached ``manage.py run_scrape <uuid>`` subprocess."""
+    subprocess.Popen(
+        [sys.executable, "manage.py", "run_scrape", str(run.uuid)],
+        cwd=str(settings.BASE_DIR),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _reap_stale_runs(scraper):
+    """Fail runs stuck in RUNNING past the max duration (e.g. the worker died)."""
+    cutoff = timezone.now() - STALE_RUNNING_AFTER
+    for run in scraper.runs.filter(status=Run.Status.RUNNING, started_at__lt=cutoff):
+        run.status = Run.Status.FAILED
+        run.finished_at = timezone.now()
+        run.duration_ms = run.duration_ms or int(
+            STALE_RUNNING_AFTER.total_seconds() * 1000
+        )
+        if not run.log_text:
+            lines = list(run.log_lines.order_by("seq").values_list("text", flat=True))
+            lines.append(
+                "[reaper] Run exceeded the maximum duration and was marked failed."
+            )
+            run.log_text = "\n".join(lines) + "\n"
+        run.save(update_fields=["status", "finished_at", "duration_ms", "log_text"])
 
 
 def login_view(request):
@@ -110,8 +145,11 @@ def scraper_detail_view(request, slug):
     ctx = _app_ctx("scrapers", s=s, tab=tab, tab_label=TAB_LABELS[tab])
 
     if tab == "real-time":
+        _reap_stale_runs(s)
         today = timezone.localdate()
-        ctx["tournaments"] = [ALL_TOURNAMENTS] + list(s.tournaments or [])
+        ctx["active_run"] = (
+            s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
+        )
         ctx["default_to"] = today.isoformat()
         ctx["default_from"] = (today - timezone.timedelta(days=7)).isoformat()
     elif tab == "calls":
@@ -134,10 +172,9 @@ def scraper_run_view(request, slug):
         )
         return redirect(back)
 
-    tournament = request.POST.get("tournament", ALL_TOURNAMENTS).strip()
-    valid = {ALL_TOURNAMENTS} | set(s.tournaments or [])
-    if tournament not in valid:
-        messages.error(request, "Unknown tournament for this source.")
+    _reap_stale_runs(s)
+    if s.runs.filter(status=Run.Status.RUNNING).exists():
+        messages.error(request, "A run is already in progress for this source.")
         return redirect(back)
 
     raw_from = request.POST.get("date_from", "").strip()
@@ -154,31 +191,96 @@ def scraper_run_view(request, slug):
     if date_from and date_to and date_from > date_to:
         messages.error(request, "The start date must be on or before the end date.")
         return redirect(back)
+    if date_from and date_to and (date_to - date_from).days > MAX_RUN_SPAN_DAYS:
+        messages.error(
+            request,
+            f"Pick a window of {MAX_RUN_SPAN_DAYS} days or fewer.",
+        )
+        return redirect(back)
 
-    run = create_run(
-        s,
-        tournament=tournament,
-        date_from=date_from,
-        date_to=date_to,
-        user=request.user,
-        allow_failure=False,
-    )
+    try:
+        run = Run.objects.create(
+            scraper=s,
+            launched_by=request.user,
+            tournament=ALL_TOURNAMENTS,
+            date_from=date_from,
+            date_to=date_to,
+            status=Run.Status.RUNNING,
+            started_at=timezone.now(),
+        )
+    except IntegrityError:
+        # Lost the race to the partial-unique constraint: another run is live.
+        messages.error(request, "A run is already in progress for this source.")
+        return redirect(back)
+    try:
+        _launch_run(run)
+    except Exception:  # noqa: BLE001
+        run.status = Run.Status.FAILED
+        run.finished_at = timezone.now()
+        run.log_text = "Failed to launch the scraper process.\n"
+        run.save(update_fields=["status", "finished_at", "log_text"])
+        messages.error(request, "Could not start the run. Please try again.")
+        return redirect(back)
+
     messages.success(
-        request,
-        f"Run #{run.short_id} {run.get_status_display().lower()} — "
-        f"{run.row_count} rows ({run.size_label}).",
+        request, f"Run #{run.short_id} started — streaming the live log below."
     )
-    return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=calls")
+    return redirect(back)
 
 
 def _get_run(slug, run_uuid):
     return get_object_or_404(Run, uuid=run_uuid, scraper__slug=slug)
 
 
+def _run_lines(run):
+    """Log lines for the viewer: the materialised snapshot, else the live rows."""
+    if run.log_text:
+        return run.log_text.splitlines()
+    return list(run.log_lines.order_by("seq").values_list("text", flat=True))
+
+
+def _run_log_text(run):
+    if run.log_text:
+        return run.log_text
+    joined = "\n".join(run.log_lines.order_by("seq").values_list("text", flat=True))
+    return joined + "\n" if joined else ""
+
+
+@login_required
+def run_events_view(request, slug, run_uuid):
+    run = _get_run(slug, run_uuid)
+    # If the worker died, the poller would otherwise stream forever — reap here
+    # so the live console terminates without needing a page reload.
+    if run.status == Run.Status.RUNNING:
+        _reap_stale_runs(run.scraper)
+        run.refresh_from_db()
+    try:
+        after = int(request.GET.get("after", "0"))
+    except (TypeError, ValueError):
+        after = 0
+    lines = list(
+        run.log_lines.filter(seq__gt=after)
+        .order_by("seq")
+        .values("seq", "level", "text")
+    )
+    return JsonResponse(
+        {
+            "status": run.status,
+            "status_display": run.get_status_display(),
+            "done": run.status != Run.Status.RUNNING,
+            "lines": lines,
+            "row_count": run.row_count,
+            "size_label": run.size_label,
+            "duration_label": run.duration_label,
+            "has_csv": run.has_csv,
+        }
+    )
+
+
 @login_required
 def run_log_view(request, slug, run_uuid):
     run = _get_run(slug, run_uuid)
-    lines = run.log_text.splitlines()
+    lines = _run_lines(run)
     paginator = Paginator(lines, LOG_LINES_PER_PAGE)
     page_obj = paginator.get_page(request.GET.get("page"))
     ctx = _app_ctx(
@@ -194,7 +296,7 @@ def run_log_view(request, slug, run_uuid):
 @login_required
 def run_log_download_view(request, slug, run_uuid):
     run = _get_run(slug, run_uuid)
-    resp = HttpResponse(run.log_text, content_type="text/plain; charset=utf-8")
+    resp = HttpResponse(_run_log_text(run), content_type="text/plain; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{slug}-{run.short_id}.log"'
     return resp
 

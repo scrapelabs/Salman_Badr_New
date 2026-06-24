@@ -32,17 +32,11 @@
     <a class="tab {% if tab == 'real-time' %}active{% endif %}" href="?tab=real-time" {% if tab == 'real-time' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg><span>Real-time test</span>
     </a>
-    <a class="tab {% if tab == 'code' %}active{% endif %}" href="?tab=code" {% if tab == 'code' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg><span>Code samples</span>
-    </a>
     <a class="tab {% if tab == 'calls' %}active{% endif %}" href="?tab=calls" {% if tab == 'calls' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg><span>Calls history</span>
     </a>
     <a class="tab {% if tab == 'settings' %}active{% endif %}" href="?tab=settings" {% if tab == 'settings' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Settings</span>
-    </a>
-    <a class="tab {% if tab == 'enhancements' %}active{% endif %}" href="?tab=enhancements" {% if tab == 'enhancements' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span>Enhancements</span>
     </a>
     <a class="tab {% if tab == 'status' %}active{% endif %}" href="?tab=status" {% if tab == 'status' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg><span>Status</span>
@@ -65,6 +59,83 @@
   {% endif %}
 
   {% if tab == 'real-time' %}
+  {% if active_run %}
+  <div class="panel rt-console" id="rtConsole" data-events-url="{% url 'run_events' s.slug active_run.uuid %}">
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Real-time test · live</div>
+          <div class="status-name">Run #{{ active_run.short_id }} on {{ s.code }}</div>
+        </div>
+        <span class="run-status {{ active_run.status }}" id="rtStatus">
+          <span class="rt-spin" id="rtSpin" aria-hidden="true"></span>{{ active_run.get_status_display }}
+        </span>
+      </div>
+      <p class="rt-intro">
+        The scraper is running as a background process. This log streams live and
+        is saved as it goes — reload the page or open it elsewhere and you’ll see
+        the same output. When it finishes, the CSV and log are added to
+        <a href="?tab=calls">Calls history</a>.
+      </p>
+      <pre class="console-out" id="consoleOut" aria-live="polite"></pre>
+    </div>
+    <div class="panel-foot rt-foot" id="rtFoot" hidden>
+      <span class="status-note" id="rtSummary"></span>
+      <div class="rt-foot-actions">
+        <a class="btn btn-ghost btn-sm" href="{% url 'run_log' s.slug active_run.uuid %}" target="_blank" rel="noopener">Open log</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug active_run.uuid %}">Download log</a>
+        <a class="btn btn-ghost btn-sm" id="rtCsv" href="{% url 'run_csv_download' s.slug active_run.uuid %}">Download CSV</a>
+        <a class="btn btn-primary btn-sm" href="?tab=real-time">Run another</a>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var root = document.getElementById('rtConsole');
+    if (!root) return;
+    var out = document.getElementById('consoleOut');
+    var statusEl = document.getElementById('rtStatus');
+    var foot = document.getElementById('rtFoot');
+    var summary = document.getElementById('rtSummary');
+    var csvBtn = document.getElementById('rtCsv');
+    var url = root.dataset.eventsUrl;
+    var last = 0, stopped = false;
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function append(lines) {
+      if (!lines || !lines.length) return;
+      var html = '';
+      for (var i = 0; i < lines.length; i++) {
+        var lv = (lines[i].level || 'INFO').toLowerCase();
+        html += '<span class="cl cl-' + lv + '">' + esc(lines[i].text) + '</span>\n';
+        last = lines[i].seq;
+      }
+      out.insertAdjacentHTML('beforeend', html);
+      out.scrollTop = out.scrollHeight;
+    }
+    function finish(d) {
+      stopped = true;
+      var spin = document.getElementById('rtSpin');
+      if (spin) spin.remove();
+      statusEl.className = 'run-status ' + d.status;
+      statusEl.textContent = d.status_display;
+      summary.textContent = d.row_count + ' row' + (d.row_count === 1 ? '' : 's') + ' · ' + d.size_label + ' · ' + d.duration_label;
+      if (!d.has_csv && csvBtn) { csvBtn.classList.add('is-disabled'); csvBtn.removeAttribute('href'); csvBtn.title = 'No CSV — run produced no rows'; }
+      foot.hidden = false;
+    }
+    function poll() {
+      if (stopped) return;
+      fetch(url + '?after=' + last, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          append(d.lines);
+          if (d.done) { finish(d); } else { setTimeout(poll, 1000); }
+        })
+        .catch(function () { setTimeout(poll, 2000); });
+    }
+    poll();
+  })();
+  </script>
+  {% else %}
   <form class="panel rt-form" method="post" action="{% url 'scraper_run' s.slug %}">
     {% csrf_token %}
     <div class="panel-pad">
@@ -76,10 +147,9 @@
         <span class="mode-pill {{ s.mode }}">{{ s.get_mode_display }}</span>
       </div>
       <p class="rt-intro">
-        Trigger an on-demand scrape for a date window. Keep the tournament on
-        “All tournaments” to mine the full draw, or pick one to scope the run.
-        The run writes a log and a CSV you can open or download from
-        <a href="?tab=calls">Calls history</a>.
+        Trigger an on-demand scrape for a date window. The scraper runs as a
+        background process; its log streams live on this page and is saved as it
+        goes, then the CSV and log land in <a href="?tab=calls">Calls history</a>.
       </p>
       <div class="rt-grid">
         <div class="rt-field">
@@ -90,12 +160,6 @@
           <label class="field-label" for="rtTo">To date</label>
           <input class="rt-input" type="date" id="rtTo" name="date_to" value="{{ default_to }}" {% if s.is_maintenance %}disabled{% endif %}>
         </div>
-        <div class="rt-field">
-          <label class="field-label" for="rtTour">Tournament</label>
-          <select class="rt-input" id="rtTour" name="tournament" {% if s.is_maintenance %}disabled{% endif %}>
-            {% for t in tournaments %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-          </select>
-        </div>
       </div>
     </div>
     <div class="panel-foot">
@@ -103,7 +167,7 @@
         {% if s.is_maintenance %}
           Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.
         {% else %}
-          A simulated run completes synchronously and appears at the top of Calls history.
+          The run starts immediately and streams its log here in real time.
         {% endif %}
       </span>
       <button class="btn btn-primary" type="submit" {% if s.is_maintenance %}disabled{% endif %}>
@@ -112,6 +176,7 @@
       </button>
     </div>
   </form>
+  {% endif %}
 
   {% elif tab == 'calls' %}
   <div class="calls-head">

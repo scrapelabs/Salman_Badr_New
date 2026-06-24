@@ -1283,7 +1283,7 @@ code {
 }
 .rt-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 .rt-field { display: flex; flex-direction: column; gap: 6px; }
@@ -1305,6 +1305,43 @@ code {
 }
 .rt-input:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn:disabled, .btn[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+/* Live console (real-time test) */
+.rt-console #rtStatus { display: inline-flex; align-items: center; gap: 6px; }
+.rt-spin {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: rt-spin 0.7s linear infinite;
+}
+@keyframes rt-spin { to { transform: rotate(360deg); } }
+.console-out {
+  margin: 14px 0 0;
+  max-height: 460px;
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 12px;
+  background: var(--app-code-bg, #0b1220);
+  color: #d7dee8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.console-out:empty::before {
+  content: "Waiting for the first log line…";
+  color: #8a97a8;
+}
+.console-out .cl { display: inline; }
+.console-out .cl-warn { color: #f4c462; }
+.console-out .cl-error { color: #ff8c8c; }
+.rt-foot { flex-wrap: wrap; gap: 12px; }
+.rt-foot-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rt-foot-actions .is-disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
 
 /* Calls history */
 .calls-head {

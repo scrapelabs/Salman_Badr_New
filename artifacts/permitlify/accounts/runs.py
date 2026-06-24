@@ -9,6 +9,7 @@ the two produce identical-looking output.
 import csv
 import io
 import random
+import time
 from datetime import timedelta
 
 from django.utils import timezone
@@ -228,3 +229,48 @@ def create_run(
         log_text=log_text,
         csv_data=csv_data,
     )
+
+
+def simulated_run(scraper, run, log):
+    """Drive a simulated run through a live ``log(level, message)`` callback.
+
+    Used for every scraper that has no real spider yet. Emits log lines over
+    time (with small pauses) so the live console streams, then returns
+    ``(csv_text, row_count, status)``. Runs inside the ``run_scrape`` subprocess,
+    so the sleeps never block the web server.
+    """
+    rng = random.Random()
+    tournament = run.tournament or ALL_TOURNAMENTS
+    single = tournament != ALL_TOURNAMENTS
+
+    status = Run.Status.PARTIAL if rng.random() < 0.12 else Run.Status.SUCCESS
+    kind = _csv_kind(scraper)
+    rows = _row_target(kind, single, status, rng)
+
+    window = "full history"
+    if run.date_from and run.date_to:
+        window = f"{run.date_from} \u2192 {run.date_to}"
+
+    log("INFO", f"Starting {scraper.slug} \u2014 scope=all tournaments, window={window}")
+    log("INFO", f"curl_cffi impersonate=chrome120; proxy pool=res-rotating ({rng.randint(18, 64)} live)")
+    log("INFO", f"GET https://{scraper.domain}/draws -> 200")
+
+    pages = max(8, min(64, rows // rng.randint(3, 6) + rng.randint(6, 16)))
+    fetched = 0
+    for p in range(1, pages + 1):
+        got = rng.randint(1, 6)
+        fetched += got
+        if status != Run.Status.SUCCESS and rng.random() < 0.06:
+            code = rng.choice([429, 503, 502])
+            log("WARN", f"page {p:>3}/{pages}: HTTP {code} \u2014 backing off, retrying")
+        log("INFO", f"page {p:>3}/{pages}: parsed {got} rows ({fetched} total)")
+        time.sleep(0.12)
+
+    if status == Run.Status.PARTIAL:
+        log("WARN", f"{rng.randint(2, 9)} rows dropped \u2014 unexpected markup in detail.py selectors")
+
+    log("INFO", f"Normalising + de-duplicating {rows} rows")
+    csv_text = build_csv(scraper, rows, rng)
+    log("INFO", f"Wrote {rows} rows to CSV")
+    log("INFO", f"Run finished \u2014 status={status}")
+    return csv_text, rows, status

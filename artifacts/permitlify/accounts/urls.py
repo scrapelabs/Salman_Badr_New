@@ -23,6 +23,11 @@ urlpatterns = [
         views.run_csv_download_view,
         name="run_csv_download",
     ),
+    path(
+        "scrapers/<slug:slug>/runs/<uuid:run_uuid>/events/",
+        views.run_events_view,
+        name="run_events",
+    ),
     path("schedule/", views.schedule_view, name="schedule"),
     path("proxies/", views.proxies_view, name="proxies"),
     path("apis/", views.apis_view, name="apis"),
