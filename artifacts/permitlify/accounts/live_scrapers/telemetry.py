@@ -11,6 +11,7 @@ scraping framework so the downloaded files are drop-in compatible:
 import csv
 import hashlib
 import io
+import threading
 import traceback
 import uuid
 from datetime import datetime, timezone as _tz
@@ -47,6 +48,7 @@ class Telemetry:
     def __init__(self):
         self._requests = []
         self._errors = []
+        self._lock = threading.Lock()
 
     # -- recording -------------------------------------------------------
     def record_request(self, *, url, method, status, size, duration_ms):
@@ -55,7 +57,7 @@ class Telemetry:
         fingerprint = hashlib.sha1(
             f"{url}{status_part}{size}".encode("utf-8")
         ).hexdigest()
-        self._requests.append({
+        entry = {
             "request_id": str(uuid.uuid4()),
             "duration": f"{duration_ms:.0f} ms",
             "fingerprint": fingerprint,
@@ -64,7 +66,9 @@ class Telemetry:
             "http_status": status if status is not None else "",
             "last_seen": datetime.now(_tz.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
             "url": url,
-        })
+        }
+        with self._lock:
+            self._requests.append(entry)
 
     def record_error(self, message, *, level="ERROR", exc=None):
         exception = ""
@@ -72,12 +76,14 @@ class Telemetry:
             exception = "".join(
                 traceback.format_exception(type(exc), exc, exc.__traceback__)
             )
-        self._errors.append({
+        entry = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
             "level": level,
             "message": message,
             "exception": exception,
-        })
+        }
+        with self._lock:
+            self._errors.append(entry)
 
     # -- counts / export -------------------------------------------------
     @property

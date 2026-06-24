@@ -12,6 +12,7 @@ There is no simulated/demo data: a scraper either has a real implementation in
 honestly with a clear message — it never fabricates rows.
 """
 
+import threading
 import time
 import traceback
 
@@ -31,22 +32,30 @@ LIVE_SCRAPERS = {
 
 
 class _RunLogger:
-    """Callable ``log(level, message)`` that persists each line and buffers it."""
+    """Callable ``log(level, message)`` that persists each line and buffers it.
+
+    Thread-safe: the scraper fetches ties concurrently, so several worker
+    threads may log at once. The lock keeps ``seq`` monotonic and unique (the
+    live console polls by ``seq``) and serialises the per-line DB insert.
+    """
 
     def __init__(self, run):
         self.run = run
         self.seq = 0
         self.buffer = []
+        self._lock = threading.Lock()
 
     def __call__(self, level, message):
-        self.seq += 1
-        stamp = timezone.localtime().strftime("%Y-%m-%d %H:%M:%S")
-        text = f"[{stamp}] {level:<5} {message}"
-        RunLogLine.objects.create(
-            run=self.run, seq=self.seq, level=level, text=text
-        )
-        self.buffer.append(text)
-        print(text, flush=True)
+        with self._lock:
+            self.seq += 1
+            seq = self.seq
+            stamp = timezone.localtime().strftime("%Y-%m-%d %H:%M:%S")
+            text = f"[{stamp}] {level:<5} {message}"
+            RunLogLine.objects.create(
+                run=self.run, seq=seq, level=level, text=text
+            )
+            self.buffer.append(text)
+            print(text, flush=True)
 
     def full_text(self):
         return "\n".join(self.buffer) + ("\n" if self.buffer else "")

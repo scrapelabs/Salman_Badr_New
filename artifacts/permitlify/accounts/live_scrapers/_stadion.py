@@ -19,9 +19,11 @@ items CSV, matching the formats produced by the original framework.
 import csv
 import io
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
@@ -38,8 +40,9 @@ UA = (
     "(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
 )
 
-# Keep a real run bounded so the lab stays responsive.
-MAX_TIES = 6
+# Ties are fetched concurrently, matching the production spider's behaviour, so
+# a full season's worth of ties is processed without an artificial cap.
+MAX_WORKERS = 8
 
 # Long ?include= expression copied from the production spider.
 _MATCH_INCLUDE = (
@@ -426,40 +429,77 @@ def run(config, run_obj, log):
                             )
         log("INFO", f"  {year}: {len(ties) - before} ties discovered")
 
-    log("INFO", f"Total ties discovered: {len(ties)} (processing up to {MAX_TIES})")
-    ties = ties[:MAX_TIES]
+    total = len(ties)
+    log(
+        "INFO",
+        f"Total ties discovered: {total} "
+        f"(processing all with {MAX_WORKERS} workers)",
+    )
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(HEADER)
-    row_count = 0
 
-    for idx, (tie_id, tie_date) in enumerate(ties, 1):
-        tc_link = f"{API}/custom/tieCentre/{tie_id}"
-        log("INFO", f"[tie {idx}/{len(ties)}] {tie_id} ({tie_date or 'n/a'})")
-        tie_centre = _get_json(tc_link, log, tele, opener)
-        if not tie_centre:
-            continue
-        matches = tie_centre.get("data", {}).get("tie", {}).get("matches", []) or []
-        log("INFO", f"  {len(matches)} match(es) in tie")
-        for match in matches:
-            match_id = match.get("id", "")
-            if not match_id:
-                continue
-            score = _match_score(match)
-            row = _build_row(config, tie_id, tie_date, match_id, score, log, tele, opener)
-            if not row:
-                continue
-            writer.writerow([sanitize_cell(row.get(c, "")) for c in COLUMNS])
-            row_count += 1
+    lock = threading.Lock()
+    counter = {"rows": 0, "done": 0}
+
+    def process_tie(item):
+        tie_id, tie_date = item
+        try:
+            tc_link = f"{API}/custom/tieCentre/{tie_id}"
+            tie_centre = _get_json(tc_link, log, tele, opener)
+            with lock:
+                counter["done"] += 1
+                done = counter["done"]
+            if not tie_centre:
+                log(
+                    "INFO",
+                    f"[tie {done}/{total}] {tie_id} "
+                    f"({tie_date or 'n/a'}) \u2014 no data",
+                )
+                return
+            matches = (
+                tie_centre.get("data", {}).get("tie", {}).get("matches", [])
+                or []
+            )
             log(
                 "INFO",
-                f"  + {row.get('draw_team_type', '')}: "
-                f"{row.get('winner_1_name') or '?'} def. "
-                f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
-                f"@ {row.get('tournament_name') or config.label}",
+                f"[tie {done}/{total}] {tie_id} "
+                f"({tie_date or 'n/a'}) \u2014 {len(matches)} match(es)",
+            )
+            for match in matches:
+                match_id = match.get("id", "")
+                if not match_id:
+                    continue
+                score = _match_score(match)
+                row = _build_row(
+                    config, tie_id, tie_date, match_id, score, log, tele, opener
+                )
+                if not row:
+                    continue
+                cells = [sanitize_cell(row.get(c, "")) for c in COLUMNS]
+                with lock:
+                    writer.writerow(cells)
+                    counter["rows"] += 1
+                log(
+                    "INFO",
+                    f"  + {row.get('draw_team_type', '')}: "
+                    f"{row.get('winner_1_name') or '?'} def. "
+                    f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
+                    f"@ {row.get('tournament_name') or config.label}",
+                )
+        except Exception as exc:  # noqa: BLE001 - a bad tie must not kill the run
+            tele.record_error(f"Tie {tie_id} failed: {exc}", exc=exc)
+            log(
+                "WARN",
+                f"[tie] {tie_id} failed: {exc.__class__.__name__}: {exc}",
             )
 
+    if ties:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            list(executor.map(process_tie, ties))
+
+    row_count = counter["rows"]
     log("INFO", f"Writing {row_count} row(s) to CSV")
     log(
         "INFO",
