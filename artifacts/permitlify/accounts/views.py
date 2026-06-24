@@ -340,6 +340,26 @@ def run_errors_download_view(request, slug, run_uuid):
     return resp
 
 
+@login_required
+@require_http_methods(["POST"])
+def run_delete_view(request, slug, run_uuid):
+    """Delete a single run from Calls history (its log lines + CSVs go with it)."""
+    run = _get_run(slug, run_uuid)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=calls"
+    page = (request.POST.get("page") or "").strip()
+    if page.isdigit():
+        back = f"{back}&page={page}"
+
+    if run.is_running:
+        messages.error(request, "Can't delete a run while it's still in progress.")
+        return redirect(back)
+
+    short = run.short_id
+    run.delete()
+    messages.success(request, f"Run #{short} and its files were deleted.")
+    return redirect(back)
+
+
 def _placeholder(active_nav, kicker, title, sub, empty_title, empty_sub):
     @login_required
     def view(request):

@@ -1564,6 +1564,9 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .run-act svg { width: 13px; height: 13px; }
 .run-act.is-disabled { opacity: 0.4; cursor: not-allowed; }
 .run-act.is-disabled:hover { color: var(--app-text-2); border-color: var(--app-border-2); background: var(--app-surface); }
+.run-act-danger { color: var(--app-maint); cursor: pointer; }
+.run-act-danger:hover { color: #fff; border-color: var(--app-maint); background: var(--app-maint); }
+.run-del-form { display: inline-flex; margin: 0; }
 
 /* Flash messages */
 .msg-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }

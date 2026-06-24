@@ -246,6 +246,13 @@
             {% if run.has_errors %}
             <a class="run-act" href="{% url 'run_errors_download' s.slug run.uuid %}" title="Download errors CSV">Errors</a>
             {% endif %}
+            {% if not run.is_running %}
+            <form class="run-del-form" method="post" action="{% url 'run_delete' s.slug run.uuid %}" onsubmit="return confirm('Delete run #{{ run.short_id }}? Its log and CSV files will be permanently removed.');">
+              {% csrf_token %}
+              <input type="hidden" name="page" value="{{ page_obj.number }}" />
+              <button type="submit" class="run-act run-act-danger" title="Delete this run and its files">Delete</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
         {% empty %}
