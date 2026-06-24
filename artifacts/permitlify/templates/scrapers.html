@@ -1,0 +1,21 @@
+{% extends "app_base.html" %}
+{% block title %}Scrapers · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">Scrapers</span>
+{% endblock %}
+{% block content %}
+<div class="content-narrow">
+  <div class="page-head">
+    <div class="kicker">Workspace</div>
+    <h1 class="h-title">Scrapers</h1>
+    <p class="h-sub">
+      Every script that mines tennis data from across the web. Open one to test
+      it, view code samples and calls history, or toggle its production status.
+    </p>
+  </div>
+
+  {% include "partials/scraper_table.html" with rows=scrapers %}
+</div>
+{% endblock %}

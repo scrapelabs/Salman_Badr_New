@@ -22,6 +22,17 @@ The app started as "Permitlify" (building-permit leads) and was rebranded to **M
 
 **Why:** the user explicitly wants the supplied design reproduced exactly; faithfulness beats taste here. Keeping tokens global + page CSS scoped lets each new page match without cross-page regressions.
 
+## Atlas authenticated-app theme (Django) — two token layers
+
+The authenticated app (sidebar + topbar + scraper pages) was rebuilt to an "Atlas" admin-dashboard look with a working light/dark toggle. Keep these layers **separate**:
+
+- **Brand tokens** (`--grad`, `--pr`, `--ac`, `--tx*`, `--sur2`, …) live in the first `:root` of `static/css/styles.css` and are **never** theme-flipped. The login page and the brand gradient/avatars use these.
+- **App semantic tokens** (`--app-bg`, `--app-surface`, `--app-text`, `--app-accent`, `--app-prod/maint`, …) live in a second `:root` and are overridden under `html[data-theme="dark"]`. Only app-shell components use these.
+- **The login page is intentionally theme-agnostic** — it uses brand tokens only, so toggling dark mode must never restyle it. Don't point login CSS at `--app-*` tokens.
+- No-FOUC: an early inline script in `base.html` reads `localStorage['mm-theme']` and sets `data-theme` before paint; the toggle button (`#themeToggle`) flips it and persists. Default is light.
+
+**Why:** the toggle should only ever affect the authenticated app, and the brand gradient must stay identical in both themes. Mixing the two layers caused the login/gradient to shift unexpectedly.
+
 ## Gotcha — long SVG line truncation
 
 The logo SVG is a single ~2400-char line; the file `read` tool truncates lines >2000 chars. To get the full markup, extract it with node (`fs.readFileSync` + slice) rather than `read`.

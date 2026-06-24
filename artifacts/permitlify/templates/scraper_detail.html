@@ -1,0 +1,123 @@
+{% extends "app_base.html" %}
+{% block title %}{{ s.name }} · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <a class="crumb" href="{% url 'scrapers' %}">Scrapers</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb">{{ s.code }}</span>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">{{ tab_label }}</span>
+{% endblock %}
+{% block topbar_actions %}
+  <a class="btn btn-ghost btn-sm" href="{% url 'scrapers' %}">All scrapers</a>
+{% endblock %}
+{% block content %}
+<div class="content-narrow">
+  <div class="detail-head">
+    <div class="detail-badge">{{ s.code }}</div>
+    <div class="detail-titlewrap">
+      <div class="detail-title">{{ s.name }} <span class="tour-tag">{{ s.tour }}</span></div>
+      <p class="detail-desc">{{ s.desc }}</p>
+      <a class="detail-vendor" href="{{ s.vendor }}" target="_blank" rel="noopener">
+        Open vendor site
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <a class="tab {% if tab == 'real-time' %}active{% endif %}" href="?tab=real-time" {% if tab == 'real-time' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg><span>Real-time test</span>
+    </a>
+    <a class="tab {% if tab == 'code' %}active{% endif %}" href="?tab=code" {% if tab == 'code' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg><span>Code samples</span>
+    </a>
+    <a class="tab {% if tab == 'calls' %}active{% endif %}" href="?tab=calls" {% if tab == 'calls' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg><span>Calls history</span>
+    </a>
+    <a class="tab {% if tab == 'settings' %}active{% endif %}" href="?tab=settings" {% if tab == 'settings' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Settings</span>
+    </a>
+    <a class="tab {% if tab == 'enhancements' %}active{% endif %}" href="?tab=enhancements" {% if tab == 'enhancements' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span>Enhancements</span>
+    </a>
+    <a class="tab {% if tab == 'status' %}active{% endif %}" href="?tab=status" {% if tab == 'status' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg><span>Status</span>
+    </a>
+  </nav>
+
+  {% if s.mode == 'maintenance' %}
+  <div class="maint-strip">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v5M12 18h.01"/></svg>
+    This source is in maintenance — real-time tests are blocked and the public API returns HTTP 503.
+  </div>
+  {% endif %}
+
+  {% if tab == 'status' %}
+  <form class="panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=status">
+    {% csrf_token %}
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Source status</div>
+          <div class="status-name">{{ s.code }} · {{ s.name }}</div>
+        </div>
+        <span class="mode-pill {{ s.mode }}">{{ s.mode|capfirst }}</span>
+      </div>
+
+      <div class="mode-choice">
+        <label class="mode-opt">
+          <input type="radio" name="mode" value="production" {% if s.mode == 'production' %}checked{% endif %} />
+          <span class="chip"><i class="dot prod"></i>Production</span>
+        </label>
+        <label class="mode-opt">
+          <input type="radio" name="mode" value="maintenance" {% if s.mode == 'maintenance' %}checked{% endif %} />
+          <span class="chip"><i class="dot maint"></i>Maintenance</span>
+        </label>
+      </div>
+
+      <label class="field-label" for="maintMsg">Message shown when in maintenance</label>
+      <textarea id="maintMsg" class="status-textarea" name="maintenance_message">{{ s.maintenance_message }}</textarea>
+    </div>
+    <div class="panel-foot">
+      <span class="status-note">
+        {% if s.mode == 'production' %}
+          This source is live — runs complete normally.
+        {% else %}
+          Re-enable this source once the upstream is healthy again.
+        {% endif %}
+      </span>
+      <button class="btn btn-primary" type="submit">Save changes</button>
+    </div>
+  </form>
+
+  <h2 class="section-title">What each mode does</h2>
+  <div class="mode-cards">
+    <div class="mode-card">
+      <span class="mode-pill production">Production</span>
+      <ul class="mode-list">
+        <li><strong>Real-time test</strong> button submits jobs normally.</li>
+        <li><strong>Public API</strong> <code>POST /api/scrape/run</code> accepts new jobs and returns <code>job</code> with a <code>task_id</code>.</li>
+        <li>This is the default for every source.</li>
+      </ul>
+    </div>
+    <div class="mode-card">
+      <span class="mode-pill maintenance">Maintenance</span>
+      <ul class="mode-list">
+        <li><strong>Real-time test</strong> button is blocked with a clear message.</li>
+        <li><strong>Public API</strong> returns <code>HTTP 503</code> with <code>{"errors":[…], "maintenance":true, "message":…}</code>.</li>
+        <li>An amber strip appears on every other tab so the state can't be missed.</li>
+      </ul>
+    </div>
+  </div>
+  {% else %}
+  <div class="panel">
+    <div class="panel-empty">
+      <h3>{{ tab_label }}</h3>
+      <p>The {{ tab_label|lower }} view for {{ s.name }} will live here.</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

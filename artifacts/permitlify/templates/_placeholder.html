@@ -1,0 +1,23 @@
+{% extends "app_base.html" %}
+{% block title %}{{ page_title }} · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">{{ page_title }}</span>
+{% endblock %}
+{% block content %}
+<div class="content-narrow">
+  <div class="page-head">
+    <div class="kicker">{{ page_kicker }}</div>
+    <h1 class="h-title">{{ page_title }}</h1>
+    <p class="h-sub">{{ page_sub }}</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-empty">
+      <h3>{{ empty_title }}</h3>
+      <p>{{ empty_sub }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -112,7 +112,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = "/"
-LOGIN_REDIRECT_URL = "/dashboard/"
+LOGIN_REDIRECT_URL = "/overview/"
 LOGOUT_REDIRECT_URL = "/"
 
 # --- I18N -----------------------------------------------------------------

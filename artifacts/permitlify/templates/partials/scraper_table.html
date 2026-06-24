@@ -1,0 +1,35 @@
+{% comment %}Renders a scraper table. Pass `rows` (a list of scraper dicts).{% endcomment %}
+<div class="tablewrap">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Scraper</th>
+        <th>Tour</th>
+        <th>Mode</th>
+        <th>Calls</th>
+        <th>Returns</th>
+        <th>Last run</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in rows %}
+      <tr data-href="{% url 'scraper_detail' s.slug %}">
+        <td>
+          <div class="tbl-name">
+            <span class="tbl-badge">{{ s.code }}</span>
+            <span>
+              <a class="tbl-title" href="{% url 'scraper_detail' s.slug %}">{{ s.name }}</a><br />
+              <span class="tbl-domain">{{ s.domain }}</span>
+            </span>
+          </div>
+        </td>
+        <td>{{ s.tour }}</td>
+        <td><span class="mode-tag {{ s.mode }}">{{ s.mode|capfirst }}</span></td>
+        <td>{{ s.calls }}</td>
+        <td>{{ s.returns }}</td>
+        <td>{{ s.last_run }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
