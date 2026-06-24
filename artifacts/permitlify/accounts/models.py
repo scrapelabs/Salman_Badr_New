@@ -8,11 +8,53 @@ re-opened and downloaded later. Runs perform live network scrapes via
 :mod:`accounts.live_scrapers`.
 """
 
+import re
 import uuid
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+# Mask the password in an optionally-schemed "user:pass@host" address.
+_CREDS_RE = re.compile(r"(^(?:[a-zA-Z][a-zA-Z0-9+.\-]*://)?[^/:@\s]+:)[^/@\s]+(@)")
+
+
+class Proxy(models.Model):
+    """A proxy pool the workspace can route scraper traffic through.
+
+    Pools are managed on the Proxies page and selected per scraper from its
+    Settings tab. ``address`` is optional: a pool with no address is a label
+    only, and scrapers fall back to a direct connection until one is set.
+    """
+
+    class Kind(models.TextChoices):
+        RESIDENTIAL = "residential", "Residential"
+        DATACENTER = "datacenter", "Datacenter"
+        MOBILE = "mobile", "Mobile"
+        ISP = "isp", "ISP"
+
+    name = models.CharField(max_length=80)
+    kind = models.CharField(
+        max_length=16, choices=Kind.choices, default=Kind.RESIDENTIAL
+    )
+    address = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name_plural = "proxies"
+
+    def __str__(self):
+        return f"{self.name} ({self.get_kind_display()})"
+
+    @property
+    def display_address(self):
+        """Address with any embedded password masked, safe to render in the UI."""
+        addr = (self.address or "").strip()
+        if not addr:
+            return ""
+        return _CREDS_RE.sub("\\g<1>\u2022\u2022\u2022\u2022\\g<2>", addr)
 
 
 class Scraper(models.Model):
@@ -33,6 +75,13 @@ class Scraper(models.Model):
         max_length=12, choices=Mode.choices, default=Mode.PRODUCTION
     )
     maintenance_message = models.TextField(blank=True)
+    proxy = models.ForeignKey(
+        "Proxy",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="scrapers",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

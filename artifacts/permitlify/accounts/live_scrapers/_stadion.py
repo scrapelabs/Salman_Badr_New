@@ -93,7 +93,38 @@ class StadionConfig:
     url_builder: Callable[[str, str], str]  # (tie_id, match_id) -> tournament_url
 
 
-def _get_json(url, log, tele, tries=3, timeout=25):
+def _build_opener(scraper, log):
+    """Build a urllib opener that honours the scraper's selected proxy.
+
+    A proxy with a non-empty address routes traffic through it; otherwise the
+    scraper connects directly. The address (which may carry credentials) is
+    never logged — only the pool's name and type.
+    """
+    proxy = getattr(scraper, "proxy", None)
+    if proxy and proxy.is_active and (proxy.address or "").strip():
+        addr = proxy.address.strip()
+        if "://" not in addr:
+            addr = "http://" + addr
+        handler = urllib.request.ProxyHandler({"http": addr, "https": addr})
+        log(
+            "INFO",
+            f"HTTP client: urllib via {proxy.get_kind_display()} proxy "
+            f"'{proxy.name}'",
+        )
+        return urllib.request.build_opener(handler)
+    if proxy and proxy.is_active:
+        log(
+            "INFO",
+            f"Proxy '{proxy.name}' ({proxy.get_kind_display()}) selected but has "
+            "no address \u2014 using direct connection",
+        )
+    else:
+        log("INFO", "HTTP client: urllib (direct, no proxy)")
+    # Empty ProxyHandler => ignore any HTTP(S)_PROXY environment variables.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def _get_json(url, log, tele, opener, tries=3, timeout=25):
     """GET ``url`` as JSON, recording each attempt/failure into ``tele``."""
     last_exc = None
     for attempt in range(1, tries + 1):
@@ -102,7 +133,7 @@ def _get_json(url, log, tele, tries=3, timeout=25):
             req = urllib.request.Request(
                 url, headers={"User-Agent": UA, "Accept": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener.open(req, timeout=timeout) as resp:
                 status = getattr(resp, "status", resp.getcode())
                 body = resp.read()
                 tele.record_request(
@@ -258,9 +289,9 @@ def _match_score(match):
         return ""
 
 
-def _build_row(config, tie_id, tie_date, match_id, score, log, tele):
+def _build_row(config, tie_id, tie_date, match_id, score, log, tele, opener):
     link = f"{API}/match/{match_id}?include={_MATCH_INCLUDE}"
-    results = _get_json(link, log, tele)
+    results = _get_json(link, log, tele, opener)
     if not results:
         return None
     data = results.get("data", {}) or {}
@@ -364,14 +395,14 @@ def run(config, run_obj, log):
     tele = Telemetry()
     years = _years(run_obj)
     log("INFO", f"{config.label} scraper starting \u2014 rank years={years}")
-    log("INFO", "HTTP client: urllib (direct, no proxy)")
+    opener = _build_opener(run_obj.scraper, log)
 
     ties = []
     seen = set()
     for year in years:
         index_link = f"{API}/custom/wcotDrawsModeled/{config.draw_code}/{year}"
         log("INFO", f"GET {index_link}")
-        data = _get_json(index_link, log, tele)
+        data = _get_json(index_link, log, tele, opener)
         if not data:
             log("WARN", f"No draw data returned for {year}")
             continue
@@ -406,7 +437,7 @@ def run(config, run_obj, log):
     for idx, (tie_id, tie_date) in enumerate(ties, 1):
         tc_link = f"{API}/custom/tieCentre/{tie_id}"
         log("INFO", f"[tie {idx}/{len(ties)}] {tie_id} ({tie_date or 'n/a'})")
-        tie_centre = _get_json(tc_link, log, tele)
+        tie_centre = _get_json(tc_link, log, tele, opener)
         if not tie_centre:
             continue
         matches = tie_centre.get("data", {}).get("tie", {}).get("matches", []) or []
@@ -416,7 +447,7 @@ def run(config, run_obj, log):
             if not match_id:
                 continue
             score = _match_score(match)
-            row = _build_row(config, tie_id, tie_date, match_id, score, log, tele)
+            row = _build_row(config, tie_id, tie_date, match_id, score, log, tele, opener)
             if not row:
                 continue
             writer.writerow([sanitize_cell(row.get(c, "")) for c in COLUMNS])

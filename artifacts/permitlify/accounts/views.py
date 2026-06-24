@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .models import Run, Scraper
+from .models import Proxy, Run, Scraper
 from .runs import ALL_TOURNAMENTS
 
 STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
@@ -37,7 +37,7 @@ def _counts():
     return {
         "scrapers": Scraper.objects.count(),
         "schedule": 12,
-        "proxies": 48,
+        "proxies": Proxy.objects.count(),
         "apis": 6,
         "logs": Run.objects.count(),
         "users": get_user_model().objects.count(),
@@ -127,8 +127,20 @@ def scrapers_view(request):
 def scraper_detail_view(request, slug):
     s = get_object_or_404(Scraper, slug=slug)
 
-    # POST = save Production/Maintenance status from the Status tab.
+    # POST handles two tab forms, told apart by a hidden ``form`` field.
     if request.method == "POST":
+        # Settings tab: save the per-scraper proxy selection.
+        if request.POST.get("form") == "settings":
+            proxy = None
+            proxy_id = (request.POST.get("proxy") or "").strip()
+            if proxy_id.isdigit():
+                proxy = Proxy.objects.filter(pk=int(proxy_id)).first()
+            s.proxy = proxy
+            s.save(update_fields=["proxy", "updated_at"])
+            messages.success(request, "Proxy settings saved.")
+            return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
+
+        # Status tab: save Production/Maintenance status.
         mode = request.POST.get("mode", s.mode)
         if mode in (Scraper.Mode.PRODUCTION, Scraper.Mode.MAINTENANCE):
             s.mode = mode
@@ -157,6 +169,8 @@ def scraper_detail_view(request, slug):
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
         ctx["run_total"] = paginator.count
+    elif tab == "settings":
+        ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
 
     return render(request, "scraper_detail.html", ctx)
 
@@ -353,14 +367,6 @@ schedule_view = _placeholder(
     "No schedules yet",
     "Scheduled runs will appear here once you set cadences for your scrapers.",
 )
-proxies_view = _placeholder(
-    "proxies",
-    "Workspace",
-    "Proxies",
-    "Rotating proxy pools and their health, used to route scraper traffic.",
-    "No proxies configured",
-    "Add a proxy pool to route scraper traffic through it.",
-)
 apis_view = _placeholder(
     "apis",
     "Workspace",
@@ -409,6 +415,44 @@ users_view = _placeholder(
     "Just you for now",
     "Invite teammates to collaborate in MatchMiner.",
 )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def proxies_view(request):
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "delete":
+            proxy_id = (request.POST.get("proxy_id") or "").strip()
+            if proxy_id.isdigit():
+                Proxy.objects.filter(pk=int(proxy_id)).delete()
+                messages.success(request, "Proxy removed.")
+            return redirect("proxies")
+
+        name = (request.POST.get("name") or "").strip()
+        kind = request.POST.get("kind", Proxy.Kind.RESIDENTIAL)
+        address = (request.POST.get("address") or "").strip()
+        if not name:
+            messages.error(request, "Give the proxy a name.")
+        elif kind not in Proxy.Kind.values:
+            messages.error(request, "Pick a valid proxy type.")
+        else:
+            Proxy.objects.create(name=name, kind=kind, address=address)
+            messages.success(request, f"Added proxy “{name}”.")
+        return redirect("proxies")
+
+    proxies = Proxy.objects.annotate(used_by=Count("scrapers")).order_by("name")
+    by_kind = {k.value: 0 for k in Proxy.Kind}
+    for p in proxies:
+        by_kind[p.kind] = by_kind.get(p.kind, 0) + 1
+    ctx = _app_ctx(
+        "proxies",
+        proxies=proxies,
+        proxy_kinds=Proxy.Kind.choices,
+        total_proxies=len(proxies),
+        by_kind=by_kind,
+    )
+    return render(request, "proxies.html", ctx)
 
 
 @require_http_methods(["POST"])

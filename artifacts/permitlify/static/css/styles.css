@@ -933,6 +933,12 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   border-bottom: 1px solid var(--app-border);
   margin-bottom: 24px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 .tab {
   display: inline-flex;
@@ -1454,6 +1460,72 @@ code {
 .loglines li::marker { color: var(--app-text-3); font-size: 11px; }
 .loglines .logline { color: var(--app-text); }
 
+/* proxies page */
+.proxy-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.pstat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  box-shadow: var(--app-elev);
+}
+.pstat-num { font: 700 22px "DM Sans", sans-serif; color: var(--app-text); }
+.pstat-lbl { font-size: 12px; font-weight: 600; color: var(--app-text-3); }
+
+.proxy-add-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.proxy-add-addr { grid-column: 1 / -1; }
+.field-opt { font-weight: 500; color: var(--app-text-3); font-size: 12px; }
+
+.proxy-addr {
+  font: 600 12px "JetBrains Mono", ui-monospace, monospace;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  padding: 3px 8px;
+}
+
+/* proxy type pills (reuse mode-pill geometry) */
+.ptype {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 12px "DM Sans", sans-serif;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ptype::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ptype.residential { color: var(--app-accent); background: var(--app-accent-bg); }
+.ptype.datacenter  { color: var(--app-prod);   background: var(--app-prod-bg); }
+.ptype.mobile      { color: var(--app-amber);  background: var(--app-amber-bg); }
+.ptype.isp         { color: #8b5cf6; background: rgba(139, 92, 246, 0.12); }
+.ptype.direct      { color: var(--app-text-3); background: var(--app-surface-2); }
+
+.proxy-del { color: var(--app-maint); border-color: var(--app-border-2); }
+.proxy-del:hover {
+  color: var(--app-maint);
+  border-color: var(--app-maint);
+  background: var(--app-maint-bg);
+}
+.settings-empty { margin-top: 12px; }
+
 @media (max-width: 720px) {
   .rt-grid { grid-template-columns: 1fr; }
+  .proxy-add-grid { grid-template-columns: 1fr; }
+  .proxy-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -301,6 +301,52 @@
     </div>
   </div>
 
+  {% elif tab == 'settings' %}
+  <form class="panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=settings">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="settings" />
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Scraper settings</div>
+          <div class="status-name">Proxy routing</div>
+        </div>
+        {% if s.proxy %}
+        <span class="ptype {{ s.proxy.kind }}">{{ s.proxy.get_kind_display }}</span>
+        {% else %}
+        <span class="ptype direct">Direct</span>
+        {% endif %}
+      </div>
+
+      <p class="rt-intro">
+        Choose which proxy pool <strong>{{ s.code }}</strong> routes its traffic through.
+        Manage the list of pools on the <a href="{% url 'proxies' %}">Proxies</a> page.
+        With “Direct connection” — or a pool that has no address set — the scraper
+        connects without a proxy.
+      </p>
+
+      <div class="rt-grid">
+        <div class="rt-field">
+          <label class="field-label" for="proxySel">Proxy for {{ s.code }}</label>
+          <select class="rt-input" id="proxySel" name="proxy">
+            <option value="">Direct connection (no proxy)</option>
+            {% for p in proxies %}
+            <option value="{{ p.pk }}" {% if s.proxy_id == p.pk %}selected{% endif %}>{{ p.name }} · {{ p.get_kind_display }}{% if p.address %} ({{ p.display_address }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      {% if not proxies %}
+      <p class="status-note settings-empty">No proxy pools yet — <a href="{% url 'proxies' %}">add one</a> to route this scraper through it.</p>
+      {% endif %}
+    </div>
+    <div class="panel-foot">
+      <span class="status-note">Saved per scraper. Real-time and scheduled runs use this selection.</span>
+      <button class="btn btn-primary" type="submit">Save proxy</button>
+    </div>
+  </form>
+
   {% else %}
   <div class="panel">
     <div class="panel-empty">
