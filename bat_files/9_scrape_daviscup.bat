@@ -9,7 +9,7 @@ REM  (Lab -> Settings) and run it from there instead.
 REM ===========================================================================
 setlocal
 if not exist "%~dp0..\.venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual environment not found. Run 0_install.bat first.
+    echo [ERROR] Virtual environment not found. Run 0_setup.bat first.
     echo.
     pause
     exit /b 1
