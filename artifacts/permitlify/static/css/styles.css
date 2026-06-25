@@ -881,6 +881,216 @@ a.tbl-domain:hover svg {
   background: var(--app-maint-bg);
 }
 
+/* section head with a live indicator */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 30px 0 14px;
+}
+.section-head .section-title {
+  margin: 0;
+}
+.live-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 8.6px "JetBrains Mono", monospace;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--app-prod);
+}
+.live-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--app-prod);
+  box-shadow: 0 0 0 0 var(--app-prod-bg);
+  animation: live-pulse 1.6s ease-out infinite;
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 var(--app-prod-bg); }
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* real-time monitor cards (threads + CPU/Memory/Disk gauges) */
+.monitor-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.monitor-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: var(--app-elev);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.monitor-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.4px;
+  font-weight: 500;
+  color: var(--app-text-3);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  align-self: stretch;
+  text-align: left;
+}
+.monitor-foot {
+  font-size: 10px;
+  color: var(--app-text-2);
+  margin-top: 12px;
+}
+.threads-card {
+  align-items: flex-start;
+  text-align: left;
+}
+.threads-value {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 44px;
+  font-weight: 800;
+  color: var(--app-accent);
+  line-height: 1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* circular gauge */
+.gauge {
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+.gauge svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.gauge-track {
+  fill: none;
+  stroke: var(--app-surface-2);
+  stroke-width: 8;
+}
+.gauge-fill {
+  fill: none;
+  stroke: var(--app-accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
+}
+.gauge.gauge-ok .gauge-fill { stroke: var(--app-prod); }
+.gauge.gauge-warn .gauge-fill { stroke: #d97706; }
+.gauge.gauge-crit .gauge-fill { stroke: var(--app-maint); }
+.gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gauge-pct {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--app-text);
+  line-height: 1;
+}
+.gauge-unit {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--app-text-3);
+  margin-left: 1px;
+}
+
+/* run/health status badge (scrapers table + recently active) */
+.run-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 9.2px "DM Sans", sans-serif;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.run-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.run-st-running {
+  color: var(--app-accent);
+  background: var(--app-accent-bg);
+}
+.run-st-running::before {
+  animation: live-pulse 1.4s ease-out infinite;
+}
+.run-st-healthy {
+  color: var(--app-prod);
+  background: var(--app-prod-bg);
+}
+.run-st-failed {
+  color: var(--app-maint);
+  background: var(--app-maint-bg);
+}
+.run-st-stopped {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+}
+.run-st-idle {
+  color: var(--app-text-3);
+  background: var(--app-surface-2);
+}
+
+/* threads banner on the Scrapers page */
+.threadbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  box-shadow: var(--app-elev);
+  margin-bottom: 16px;
+}
+.threadbar-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.threadbar-num {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--app-accent);
+  line-height: 1;
+}
+.threadbar-unit {
+  font-size: 11px;
+  color: var(--app-text-2);
+}
+.threadbar-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10.8px;
+  color: var(--app-text-2);
+}
+
 /* interactive scraper table: search + sortable headers + pagination */
 .tbl-toolbar {
   display: flex;

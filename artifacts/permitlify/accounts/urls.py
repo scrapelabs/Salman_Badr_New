@@ -5,6 +5,7 @@ from . import qa_views, views
 urlpatterns = [
     path("", views.login_view, name="login"),
     path("overview/", views.overview_view, name="overview"),
+    path("stats/live/", views.live_stats_view, name="live_stats"),
     path("scrapers/", views.scrapers_view, name="scrapers"),
     path("scrapers/<slug:slug>/", views.scraper_detail_view, name="scraper_detail"),
     path("scrapers/<slug:slug>/run/", views.scraper_run_view, name="scraper_run"),

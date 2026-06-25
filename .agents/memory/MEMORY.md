@@ -10,6 +10,7 @@
 - [MatchMiner live scrapers](matchminer-live-scrapers.md) — full catalogue (37 wired) on shared parameterised engines + standalone modules; many honest-fail until creds/proxy; central SSRF guard in ScraperClient; unwired slugs fail honestly.
 - [Porting source scrapers](scraper-porting-pitfalls.md) — probe the live API for real field/join keys (sources have bugs), drop cosmetic AI, env-creds + honest-fail, in-process validation injecting gitignored creds, reuse brazil's 61-col schema.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
+- [Replit container resource stats](replit-container-resource-stats.md) — for live CPU/mem/disk gauges: cgroup-v2 for memory, BASE_DIR for disk (`/`=0), prime psutil CPU; psutil alone misleads.
 - [Scraper SSRF + dedup rules](scraper-ssrf-and-dedup.md) — ScraperClient validates the initial URL AND every redirect hop via _ssrf (covers discovered second-stage links centrally); dedup keys must include source identity or rematches get dropped.
 - [Confirm dialog convention](confirm-dialog-convention.md) — global #mmConfirm modal in app_base.html; destructive forms opt in via data-confirm attrs; never native confirm().
 - [QA rich-text sanitization](qa-rich-text-sanitization.md) — QA ticket/comment HTML is server-allowlisted; img src limited to attachment-prefix/https, Quill paste/drop must upload (capture phase) not base64, or content silently vanishes.

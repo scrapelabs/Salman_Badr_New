@@ -19,16 +19,18 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.db.models import Count, Max
+from django.db.models import Count, Exists, Max, OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.timesince import timesince
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from .live_scrapers import _ssrf, registry
 from .models import Proxy, Run, Scraper, Ticket
+from .system_stats import collect_system_stats, gauge_card
 from .runs import ALL_TOURNAMENTS
 
 STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
@@ -79,10 +81,125 @@ def _app_ctx(active_nav, **extra):
 
 
 def _scrapers_annotated():
+    latest_status = (
+        Run.objects.filter(scraper=OuterRef("pk"))
+        .order_by("-started_at")
+        .values("status")[:1]
+    )
     return Scraper.objects.annotate(
         run_count=Count("runs"),
         last_run_at=Max("runs__started_at"),
+        latest_status=Subquery(latest_status),
+        is_running=Exists(
+            Run.objects.filter(scraper=OuterRef("pk"), status=Run.Status.RUNNING)
+        ),
     )
+
+
+# Per-scraper health badge shown on the Scrapers table + Overview monitor.
+RUN_STATE_LABELS = {
+    "running": "Running",
+    "healthy": "Healthy",
+    "failed": "Failed",
+    "stopped": "Stopped",
+    "idle": "Idle",
+}
+
+
+def _derive_run_state(is_running, latest_status):
+    """Collapse a scraper's in-flight flag + last run status into one badge state."""
+    if is_running:
+        return "running"
+    if latest_status is None:
+        return "idle"
+    if latest_status == Run.Status.FAILED:
+        return "failed"
+    if latest_status == Run.Status.STOPPED:
+        return "stopped"
+    if latest_status in (Run.Status.SUCCESS, Run.Status.PARTIAL):
+        return "healthy"
+    return "idle"
+
+
+def _run_status_state(run):
+    """Badge state for a single Run row (Overview "recently active" table)."""
+    if run.status == Run.Status.RUNNING:
+        return "running"
+    if run.status == Run.Status.FAILED:
+        return "failed"
+    if run.status == Run.Status.STOPPED:
+        return "stopped"
+    return "healthy"  # success / partial
+
+
+def _with_run_state(scrapers):
+    """Materialise an annotated scraper queryset, attaching badge state attrs."""
+    items = list(scrapers)
+    for s in items:
+        s.run_state = _derive_run_state(s.is_running, s.latest_status)
+        s.run_state_label = RUN_STATE_LABELS[s.run_state]
+    return items
+
+
+def _threads_running():
+    """(total worker threads, scraper count) for scrapers with an in-flight run.
+
+    Each running scraper contributes its worker-pool size, so 5 scrapers running
+    5 threads each reports 25 — the live concurrency across the platform.
+    """
+    running = list(
+        Scraper.objects.filter(runs__status=Run.Status.RUNNING).distinct()
+    )
+    return sum(s.worker_count for s in running), len(running)
+
+
+def _recent_runs(finished_limit=5):
+    """All in-flight runs, then the latest N finished runs (newest first)."""
+    running = list(
+        Run.objects.filter(status=Run.Status.RUNNING)
+        .select_related("scraper")
+        .order_by("-started_at")
+    )
+    finished = list(
+        Run.objects.exclude(status=Run.Status.RUNNING)
+        .select_related("scraper")
+        .order_by("-started_at")[:finished_limit]
+    )
+    for r in running + finished:
+        r.run_state = _run_status_state(r)
+    return running + finished
+
+
+def _run_brief(run):
+    return {
+        "slug": run.scraper.slug,
+        "code": run.scraper.code,
+        "name": run.scraper.name,
+        "status": run.status,
+        "status_label": run.get_status_display(),
+        "state": _run_status_state(run),
+        "started_human": f"{timesince(run.started_at)} ago",
+        "rows": run.row_count,
+        "duration_label": run.duration_label,
+        "log_url": reverse("run_log", args=[run.scraper.slug, run.uuid]),
+        "detail_url": reverse("scraper_detail", args=[run.scraper.slug]),
+    }
+
+
+def _monitor_cards(sys_stats):
+    """Gauge-ready CPU / Memory / Disk cards from a collect_system_stats() dict."""
+    cpu, mem, disk = sys_stats["cpu"], sys_stats["mem"], sys_stats["disk"]
+    return {
+        "cpu": gauge_card(
+            "CPU", cpu, f"{cpu.get('cores', 0)} cores · system load"
+        ),
+        "mem": gauge_card(
+            "Memory", mem, f"{mem.get('used_gb', 0)} / {mem.get('total_gb', 0)} GB"
+        ),
+        "disk": gauge_card(
+            "Disk", disk, f"{disk.get('used_gb', 0)} / {disk.get('total_gb', 0)} GB"
+        ),
+    }
 
 
 def _launch_run(run):
@@ -152,20 +269,68 @@ def login_view(request):
 @login_required
 def overview_view(request):
     today = timezone.localdate()
+    threads_running, running_scrapers = _threads_running()
     ctx = _app_ctx(
         "overview",
         active_scrapers=Scraper.objects.filter(mode=Scraper.Mode.PRODUCTION).count(),
         runs_today=Run.objects.filter(started_at__date=today).count(),
         maint_count=Scraper.objects.filter(mode=Scraper.Mode.MAINTENANCE).count(),
-        recent=_scrapers_annotated().order_by("-last_run_at")[:4],
+        monitor=_monitor_cards(collect_system_stats()),
+        threads_running=threads_running,
+        running_scrapers=running_scrapers,
+        recent_runs=_recent_runs(),
+        live_stats_url=reverse("live_stats"),
     )
     return render(request, "overview.html", ctx)
 
 
 @login_required
 def scrapers_view(request):
-    scrapers = _scrapers_annotated().order_by("name")
-    return render(request, "scrapers.html", _app_ctx("scrapers", scrapers=scrapers))
+    scrapers = _with_run_state(_scrapers_annotated().order_by("name"))
+    threads_running, running_scrapers = _threads_running()
+    return render(
+        request,
+        "scrapers.html",
+        _app_ctx(
+            "scrapers",
+            scrapers=scrapers,
+            threads_running=threads_running,
+            running_scrapers=running_scrapers,
+            live_stats_url=reverse("live_stats"),
+        ),
+    )
+
+
+@login_required
+def live_stats_view(request):
+    """JSON feed polled by the Overview + Scrapers pages for real-time stats."""
+    threads_running, running_scrapers = _threads_running()
+    today = timezone.localdate()
+    scr_map = {
+        s.slug: {
+            "state": (state := _derive_run_state(s.is_running, s.latest_status)),
+            "label": RUN_STATE_LABELS[state],
+        }
+        for s in _scrapers_annotated()
+    }
+    return JsonResponse(
+        {
+            "system": collect_system_stats(),
+            "threads_running": threads_running,
+            "running_scrapers": running_scrapers,
+            "overview": {
+                "active_scrapers": Scraper.objects.filter(
+                    mode=Scraper.Mode.PRODUCTION
+                ).count(),
+                "runs_today": Run.objects.filter(started_at__date=today).count(),
+                "maint_count": Scraper.objects.filter(
+                    mode=Scraper.Mode.MAINTENANCE
+                ).count(),
+                "recent_runs": [_run_brief(r) for r in _recent_runs()],
+            },
+            "scrapers": scr_map,
+        }
+    )
 
 
 @login_required

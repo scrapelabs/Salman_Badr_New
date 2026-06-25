@@ -6,7 +6,7 @@
   <span class="crumb current">Scrapers</span>
 {% endblock %}
 {% block content %}
-<div class="content-narrow">
+<div class="content-narrow" data-live-stats="{{ live_stats_url }}">
   <div class="page-head">
     <div class="kicker">Workspace</div>
     <h1 class="h-title">Scrapers</h1>
@@ -16,6 +16,58 @@
     </p>
   </div>
 
+  <div class="threadbar">
+    <div class="threadbar-main">
+      <span class="threadbar-num" data-threads-running>{{ threads_running }}</span>
+      <span class="threadbar-unit">worker threads running now</span>
+    </div>
+    <div class="threadbar-sub">
+      across <span data-running-scrapers>{{ running_scrapers }}</span>
+      active scraper<span data-running-plural>{{ running_scrapers|pluralize }}</span>
+      <span class="live-dot" title="Updating in real time">Live</span>
+    </div>
+  </div>
+
   {% include "partials/scraper_table.html" with rows=scrapers interactive=True %}
 </div>
+
+<script>
+  (function () {
+    var root = document.querySelector("[data-live-stats]");
+    if (!root || root.__liveInit) return;
+    root.__liveInit = true;
+    var url = root.getAttribute("data-live-stats");
+
+    function setText(sel, v) { var el = root.querySelector(sel); if (el) el.textContent = v; }
+
+    function apply(d) {
+      setText("[data-threads-running]", d.threads_running);
+      setText("[data-running-scrapers]", d.running_scrapers);
+      var pl = root.querySelector("[data-running-plural]");
+      if (pl) pl.textContent = d.running_scrapers === 1 ? "" : "s";
+      var map = d.scrapers || {};
+      root.querySelectorAll("tr[data-slug]").forEach(function (row) {
+        var info = map[row.getAttribute("data-slug")];
+        if (!info) return;
+        var badge = row.querySelector(".run-badge");
+        if (badge) {
+          badge.className = "run-badge run-st-" + info.state;
+          badge.textContent = info.label;
+        }
+        row.setAttribute("data-status", info.state);
+      });
+    }
+
+    function tick() {
+      if (document.hidden) return schedule();
+      fetch(url, { headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d) apply(d); })
+        .catch(function () {})
+        .finally(schedule);
+    }
+    function schedule() { setTimeout(tick, 3000); }
+    schedule();
+  })();
+</script>
 {% endblock %}

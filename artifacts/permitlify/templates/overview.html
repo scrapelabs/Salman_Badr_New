@@ -6,7 +6,7 @@
   <span class="crumb current">Overview</span>
 {% endblock %}
 {% block content %}
-<div class="content-narrow">
+<div class="content-narrow" data-live-stats="{{ live_stats_url }}">
   <div class="page-head">
     <div class="kicker">Tennis Intelligence Platform</div>
     <h1 class="h-title">Welcome back, {{ user.username }}</h1>
@@ -16,25 +16,129 @@
     </p>
   </div>
 
+  <div class="section-head">
+    <h2 class="section-title">Live system monitor</h2>
+    <span class="live-dot" title="Updating in real time">Live</span>
+  </div>
+  <div class="monitor-cards">
+    <div class="monitor-card threads-card">
+      <div class="monitor-label">Threads running</div>
+      <div class="threads-value"><span data-threads-running>{{ threads_running }}</span></div>
+      <div class="monitor-foot">
+        across <span data-running-scrapers>{{ running_scrapers }}</span>
+        active scraper<span data-running-plural>{{ running_scrapers|pluralize }}</span>
+      </div>
+    </div>
+    {% include "partials/gauge.html" with g=monitor.cpu key="cpu" %}
+    {% include "partials/gauge.html" with g=monitor.mem key="mem" %}
+    {% include "partials/gauge.html" with g=monitor.disk key="disk" %}
+  </div>
+
   <div class="stat-cards">
     <div class="stat-card">
       <div class="stat-label">Active scrapers</div>
-      <div class="stat-value">{{ active_scrapers }}</div>
+      <div class="stat-value" data-stat-active>{{ active_scrapers }}</div>
       <div class="stat-foot">Production sources mining tennis data</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Runs today</div>
-      <div class="stat-value">{{ runs_today }}</div>
+      <div class="stat-value" data-stat-runs>{{ runs_today }}</div>
       <div class="stat-foot">Real-time + scheduled jobs since midnight UTC</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">In maintenance</div>
-      <div class="stat-value">{{ maint_count }}</div>
+      <div class="stat-value" data-stat-maint>{{ maint_count }}</div>
       <div class="stat-foot">Paused sources awaiting re-enable</div>
     </div>
   </div>
 
   <h2 class="section-title">Recently active</h2>
-  {% include "partials/scraper_table.html" with rows=recent %}
+  {% include "partials/recent_runs.html" with recent_runs=recent_runs %}
 </div>
+
+<script>
+  (function () {
+    var root = document.querySelector("[data-live-stats]");
+    if (!root || root.__liveInit) return;
+    root.__liveInit = true;
+    var url = root.getAttribute("data-live-stats");
+    var CIRC = {{ monitor.cpu.circumference }};
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function severity(p) { return p >= 85 ? "crit" : p >= 60 ? "warn" : "ok"; }
+    function setText(sel, v) { var el = root.querySelector(sel); if (el) el.textContent = v; }
+
+    function updateGauge(key, g) {
+      var card = root.querySelector('[data-gauge="' + key + '"]');
+      if (!card || !g) return;
+      var pct = g.percent || 0;
+      var pctEl = card.querySelector("[data-gauge-pct]");
+      if (pctEl) pctEl.textContent = pct;
+      var fill = card.querySelector("[data-gauge-fill]");
+      if (fill) fill.style.strokeDashoffset = (CIRC * (1 - Math.min(100, Math.max(0, pct)) / 100)).toFixed(2);
+      var ring = card.querySelector(".gauge");
+      if (ring) ring.className = "gauge gauge-" + severity(pct);
+      var foot = card.querySelector("[data-gauge-foot]");
+      if (foot) {
+        if (key === "cpu") foot.textContent = (g.cores || 0) + " cores · system load";
+        else foot.textContent = (g.used_gb || 0) + " / " + (g.total_gb || 0) + " GB";
+      }
+    }
+
+    function rowHtml(r) {
+      return (
+        '<tr data-href="' + esc(r.log_url) + '">' +
+          '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
+            '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
+          '<td><span class="run-badge run-st-' + esc(r.state) + '">' + esc(r.status_label) + "</span></td>" +
+          "<td>" + esc(r.started_human) + "</td>" +
+          "<td>" + esc(r.rows) + "</td>" +
+          "<td>" + esc(r.duration_label) + "</td>" +
+          '<td class="td-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.log_url) + '">Open log</a></td>' +
+        "</tr>"
+      );
+    }
+
+    function updateRuns(runs) {
+      var body = root.querySelector("#recentRunsBody");
+      if (!body) return;
+      if (!runs || !runs.length) {
+        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="6">No runs yet — launch a scraper from its Lab.</td></tr>';
+        return;
+      }
+      body.innerHTML = runs.map(rowHtml).join("");
+    }
+
+    function apply(d) {
+      var sys = d.system || {};
+      updateGauge("cpu", sys.cpu);
+      updateGauge("mem", sys.mem);
+      updateGauge("disk", sys.disk);
+      setText("[data-threads-running]", d.threads_running);
+      setText("[data-running-scrapers]", d.running_scrapers);
+      var pl = root.querySelector("[data-running-plural]");
+      if (pl) pl.textContent = d.running_scrapers === 1 ? "" : "s";
+      var ov = d.overview || {};
+      setText("[data-stat-active]", ov.active_scrapers);
+      setText("[data-stat-runs]", ov.runs_today);
+      setText("[data-stat-maint]", ov.maint_count);
+      updateRuns(ov.recent_runs);
+    }
+
+    function tick() {
+      if (document.hidden) return schedule();
+      fetch(url, { headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d) apply(d); })
+        .catch(function () {})
+        .finally(schedule);
+    }
+    function schedule() { setTimeout(tick, 3000); }
+    schedule();
+  })();
+</script>
 {% endblock %}

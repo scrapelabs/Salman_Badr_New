@@ -1,0 +1,16 @@
+{% comment %}One CPU/Memory/Disk gauge card. Pass `g` (a gauge_card dict) and `key`.{% endcomment %}
+<div class="monitor-card gauge-card" data-gauge="{{ key }}">
+  <div class="monitor-label">{{ g.title }}</div>
+  <div class="gauge gauge-{{ g.sev }}" data-gauge-sev="{{ g.sev }}">
+    <svg viewBox="0 0 80 80" aria-hidden="true" focusable="false">
+      <circle class="gauge-track" cx="40" cy="40" r="34"></circle>
+      <circle class="gauge-fill" cx="40" cy="40" r="34"
+              data-gauge-fill data-circ="{{ g.circumference }}"
+              style="stroke-dasharray:{{ g.circumference }};stroke-dashoffset:{{ g.offset }};"></circle>
+    </svg>
+    <div class="gauge-center">
+      <span class="gauge-pct" data-gauge-pct>{{ g.percent }}</span><span class="gauge-unit">%</span>
+    </div>
+  </div>
+  <div class="monitor-foot" data-gauge-foot>{{ g.foot }}</div>
+</div>
