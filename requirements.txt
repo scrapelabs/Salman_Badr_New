@@ -11,3 +11,4 @@ python-dotenv>=1.0.0
 nh3>=0.3.6
 parsel>=1.9.0
 psutil>=6.0.0
+patchright>=1.60.1

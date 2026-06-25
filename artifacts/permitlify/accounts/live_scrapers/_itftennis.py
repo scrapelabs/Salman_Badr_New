@@ -32,9 +32,13 @@ juniors/seniors draws carry an explicit ``playerTypeCode`` (boys/girls/men/women
 names are emitted as the API returns them (``"Family, Given"``). The production
 spider's hard-coded litport proxy pool is dropped in favour of the scraper's
 configured proxy. Because ``www.itftennis.com`` sits behind Imperva/Incapsula,
-a residential proxy is required to reach it from a datacenter IP; direct
-requests get an anti-bot interstitial and the run **fails honestly** (no
-fabricated rows), exactly like the Stadion-backed scrapers behind CloudFront.
+**phase 2 fetches through a patchright (stealth Chromium) browser**
+(:mod:`accounts.live_scrapers._browser`): ``page.goto`` solves the Incapsula JS
+challenge and the ``GetEventFilters`` / ``GetDrawsheet`` / player-DOB API calls
+reuse the solved cookies via ``context.request`` — so a proxy whose IP would
+otherwise be challenged (a block page and zero rows) still collects data. Phase
+1 discovery stays on curl_cffi. If the browser can't launch the run **fails
+honestly** (no fabricated rows), like the Stadion scrapers behind CloudFront.
 
 ``run(config, run_obj, log)`` returns
 ``(items_csv, requests_csv, errors_csv, row_count, status)``.
@@ -46,7 +50,6 @@ import json
 import math
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urljoin
@@ -57,10 +60,12 @@ from lxml import etree
 
 from accounts.models import Run
 
+from ._browser import BrowserClient
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 API_ROOT = "https://www.itftennis.com"
+_HOST = "www.itftennis.com"
 BALL_TYPE = "Yellow"
 ID_TYPE = "ITF"
 IMPORT_SOURCE = "ITF"
@@ -687,27 +692,19 @@ def run(cfg, run_obj, log):
     proxies = build_proxies(scraper, log)
 
     # ---- phase 1 · discovery ------------------------------------------
-    log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
-    with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
-        if tournament_url:
-            tournaments = _discover_one(discovery, tournament_url, log)
-        else:
+    # Date-range discovery uses curl_cffi GetCalendar. The single-URL path is
+    # resolved *inside* the browser below, because the tournament page is the
+    # very resource Incapsula challenges — curl_cffi would 0-row it.
+    tournaments = []
+    if not tournament_url:
+        log(
+            "INFO",
+            "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments "
+            "\u2500\u2500\u2500\u2500",
+        )
+        with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
             tournaments = _discover_range(discovery, cfg, start_date, end_date, log)
-    log("INFO", f"\U0001f4cb {len(tournaments)} tournament(s) discovered")
-
-    # Per-thread clients (curl_cffi sessions aren't thread-safe).
-    local = threading.local()
-    clients = []
-    clients_lock = threading.Lock()
-
-    def client_for():
-        cli = getattr(local, "client", None)
-        if cli is None:
-            cli = ScraperClient(log=log, tele=tele, proxies=proxies)
-            with clients_lock:
-                clients.append(cli)
-            local.client = cli
-        return cli
+        log("INFO", f"\U0001f4cb {len(tournaments)} tournament(s) discovered")
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -743,10 +740,10 @@ def run(cfg, run_obj, log):
             f"@ {row.get('tournament_name') or cfg.label}",
         )
 
-    def crawl_one(tournament):
+    def crawl_one(browser, tournament):
         try:
             _scrape_tournament(
-                client_for(), cfg, tournament, emit, log, dob_cache, dob_lock
+                browser, cfg, tournament, emit, log, dob_cache, dob_lock
             )
         except Exception as exc:  # noqa: BLE001 - a bad tournament can't kill the run
             tele.record_error(
@@ -766,17 +763,58 @@ def run(cfg, run_obj, log):
                 progress_done=F("progress_done") + 1
             )
 
-    try:
-        if tournaments:
-            Run.objects.filter(pk=run_obj.pk).update(
-                progress_total=len(tournaments), progress_done=0
+    # ---- phase 2 · scraping (patchright browser, sequential) ----------
+    # itftennis sits behind Imperva/Incapsula, so the per-tournament work runs
+    # inside a real patchright Chromium: ``page.goto`` solves the JS challenge
+    # that 0-rows a curl_cffi run behind a challenged proxy, and the API calls
+    # reuse the solved cookies. A single-tournament URL is also *discovered*
+    # here (its page is the challenged resource). The Playwright sync API is
+    # single-thread bound, so the crawl is sequential \u2014 ``Scraper.threads``
+    # does not parallelise it here.
+    if tournament_url or tournaments:
+        try:
+            with BrowserClient(
+                log=log, tele=tele, proxy=scraper.proxy, allowed_hosts=(_HOST,)
+            ) as browser:
+                if tournament_url:
+                    log(
+                        "INFO",
+                        "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving tournament "
+                        "(patchright) \u2500\u2500\u2500\u2500",
+                    )
+                    tournaments = _discover_one(browser, tournament_url, log)
+                    log(
+                        "INFO",
+                        f"\U0001f4cb {len(tournaments)} tournament(s) discovered",
+                    )
+                if tournaments:
+                    Run.objects.filter(pk=run_obj.pk).update(
+                        progress_total=len(tournaments), progress_done=0
+                    )
+                    log(
+                        "INFO",
+                        "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping tournaments "
+                        "(patchright) \u2500\u2500\u2500\u2500",
+                    )
+                    if workers > 1:
+                        log(
+                            "INFO",
+                            "\u2139\ufe0f browser phase 2 is sequential \u2014 worker "
+                            "threads are not used",
+                        )
+                    for tournament in tournaments:
+                        crawl_one(browser, tournament)
+        except Exception as exc:  # noqa: BLE001 - launch/teardown failure
+            tele.record_error(
+                redact_secrets(f"Browser session failed: {exc}"), exc=exc
             )
-            log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping tournaments \u2500\u2500\u2500\u2500")
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                list(executor.map(crawl_one, tournaments))
-    finally:
-        for cli in clients:
-            cli.close()
+            log(
+                "ERROR",
+                redact_secrets(
+                    f"\U0001f6d1 patchright browser unavailable: "
+                    f"{exc.__class__.__name__}: {exc}"
+                ),
+            )
 
     row_count = counter["rows"]
     log("INFO", "\u2500\u2500\u2500\u2500 summary \u2500\u2500\u2500\u2500")

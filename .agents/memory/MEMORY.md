@@ -4,6 +4,7 @@
 - [Run-worker process lifecycle](run-worker-process-lifecycle.md) — MatchMiner scrape worker is a detached subprocess; SIGKILL→zombie (kill(pid,0) lies), reap after settle; worker final save must exclude pid via update_fields; stuck RUNNING + empty log = OOM kill, not a bug.
 - [Verifying full scrape runs](verifying-background-scrape-runs.md) — a full BJK run outlives the 120s bash timeout; bash-spawned workers die on call end — trigger via the live runserver over HTTP (mint a session, no password).
 - [ITF/Stadion CloudFront block](cloudfront-datacenter-block.md) — API 403-blocks datacenter IPs (incl. Replit) at the CDN edge; needs curl_cffi impersonation + a residential proxy.
+- [itftennis stealth browser](itftennis-patchright-browser.md) — itftennis.com needs patchright (browser) for the Incapsula JS challenge, works DIRECT (the proxy IP is what's challenged — opposite of Stadion); Playwright SSRF blind-spots (ws/service-worker/context.request) a browser client must close.
 - [DB schema management](db-schema-management.md) — DATABASE_URL is Django-owned; schema only via `manage.py migrate`. NEVER run legacy Drizzle `pnpm --filter db push` against it (it drops Django tables).
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
