@@ -935,9 +935,18 @@ def run(run_obj, log):
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
 
     # ---- credentials gate (Claude required, OpenAI optional) -------------
-    claude_keys = [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
+    # Prefer the per-scraper key saved in the Lab → Settings tab; fall back to
+    # the env-sourced settings.CLAUDE_KEYS. Comma-separate to rotate several.
+    scraper_key = (getattr(scraper, "claude_api_key", "") or "").strip()
+    if scraper_key:
+        claude_keys = [k.strip() for k in scraper_key.split(",") if k.strip()]
+    else:
+        claude_keys = [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
     if not claude_keys:
-        msg = "Set CLAUDE_KEYS (or ANTHROPIC_API_KEY) to run the College Dual Match AI scraper."
+        msg = (
+            "Add a Claude API key in the Settings tab (or set CLAUDE_KEYS / "
+            "ANTHROPIC_API_KEY) to run the College Dual Match AI scraper."
+        )
         log("ERROR", f"\U0001f6d1 {msg}")
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED

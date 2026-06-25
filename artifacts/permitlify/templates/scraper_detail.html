@@ -591,6 +591,24 @@
         Higher is faster but puts more load on the proxy and upstream API.
       </p>
 
+      {% if needs_claude %}
+      <div class="rt-field settings-keyfield">
+        <label class="field-label" for="claudeKey">Claude API key</label>
+        <div class="sch-copyrow">
+          <input class="rt-input sch-secret" id="claudeKey" name="claude_api_key" type="password"
+                 value="{{ s.claude_api_key }}" autocomplete="off" spellcheck="false"
+                 placeholder="sk-ant-… (comma-separate to rotate several keys)" />
+          <button class="btn btn-ghost btn-sm settings-reveal" type="button" data-target="#claudeKey" aria-pressed="false">Reveal</button>
+        </div>
+        <p class="status-note settings-empty">
+          Required for the AI box-score extraction. Stored per scraper; real-time and
+          scheduled runs use it. Leave blank to fall back to the server’s
+          <code>CLAUDE_KEYS</code> / <code>ANTHROPIC_API_KEY</code>. Treated as a secret —
+          never logged.
+        </p>
+      </div>
+      {% endif %}
+
       {% if not proxies %}
       <p class="status-note settings-empty">No proxy pools yet — <a href="{% url 'proxies' %}">add one</a> to route this scraper through it.</p>
       {% endif %}
@@ -600,6 +618,21 @@
       <button class="btn btn-primary" type="submit">Save settings</button>
     </div>
   </form>
+
+  <script>
+    (function () {
+      document.querySelectorAll('.settings-reveal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var el = document.querySelector(btn.dataset.target);
+          if (!el) return;
+          var hidden = el.type === 'password';
+          el.type = hidden ? 'text' : 'password';
+          btn.textContent = hidden ? 'Hide' : 'Reveal';
+          btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+        });
+      });
+    })();
+  </script>
 
   {% elif tab == 'schedule' %}
   <div class="panel">

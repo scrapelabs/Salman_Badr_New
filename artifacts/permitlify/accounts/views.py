@@ -209,7 +209,15 @@ def scraper_detail_view(request, slug):
                 Scraper.THREADS_MIN, min(threads, Scraper.THREADS_MAX)
             )
 
-            s.save(update_fields=["proxy", "threads", "updated_at"])
+            update_fields = ["proxy", "threads", "updated_at"]
+            # AI scrapers (e.g. college_dual_match) carry a Claude API key field.
+            # Only persist it for scrapers that surface it, and only when the field
+            # is present in the POST (so other settings saves never clobber it).
+            if registry.spec_for(s.slug).needs_claude and "claude_api_key" in request.POST:
+                s.claude_api_key = (request.POST.get("claude_api_key") or "").strip()
+                update_fields.append("claude_api_key")
+
+            s.save(update_fields=update_fields)
             messages.success(request, "Scraper settings saved.")
             return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
 
@@ -321,6 +329,7 @@ def scraper_detail_view(request, slug):
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
         ctx["thread_min"] = Scraper.THREADS_MIN
         ctx["thread_max"] = Scraper.THREADS_MAX
+        ctx["needs_claude"] = registry.spec_for(slug).needs_claude
 
     return render(request, "scraper_detail.html", ctx)
 

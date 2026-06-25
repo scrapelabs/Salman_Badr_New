@@ -91,6 +91,11 @@ class Scraper(models.Model):
         related_name="scrapers",
     )
     threads = models.PositiveSmallIntegerField(default=THREADS_DEFAULT)
+    # API key(s) for AI-backed scrapers (e.g. college_dual_match Claude extraction).
+    # Comma-separate to provide several keys the worker rotates across. Treat as a
+    # secret: rendered in a password input with a reveal toggle, never logged. When
+    # blank the runner falls back to settings.CLAUDE_KEYS (env), else fails honestly.
+    claude_api_key = models.CharField(max_length=1024, blank=True, default="")
     # Secret bearer token for the public scheduled-trigger webhook (Schedule tab).
     # Auto-assigned on first save and rotatable from the UI; treat it as a password.
     trigger_token = models.CharField(max_length=128, unique=True, blank=True)
