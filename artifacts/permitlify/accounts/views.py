@@ -86,7 +86,7 @@ def _scrapers_annotated():
         .order_by("-started_at")
         .values("status")[:1]
     )
-    return Scraper.objects.annotate(
+    return Scraper.objects.select_related("proxy").annotate(
         run_count=Count("runs"),
         last_run_at=Max("runs__started_at"),
         latest_status=Subquery(latest_status),

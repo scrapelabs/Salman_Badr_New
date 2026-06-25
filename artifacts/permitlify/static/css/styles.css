@@ -881,6 +881,33 @@ a.tbl-domain:hover svg {
   background: var(--app-maint-bg);
 }
 
+/* proxy-type chip on the Scrapers table (type only — no service name) */
+.proxy-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 9.2px "DM Sans", sans-serif;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--app-text);
+  background: rgba(120, 130, 150, 0.12);
+}
+.proxy-tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.proxy-tag.residential {
+  color: var(--app-prod);
+  background: var(--app-prod-bg);
+}
+.proxy-tag.datacenter {
+  color: var(--app-accent);
+  background: var(--app-accent-bg);
+}
+
 /* section head with a live indicator */
 .section-head {
   display: flex;

@@ -14,6 +14,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
       <option value="tour">Tour</option>
       <option value="status">Status</option>
       <option value="mode">Mode</option>
+      <option value="proxy">Proxy</option>
       <option value="runs">Runs</option>
       <option value="lastrun">Last run</option>
     </select>
@@ -34,6 +35,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
         <th class="th-sort" data-sort="tour" data-type="text"><button type="button" class="th-sort-btn">Tour <span class="sort-caret" aria-hidden="true"></span></button></th>
         <th class="th-sort" data-sort="status" data-type="text"><button type="button" class="th-sort-btn">Status <span class="sort-caret" aria-hidden="true"></span></button></th>
         <th class="th-sort" data-sort="mode" data-type="text"><button type="button" class="th-sort-btn">Mode <span class="sort-caret" aria-hidden="true"></span></button></th>
+        <th class="th-sort" data-sort="proxy" data-type="text"><button type="button" class="th-sort-btn">Proxy <span class="sort-caret" aria-hidden="true"></span></button></th>
         <th class="th-sort" data-sort="runs" data-type="num"><button type="button" class="th-sort-btn">Runs <span class="sort-caret" aria-hidden="true"></span></button></th>
         <th class="th-sort" data-sort="lastrun" data-type="num"><button type="button" class="th-sort-btn">Last run <span class="sort-caret" aria-hidden="true"></span></button></th>
         {% else %}
@@ -41,6 +43,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
         <th>Tour</th>
         <th>Status</th>
         <th>Mode</th>
+        <th>Proxy</th>
         <th>Runs</th>
         <th>Last run</th>
         {% endif %}
@@ -49,7 +52,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
     </thead>
     <tbody>
       {% for s in rows %}
-      <tr data-href="{% url 'scraper_detail' s.slug %}" data-slug="{{ s.slug }}"{% if interactive %} data-name="{{ s.name|lower }}" data-tour="{{ s.tour|lower }}" data-status="{{ s.run_state }}" data-mode="{{ s.get_mode_display|lower }}" data-runs="{{ s.run_count }}" data-lastrun="{{ s.last_run_at|date:'U'|default:'0' }}"{% endif %}>
+      <tr data-href="{% url 'scraper_detail' s.slug %}" data-slug="{{ s.slug }}"{% if interactive %} data-name="{{ s.name|lower }}" data-tour="{{ s.tour|lower }}" data-status="{{ s.run_state }}" data-mode="{{ s.get_mode_display|lower }}" data-proxy="{% if s.proxy %}{{ s.proxy.get_kind_display|lower }}{% else %}direct{% endif %}" data-runs="{{ s.run_count }}" data-lastrun="{{ s.last_run_at|date:'U'|default:'0' }}"{% endif %}>
         <td>
           <div class="tbl-name">
             <span class="tbl-badge">{{ s.code }}</span>
@@ -62,6 +65,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
         <td>{{ s.tour }}</td>
         <td><span class="run-badge run-st-{{ s.run_state }}">{{ s.run_state_label }}</span></td>
         <td><span class="mode-tag {{ s.mode }}">{{ s.get_mode_display }}</span></td>
+        <td>{% if s.proxy %}<span class="proxy-tag {{ s.proxy.kind }}">{{ s.proxy.get_kind_display }}</span>{% else %}<span class="muted">Direct</span>{% endif %}</td>
         <td>{{ s.run_count }}</td>
         <td>{% if s.last_run_at %}{{ s.last_run_at|timesince }} ago{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="td-actions">
