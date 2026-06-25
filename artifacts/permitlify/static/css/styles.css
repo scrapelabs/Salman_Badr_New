@@ -837,6 +837,26 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   font-size: 8.8px;
   color: var(--app-text-3);
 }
+a.tbl-domain {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  transition: color 0.12s;
+}
+a.tbl-domain:hover {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+a.tbl-domain svg {
+  width: 9px;
+  height: 9px;
+  opacity: 0.55;
+  flex: none;
+}
+a.tbl-domain:hover svg {
+  opacity: 1;
+}
 .mode-tag {
   display: inline-flex;
   align-items: center;
@@ -909,6 +929,66 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   letter-spacing: 0.3px;
   color: var(--app-text-3);
   white-space: nowrap;
+}
+.tbl-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tbl-sort-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.4px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--app-text-3);
+  white-space: nowrap;
+}
+.tbl-sort-select {
+  padding: 8px 28px 8px 11px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 9px center;
+  color: var(--app-text);
+  font: 600 10.5px "DM Sans", sans-serif;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.tbl-sort-select:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px var(--app-accent-bg);
+}
+.tbl-sort-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface);
+  color: var(--app-text-2);
+  font: 600 9.6px "JetBrains Mono", monospace;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.tbl-sort-dir:hover {
+  border-color: var(--app-accent);
+  color: var(--app-accent);
+}
+.tbl-sort-dir svg {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.15s;
+}
+.tbl-sort-dir.is-desc svg {
+  transform: rotate(180deg);
 }
 .tbl-interactive th.th-sort {
   padding: 0;

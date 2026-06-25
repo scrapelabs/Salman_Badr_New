@@ -7,6 +7,20 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
     <input type="search" id="scrSearch" class="tbl-search-input" placeholder="Search scrapers by name…" autocomplete="off" aria-label="Search scrapers by name">
   </div>
+  <div class="tbl-sort">
+    <label class="tbl-sort-label" for="scrSortKey">Sort by</label>
+    <select id="scrSortKey" class="tbl-sort-select" aria-label="Sort scrapers by">
+      <option value="name">Scraper name</option>
+      <option value="tour">Tour</option>
+      <option value="mode">Mode</option>
+      <option value="runs">Runs</option>
+      <option value="lastrun">Last run</option>
+    </select>
+    <button type="button" id="scrSortDir" class="tbl-sort-dir" aria-label="Toggle sort direction">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      <span class="tbl-sort-dirlabel">Asc</span>
+    </button>
+  </div>
   <span class="tbl-result-count" id="scrCount" aria-live="polite"></span>
 </div>
 {% endif %}
@@ -38,7 +52,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
             <span class="tbl-badge">{{ s.code }}</span>
             <span>
               <a class="tbl-title" href="{% url 'scraper_detail' s.slug %}">{{ s.name }}</a><br />
-              <span class="tbl-domain">{{ s.domain }}</span>
+              {% if s.vendor_url %}<a class="tbl-domain" href="{{ s.vendor_url }}" target="_blank" rel="noopener noreferrer" title="Open {{ s.domain }} in a new tab">{{ s.domain }}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>{% else %}<span class="tbl-domain">{{ s.domain }}</span>{% endif %}
             </span>
           </div>
         </td>
@@ -94,6 +108,8 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
     var prevBtn = document.getElementById("scrPrev");
     var nextBtn = document.getElementById("scrNext");
     var sizeEl = document.getElementById("scrPageSize");
+    var sortKeyEl = document.getElementById("scrSortKey");
+    var sortDirEl = document.getElementById("scrSortDir");
     var heads = Array.prototype.slice.call(table.querySelectorAll("th.th-sort"));
 
     var colCount = table.querySelectorAll("thead th").length;
@@ -187,6 +203,19 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
           active ? (state.dir === "asc" ? "ascending" : "descending") : "none"
         );
       });
+
+      if (sortKeyEl) sortKeyEl.value = state.key;
+      if (sortDirEl) {
+        sortDirEl.classList.toggle("is-desc", state.dir === "desc");
+        var dl = sortDirEl.querySelector(".tbl-sort-dirlabel");
+        if (dl) dl.textContent = state.dir === "asc" ? "Asc" : "Desc";
+        sortDirEl.setAttribute(
+          "aria-label",
+          "Sort direction: " +
+            (state.dir === "asc" ? "ascending" : "descending") +
+            " — click to toggle"
+        );
+      }
     }
 
     if (searchEl) {
@@ -210,6 +239,22 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
         render();
       });
     });
+    if (sortKeyEl) {
+      sortKeyEl.addEventListener("change", function () {
+        state.key = sortKeyEl.value;
+        // numbers (runs, last run) read more naturally newest/highest first
+        state.dir = typeOf(state.key) === "num" ? "desc" : "asc";
+        state.page = 1;
+        render();
+      });
+    }
+    if (sortDirEl) {
+      sortDirEl.addEventListener("click", function () {
+        state.dir = state.dir === "asc" ? "desc" : "asc";
+        state.page = 1;
+        render();
+      });
+    }
     prevBtn.addEventListener("click", function () { state.page -= 1; render(); });
     nextBtn.addEventListener("click", function () { state.page += 1; render(); });
     sizeEl.addEventListener("change", function () {
