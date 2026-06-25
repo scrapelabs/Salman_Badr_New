@@ -235,3 +235,16 @@ SCRAPER_BROWSER_CHANNEL = os.environ.get(
 SCRAPER_BROWSER_PROFILE_DIR = os.environ.get(
     "SCRAPER_BROWSER_PROFILE_DIR", str(BASE_DIR / ".browser_profiles")
 )
+# Per-request rotation: open a *fresh* browser (new fingerprint + a throwaway
+# ephemeral profile) and a *fresh* proxy IP for every tournament, instead of
+# reusing one persistent session for the whole run. Imperva/Incapsula
+# re-challenges a single identity after a handful of records, so rotating per
+# tournament keeps every visit looking like a brand-new visitor. Default ON.
+# When ON, the persistent profile above is bypassed (each launch is ephemeral)
+# and, if the proxy address carries a ``{session}`` placeholder, a fresh token
+# is substituted each launch so a sticky-session residential proxy hands out a
+# new exit IP (a rotating gateway rotates per connection on its own). Direct
+# (no proxy) can't change IP, but the fingerprint still rotates.
+SCRAPER_BROWSER_ROTATE_PER_REQUEST = (
+    os.environ.get("SCRAPER_BROWSER_ROTATE_PER_REQUEST", "True").lower() != "false"
+)

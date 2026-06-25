@@ -34,6 +34,7 @@ an honest error rather than fabricating data.
 
 import json
 import os
+import secrets
 import shutil
 import tempfile
 import time
@@ -65,7 +66,7 @@ _BLOCK_STATUSES = frozenset({401, 403, 405, 406, 429, 503})
 LAUNCH_ARGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
 
 
-def browser_proxy(proxy):
+def browser_proxy(proxy, *, session=None):
     """Translate a :class:`accounts.models.Proxy` into a Playwright proxy dict.
 
     Mirrors :func:`accounts.live_scrapers._http.build_proxies`' activation rule
@@ -73,10 +74,19 @@ def browser_proxy(proxy):
     connection. The address may embed ``user:pass`` credentials, which are split
     into Playwright's separate ``username`` / ``password`` keys and are **never**
     logged.
+
+    ``session`` enables per-request IP rotation: rotating/sticky residential
+    endpoints usually key their exit IP off a token in the username
+    (e.g. ``customer-user-session-{session}``). When given, every ``{session}``
+    / ``{rand}`` placeholder in the address is replaced with a fresh token so a
+    new launch earns a new IP. A rotating *gateway* (no placeholder) rotates per
+    connection on its own, so the substitution is a harmless no-op there.
     """
     if not (proxy and proxy.is_active and (proxy.address or "").strip()):
         return None
     addr = proxy.address.strip()
+    if session:
+        addr = addr.replace("{session}", session).replace("{rand}", session)
     if "://" not in addr:
         addr = "http://" + addr
     parts = urlsplit(addr)
@@ -128,6 +138,7 @@ class BrowserClient:
         headless=True,
         channel=None,
         user_data_dir=None,
+        rotate_proxy_session=False,
     ):
         self.log = log
         self.tele = tele
@@ -139,6 +150,8 @@ class BrowserClient:
         self.headless = headless
         self.channel = (channel or "").strip() or None
         self.user_data_dir = (user_data_dir or "").strip() or None
+        self.rotate_proxy_session = bool(rotate_proxy_session)
+        self._session_token = None
         self._pw = None
         self._browser = None
         self._context = None
@@ -184,7 +197,13 @@ class BrowserClient:
                 launch_kwargs["executable_path"] = chromium_path
             launch_kwargs["args"] = list(LAUNCH_ARGS)
             engine = "Chromium"
-        proxy = browser_proxy(self.proxy)
+        # A fresh session token per launch forces a new exit IP from a
+        # sticky-session residential proxy (substituted into a {session}
+        # placeholder in the address); a no-op for direct / rotating-gateway.
+        self._session_token = (
+            secrets.token_hex(8) if self.rotate_proxy_session else None
+        )
+        proxy = browser_proxy(self.proxy, session=self._session_token)
         if proxy:
             launch_kwargs["proxy"] = proxy
             kind = (
@@ -193,6 +212,8 @@ class BrowserClient:
                 else "?"
             )
             conn = f"via {kind} proxy '{getattr(self.proxy, 'name', '?')}'"
+            if self.rotate_proxy_session:
+                conn += " (rotating IP)"
         else:
             conn = "direct \u2014 no proxy"
         mode = "headless" if self.headless else "headed"

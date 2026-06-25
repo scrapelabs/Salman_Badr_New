@@ -4,7 +4,7 @@
 - [Run-worker process lifecycle](run-worker-process-lifecycle.md) — MatchMiner scrape worker is a detached subprocess; SIGKILL→zombie (kill(pid,0) lies), reap after settle; worker final save must exclude pid via update_fields; stuck RUNNING + empty log = OOM kill, not a bug.
 - [Verifying full scrape runs](verifying-background-scrape-runs.md) — a full BJK run outlives the 120s bash timeout; bash-spawned workers die on call end — trigger via the live runserver over HTTP (mint a session, no password).
 - [ITF/Stadion CloudFront block](cloudfront-datacenter-block.md) — API 403-blocks datacenter IPs (incl. Replit) at the CDN edge; needs curl_cffi impersonation + a residential proxy.
-- [itftennis stealth browser](itftennis-patchright-browser.md) — itftennis.com needs patchright (browser) for the Incapsula JS challenge, works DIRECT (the proxy IP is what's challenged — opposite of Stadion); Playwright SSRF blind-spots (ws/service-worker/context.request) a browser client must close.
+- [itftennis stealth browser](itftennis-patchright-browser.md) — needs patchright for Incapsula; go DIRECT (proxy IP is what's challenged, opposite of Stadion); phase-2 rotates a fresh browser+IP per tournament; Playwright SSRF + async-unsafe traps.
 - [DB schema management](db-schema-management.md) — DATABASE_URL is Django-owned; schema only via `manage.py migrate`. NEVER run legacy Drizzle `pnpm --filter db push` against it (it drops Django tables).
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
@@ -13,7 +13,6 @@
 - [Porting source scrapers](scraper-porting-pitfalls.md) — probe the live API for real field/join keys (sources have bugs), drop cosmetic AI, env-creds + honest-fail, in-process validation injecting gitignored creds, reuse brazil's 61-col schema.
 - [url_required scrapers](url-required-scrapers.md) — a no-date-only scraper's URL requirement must be mirrored in lockstep across start form, validate_run_params, AND both Schedule-tab generators or the docs hand back a 400-ing payload.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
-- [itftennis stealth browser](itftennis-patchright-browser.md) — needs patchright not curl; go DIRECT (proxy IP Incapsula-blocked); persistent+headed+real-Chrome on Windows, headless Chromium on Replit; SSRF + async-unsafe traps.
 - [Replit container resource stats](replit-container-resource-stats.md) — for live CPU/mem/disk gauges: cgroup-v2 for memory, BASE_DIR for disk (`/`=0), prime psutil CPU; psutil alone misleads.
 - [Scraper SSRF + dedup rules](scraper-ssrf-and-dedup.md) — ScraperClient validates the initial URL AND every redirect hop via _ssrf (covers discovered second-stage links centrally); dedup keys must include source identity or rematches get dropped.
 - [Confirm dialog convention](confirm-dialog-convention.md) — global #mmConfirm modal in app_base.html; destructive forms opt in via data-confirm attrs; never native confirm().

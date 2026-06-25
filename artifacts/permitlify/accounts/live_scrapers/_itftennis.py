@@ -774,48 +774,108 @@ def run(cfg, run_obj, log):
     # single-thread bound, so the crawl is sequential \u2014 ``Scraper.threads``
     # does not parallelise it here.
     if tournament_url or tournaments:
-        try:
-            profile_root = getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "")
-            user_data_dir = (
-                os.path.join(profile_root, scraper.slug) if profile_root else None
-            )
-            with BrowserClient(
+        profile_root = getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "")
+        user_data_dir = (
+            os.path.join(profile_root, scraper.slug) if profile_root else None
+        )
+        rotate = getattr(settings, "SCRAPER_BROWSER_ROTATE_PER_REQUEST", True)
+
+        def make_browser():
+            # In rotation mode every tournament gets a brand-new identity, so use
+            # a throwaway ephemeral profile (a persistent dir would carry the very
+            # cookie/fingerprint we are deliberately shedding) and rotate the
+            # proxy IP. Off => one persistent session reused for the whole run.
+            return BrowserClient(
                 log=log,
                 tele=tele,
                 proxy=scraper.proxy,
                 allowed_hosts=(_HOST,),
                 headless=getattr(settings, "SCRAPER_BROWSER_HEADLESS", True),
                 channel=getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or None,
-                user_data_dir=user_data_dir,
-            ) as browser:
+                user_data_dir=None if rotate else user_data_dir,
+                rotate_proxy_session=rotate,
+            )
+
+        def announce_phase2():
+            Run.objects.filter(pk=run_obj.pk).update(
+                progress_total=len(tournaments), progress_done=0
+            )
+            log(
+                "INFO",
+                "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping tournaments "
+                "(patchright) \u2500\u2500\u2500\u2500",
+            )
+            if workers > 1:
+                log(
+                    "INFO",
+                    "\u2139\ufe0f browser phase 2 is sequential \u2014 worker "
+                    "threads are not used",
+                )
+
+        try:
+            if rotate:
+                # Each tournament = a fresh browser (new fingerprint + IP). The
+                # Incapsula challenge is re-solved per tournament, so no single
+                # identity accumulates the signal that re-triggers the captcha
+                # "after a few records".
                 if tournament_url:
                     log(
                         "INFO",
                         "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving tournament "
                         "(patchright) \u2500\u2500\u2500\u2500",
                     )
-                    tournaments = _discover_one(browser, tournament_url, log)
+                    with make_browser() as browser:
+                        tournaments = _discover_one(browser, tournament_url, log)
                     log(
                         "INFO",
                         f"\U0001f4cb {len(tournaments)} tournament(s) discovered",
                     )
                 if tournaments:
-                    Run.objects.filter(pk=run_obj.pk).update(
-                        progress_total=len(tournaments), progress_done=0
-                    )
+                    announce_phase2()
                     log(
                         "INFO",
-                        "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping tournaments "
-                        "(patchright) \u2500\u2500\u2500\u2500",
+                        "\U0001f504 per-request rotation: a fresh browser + IP per "
+                        "tournament",
                     )
-                    if workers > 1:
+                    for tournament in tournaments:
+                        try:
+                            with make_browser() as browser:
+                                crawl_one(browser, tournament)
+                        except Exception as exc:  # noqa: BLE001 - one bad launch != dead run
+                            tele.record_error(
+                                redact_secrets(
+                                    f"Browser launch failed for "
+                                    f"{tournament.get('tournament_url', '')}: {exc}"
+                                ),
+                                exc=exc,
+                            )
+                            log(
+                                "WARN",
+                                redact_secrets(
+                                    f"\u26a0\ufe0f browser launch failed: "
+                                    f"{exc.__class__.__name__}: {exc}"
+                                ),
+                            )
+                            Run.objects.filter(pk=run_obj.pk).update(
+                                progress_done=F("progress_done") + 1
+                            )
+            else:
+                with make_browser() as browser:
+                    if tournament_url:
                         log(
                             "INFO",
-                            "\u2139\ufe0f browser phase 2 is sequential \u2014 worker "
-                            "threads are not used",
+                            "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving "
+                            "tournament (patchright) \u2500\u2500\u2500\u2500",
                         )
-                    for tournament in tournaments:
-                        crawl_one(browser, tournament)
+                        tournaments = _discover_one(browser, tournament_url, log)
+                        log(
+                            "INFO",
+                            f"\U0001f4cb {len(tournaments)} tournament(s) discovered",
+                        )
+                    if tournaments:
+                        announce_phase2()
+                        for tournament in tournaments:
+                            crawl_one(browser, tournament)
         except Exception as exc:  # noqa: BLE001 - launch/teardown failure
             tele.record_error(
                 redact_secrets(f"Browser session failed: {exc}"), exc=exc

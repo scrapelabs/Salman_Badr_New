@@ -54,6 +54,35 @@ BrowserContext directly (no separate `Browser` — `context.close()` tears down 
 Chrome process); it opens with a default page (reuse `context.pages[0]`). All 4 SSRF
 guards attach to this context exactly as before.
 
+# Per-request rotation (the DEFAULT as of 2026-06-25): fresh browser + IP per tournament
+
+A single persistent identity still gets Incapsula-re-challenged "after a few
+records", so phase 2 now defaults to **rotation**: open a brand-new
+`BrowserClient` (fresh fingerprint + a *throwaway ephemeral* profile, so no
+carried cookie) for **each tournament**, inside its own `with` block, then close
+it. Toggle with `SCRAPER_BROWSER_ROTATE_PER_REQUEST` (default True; `=False`
+reverts to the one-persistent-session path above).
+
+- **Granularity = per tournament, NOT per HTTP call.** The tournament page solves
+  the challenge once; its `TournamentApi` calls must reuse that browser's solved
+  cookie (and IP), so relaunching per API call would break the session and is
+  pointless. "Each request" the user means = each tournament (= each "record").
+- **Fresh IP needs infra.** A rotating *gateway* proxy gives a new exit IP per new
+  connection (each relaunch) on its own; a *sticky-session* residential provider
+  needs a `{session}` (or `{rand}`) placeholder in the `Proxy.address`
+  (e.g. `http://user-session-{session}:pass@gw:7000`) — `browser_proxy(session=)`
+  substitutes a fresh `secrets.token_hex(8)` per launch. **Direct (no proxy)
+  rotates fingerprint only, not IP.** The token/address are never logged.
+- **Rotation bypasses the persistent profile** (`user_data_dir=None` → ephemeral
+  temp dir, deleted on close) — that's the whole point: shed the identity. The
+  persistent-profile / per-slug-dir machinery above applies only when rotation is
+  OFF.
+- **Cost:** ~3-4s warm Chrome relaunch + a fresh challenge solve per tournament
+  (first launch ~14s cold). Accepted as the price of evading the re-challenge.
+- Per-tournament launch failures are caught + recorded + increment progress once
+  and continue (one bad launch ≠ dead run); `progress_done` stays exactly-once
+  per tournament (crawl_one's `finally` on success XOR the launch `except`).
+
 # Playwright SSRF blind-spots (the parity gotchas)
 
 A browser HTTP client needs the same SSRF protection as the curl client
