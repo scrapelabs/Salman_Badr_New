@@ -809,15 +809,18 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   gap: 12px;
 }
 .tbl-badge {
-  width: 34px;
+  min-width: 34px;
   height: 34px;
+  padding: 0 8px;
   border-radius: 9px;
   background: var(--app-accent-bg);
   color: var(--app-accent);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font: 700 8.8px "JetBrains Mono", monospace;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 .tbl-title {
@@ -856,6 +859,164 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
 .mode-tag.maintenance {
   color: var(--app-maint);
   background: var(--app-maint-bg);
+}
+
+/* interactive scraper table: search + sortable headers + pagination */
+.tbl-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.tbl-search {
+  position: relative;
+  flex: 1 1 280px;
+  max-width: 360px;
+}
+.tbl-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--app-text-3);
+  pointer-events: none;
+}
+.tbl-search-input {
+  width: 100%;
+  padding: 9px 12px 9px 34px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: 500 11px "DM Sans", sans-serif;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.tbl-search-input::placeholder {
+  color: var(--app-text-3);
+}
+.tbl-search-input:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px var(--app-accent-bg);
+}
+.tbl-result-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.4px;
+  letter-spacing: 0.3px;
+  color: var(--app-text-3);
+  white-space: nowrap;
+}
+.tbl-interactive th.th-sort {
+  padding: 0;
+}
+.th-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 18px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  transition: color 0.12s;
+}
+.th-sort-btn:hover {
+  color: var(--app-text);
+}
+.th-sort.is-sorted .th-sort-btn {
+  color: var(--app-accent);
+}
+.sort-caret {
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.th-sort:hover .sort-caret {
+  opacity: 0.35;
+  border-bottom: 4px solid currentColor;
+}
+.th-sort.is-sorted.asc .sort-caret {
+  opacity: 1;
+  border-bottom: 4px solid currentColor;
+  border-top: 0;
+}
+.th-sort.is-sorted.desc .sort-caret {
+  opacity: 1;
+  border-top: 4px solid currentColor;
+  border-bottom: 0;
+}
+.tbl-empty {
+  padding: 28px 18px !important;
+  text-align: center;
+  color: var(--app-text-3);
+  font-style: italic;
+  white-space: normal !important;
+}
+.tbl-empty-row {
+  cursor: default !important;
+}
+.tbl-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.tbl-pagesize {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.4px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--app-text-3);
+}
+.tbl-pagesize select {
+  padding: 5px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: 600 10px "DM Sans", sans-serif;
+  cursor: pointer;
+}
+.tbl-pagesize select:focus {
+  outline: none;
+  border-color: var(--app-accent);
+}
+.tbl-pager-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.tbl-pager-info {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.4px;
+  letter-spacing: 0.3px;
+  color: var(--app-text-2);
+  min-width: 86px;
+  text-align: center;
+}
+.tbl-pager-nav .btn svg {
+  width: 13px;
+  height: 13px;
+}
+.tbl-pager-nav .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* detail header */

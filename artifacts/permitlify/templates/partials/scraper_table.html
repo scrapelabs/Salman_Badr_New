@@ -1,19 +1,38 @@
-{% comment %}Renders a scraper table. Pass `rows` (Scraper queryset annotated with run_count + last_run_at).{% endcomment %}
+{% comment %}Renders a scraper table. Pass `rows` (Scraper queryset annotated with run_count + last_run_at).
+Pass `interactive=True` for the full Scrapers list to add a name search box, sortable
+columns (asc/desc) and client-side pagination. Omit it for the small overview snippet.{% endcomment %}
+{% if interactive %}
+<div class="tbl-toolbar">
+  <div class="tbl-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="search" id="scrSearch" class="tbl-search-input" placeholder="Search scrapers by name…" autocomplete="off" aria-label="Search scrapers by name">
+  </div>
+  <span class="tbl-result-count" id="scrCount" aria-live="polite"></span>
+</div>
+{% endif %}
 <div class="tablewrap">
-  <table class="tbl">
+  <table class="tbl{% if interactive %} tbl-interactive{% endif %}" id="scrTable">
     <thead>
       <tr>
+        {% if interactive %}
+        <th class="th-sort" data-sort="name" data-type="text"><button type="button" class="th-sort-btn">Scraper <span class="sort-caret" aria-hidden="true"></span></button></th>
+        <th class="th-sort" data-sort="tour" data-type="text"><button type="button" class="th-sort-btn">Tour <span class="sort-caret" aria-hidden="true"></span></button></th>
+        <th class="th-sort" data-sort="mode" data-type="text"><button type="button" class="th-sort-btn">Mode <span class="sort-caret" aria-hidden="true"></span></button></th>
+        <th class="th-sort" data-sort="runs" data-type="num"><button type="button" class="th-sort-btn">Runs <span class="sort-caret" aria-hidden="true"></span></button></th>
+        <th class="th-sort" data-sort="lastrun" data-type="num"><button type="button" class="th-sort-btn">Last run <span class="sort-caret" aria-hidden="true"></span></button></th>
+        {% else %}
         <th>Scraper</th>
         <th>Tour</th>
         <th>Mode</th>
         <th>Runs</th>
         <th>Last run</th>
+        {% endif %}
         <th class="th-actions">Lab</th>
       </tr>
     </thead>
     <tbody>
       {% for s in rows %}
-      <tr data-href="{% url 'scraper_detail' s.slug %}">
+      <tr data-href="{% url 'scraper_detail' s.slug %}"{% if interactive %} data-name="{{ s.name|lower }}" data-tour="{{ s.tour|lower }}" data-mode="{{ s.get_mode_display|lower }}" data-runs="{{ s.run_count }}" data-lastrun="{{ s.last_run_at|date:'U'|default:'0' }}"{% endif %}>
         <td>
           <div class="tbl-name">
             <span class="tbl-badge">{{ s.code }}</span>
@@ -38,3 +57,168 @@
     </tbody>
   </table>
 </div>
+{% if interactive %}
+<div class="tbl-pager" id="scrPager">
+  <label class="tbl-pagesize">
+    Rows per page
+    <select id="scrPageSize" aria-label="Rows per page">
+      <option value="10">10</option>
+      <option value="15" selected>15</option>
+      <option value="25">25</option>
+      <option value="50">50</option>
+    </select>
+  </label>
+  <div class="tbl-pager-nav">
+    <button type="button" class="btn btn-ghost btn-sm" id="scrPrev" aria-label="Previous page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Prev
+    </button>
+    <span class="tbl-pager-info" id="scrPageInfo"></span>
+    <button type="button" class="btn btn-ghost btn-sm" id="scrNext" aria-label="Next page">
+      Next
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </div>
+</div>
+<script>
+  (function () {
+    var table = document.getElementById("scrTable");
+    if (!table || table.__scrInit) return;
+    table.__scrInit = true;
+
+    var tbody = table.querySelector("tbody");
+    var allRows = Array.prototype.slice.call(tbody.querySelectorAll("tr[data-href]"));
+    var searchEl = document.getElementById("scrSearch");
+    var countEl = document.getElementById("scrCount");
+    var pageInfoEl = document.getElementById("scrPageInfo");
+    var prevBtn = document.getElementById("scrPrev");
+    var nextBtn = document.getElementById("scrNext");
+    var sizeEl = document.getElementById("scrPageSize");
+    var heads = Array.prototype.slice.call(table.querySelectorAll("th.th-sort"));
+
+    var colCount = table.querySelectorAll("thead th").length;
+    var emptyRow = document.createElement("tr");
+    emptyRow.className = "tbl-empty-row";
+    var emptyCell = document.createElement("td");
+    emptyCell.colSpan = colCount;
+    emptyCell.className = "tbl-empty";
+    emptyRow.appendChild(emptyCell);
+
+    var state = {
+      query: "",
+      key: "name",
+      dir: "asc",
+      page: 1,
+      size: parseInt(sizeEl.value, 10) || 15,
+    };
+
+    function val(row, key) {
+      return (row.getAttribute("data-" + key) || "").toString();
+    }
+    function typeOf(key) {
+      var h = heads.filter(function (x) { return x.getAttribute("data-sort") === key; })[0];
+      return h ? h.getAttribute("data-type") : "text";
+    }
+
+    function compute() {
+      var q = state.query.trim().toLowerCase();
+      var filtered = allRows.filter(function (r) {
+        return !q || val(r, "name").indexOf(q) !== -1;
+      });
+      var numeric = typeOf(state.key) === "num";
+      var dir = state.dir === "asc" ? 1 : -1;
+      filtered.sort(function (a, b) {
+        var av = val(a, state.key), bv = val(b, state.key), c;
+        if (numeric) {
+          c = (parseFloat(av) || 0) - (parseFloat(bv) || 0);
+        } else {
+          c = av.localeCompare(bv);
+        }
+        if (c === 0) c = val(a, "name").localeCompare(val(b, "name"));
+        return c * dir;
+      });
+      return filtered;
+    }
+
+    function render() {
+      var filtered = compute();
+      var total = filtered.length;
+      var pages = Math.max(1, Math.ceil(total / state.size));
+      if (state.page > pages) state.page = pages;
+      if (state.page < 1) state.page = 1;
+      var start = (state.page - 1) * state.size;
+      var pageRows = filtered.slice(start, start + state.size);
+
+      allRows.forEach(function (r) { r.style.display = "none"; });
+      if (emptyRow.parentNode) emptyRow.parentNode.removeChild(emptyRow);
+
+      pageRows.forEach(function (r) {
+        tbody.appendChild(r);
+        r.style.display = "";
+      });
+
+      if (total === 0) {
+        emptyCell.textContent = state.query.trim()
+          ? 'No scrapers match “' + state.query.trim() + '”.'
+          : "No scrapers yet.";
+        tbody.appendChild(emptyRow);
+      }
+
+      if (countEl) {
+        countEl.textContent =
+          total + (total === 1 ? " scraper" : " scrapers") +
+          (state.query.trim() ? " found" : "");
+      }
+      if (pageInfoEl) {
+        pageInfoEl.textContent = total
+          ? "Page " + state.page + " of " + pages
+          : "—";
+      }
+      prevBtn.disabled = state.page <= 1;
+      nextBtn.disabled = state.page >= pages;
+
+      heads.forEach(function (h) {
+        var active = h.getAttribute("data-sort") === state.key;
+        h.classList.toggle("is-sorted", active);
+        h.classList.toggle("asc", active && state.dir === "asc");
+        h.classList.toggle("desc", active && state.dir === "desc");
+        h.setAttribute(
+          "aria-sort",
+          active ? (state.dir === "asc" ? "ascending" : "descending") : "none"
+        );
+      });
+    }
+
+    if (searchEl) {
+      searchEl.addEventListener("input", function () {
+        state.query = searchEl.value;
+        state.page = 1;
+        render();
+      });
+    }
+    heads.forEach(function (h) {
+      h.addEventListener("click", function () {
+        var key = h.getAttribute("data-sort");
+        if (state.key === key) {
+          state.dir = state.dir === "asc" ? "desc" : "asc";
+        } else {
+          state.key = key;
+          // numbers (runs, last run) read more naturally newest/highest first
+          state.dir = h.getAttribute("data-type") === "num" ? "desc" : "asc";
+        }
+        state.page = 1;
+        render();
+      });
+    });
+    prevBtn.addEventListener("click", function () { state.page -= 1; render(); });
+    nextBtn.addEventListener("click", function () { state.page += 1; render(); });
+    sizeEl.addEventListener("change", function () {
+      state.size = parseInt(sizeEl.value, 10) || 15;
+      state.page = 1;
+      render();
+    });
+
+    render();
+  })();
+</script>
+{% endif %}
