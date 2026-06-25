@@ -24,11 +24,21 @@ echo  MatchMiner - updating from GitHub (origin/main)
 echo ===========================================================
 echo.
 
-git pull origin main
+REM  gc.auto=0 stops git from repacking/cleaning old pack files during the pull.
+REM  That repack step is what triggers Windows "Unlink of file
+REM  '.git/objects/pack/*.idx' failed" errors when another program (an editor,
+REM  the running server, antivirus, or OneDrive/Dropbox sync) has the repo open.
+git -c gc.auto=0 pull origin main
 if errorlevel 1 (
     echo.
     echo [ERROR] git pull failed. See the messages above.
-    echo         If you have local edits that conflict, stash or commit them first.
+    echo         - If you saw "Unlink of file ... .idx failed (y/n)", answer n to
+    echo           each prompt: the new code is already fetched; git just cannot
+    echo           delete old pack files because something has the repo open.
+    echo         - Close your editor, this server, File Explorer, and pause AV,
+    echo           then re-run this script. If the project lives in OneDrive /
+    echo           Dropbox / Google Drive, move it to a plain local folder.
+    echo         - If you have local edits that conflict, stash or commit them first.
     echo.
     pause
     exit /b 1
