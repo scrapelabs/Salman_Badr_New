@@ -607,7 +607,7 @@
           <select class="rt-input" id="proxySel" name="proxy">
             <option value="">Direct connection (no proxy)</option>
             {% for p in proxies %}
-            <option value="{{ p.pk }}" {% if s.proxy_id == p.pk %}selected{% endif %}>{{ p.name }} · {{ p.get_kind_display }}{% if p.address %} ({{ p.display_address }}){% endif %}</option>
+            <option value="{{ p.pk }}" {% if s.proxy_id == p.pk %}selected{% endif %}>{{ p.name }} · {{ p.get_kind_display }}{% if p.address %} ({{ p.display_host }}){% endif %}</option>
             {% endfor %}
           </select>
         </div>

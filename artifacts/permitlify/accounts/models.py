@@ -57,6 +57,22 @@ class Proxy(models.Model):
             return ""
         return _CREDS_RE.sub("\\g<1>\u2022\u2022\u2022\u2022\\g<2>", addr)
 
+    @property
+    def display_host(self):
+        """Just the host of the address — no scheme, credentials, or port.
+
+        For compact UI labels (e.g. the per-scraper proxy dropdown) where the
+        masked credentials would only add noise. Never exposes the password.
+        """
+        addr = (self.address or "").strip()
+        if not addr:
+            return ""
+        if "://" in addr:
+            addr = addr.split("://", 1)[1]
+        if "@" in addr:
+            addr = addr.rsplit("@", 1)[1]
+        return addr.split("/", 1)[0].split(":", 1)[0]
+
 
 class Scraper(models.Model):
     # Concurrency bounds for the scrape worker pool (Scraper.threads). The value
