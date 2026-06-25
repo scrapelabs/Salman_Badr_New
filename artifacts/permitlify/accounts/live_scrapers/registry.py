@@ -47,6 +47,7 @@ class ScraperSpec:
     runner_path: str = ""              # "accounts.live_scrapers.foo:run"
     allowed_hosts: tuple = ()          # host allowlist for URL inputs (SSRF guard)
     needs_claude: bool = False         # AI scraper: surface a Claude API key field
+    url_required: bool = False         # URL input is mandatory (no date-only mode)
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -319,6 +320,7 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.college_dual_match:run",
         needs_claude=True,
+        url_required=True,
     ),
 }
 

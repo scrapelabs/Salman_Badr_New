@@ -97,10 +97,16 @@
         {% elif input_kind == 'date_range' or input_kind == 'date_range_or_url' %}
         {% if allows_url %}
         <div class="rt-field rt-field-wide">
+          {% if url_required %}
+          <label class="field-label" for="rtUrl">Google Sheet / tournament URL <span class="rt-req">(required)</span></label>
+          <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" required placeholder="https://docs.google.com/spreadsheets/d/…  (sheet of Team / Link rows)" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          {% else %}
           <label class="field-label" for="rtUrl">Tournament URL <span class="rt-opt">(optional)</span></label>
           <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" placeholder="https://…  — leave blank to scrape the date range" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          {% endif %}
         </div>
         {% endif %}
+        {% if not url_required %}
         <div class="rt-field">
           <label class="field-label" for="rtFrom">From</label>
           <input class="rt-input" id="rtFrom" name="date_from" type="date" value="{{ default_date_from }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
@@ -109,6 +115,7 @@
           <label class="field-label" for="rtTo">To</label>
           <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
         </div>
+        {% endif %}
         {% elif input_kind == 'rank_snapshot' %}
         <div class="rt-field">
           <label class="field-label" for="rtSnap">Ranking date</label>
@@ -287,7 +294,7 @@
         setNote('warn', 'Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.');
       } else {
         if (startBtn) startBtn.disabled = false;
-        if (yearSel) yearSel.disabled = false;
+        document.querySelectorAll('.rt-start .rt-input').forEach(function (el) { el.disabled = false; });
         setNote('ready', 'The run starts immediately and streams its log in the console below.');
       }
     }

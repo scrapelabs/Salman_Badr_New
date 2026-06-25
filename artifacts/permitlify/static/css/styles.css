@@ -1788,6 +1788,7 @@ code {
 .rt-start-row .rt-field { flex: 0 1 260px; min-width: 180px; }
 .rt-start-row .rt-field-wide { flex: 1 1 100%; min-width: 240px; }
 .rt-opt { font-weight: 400; color: var(--app-muted); }
+.rt-req { font-weight: 500; color: var(--app-accent); }
 .rt-start-btn { height: 42px; white-space: nowrap; flex: 0 0 auto; padding-inline: 18px; }
 .rt-start-note {
   display: flex;

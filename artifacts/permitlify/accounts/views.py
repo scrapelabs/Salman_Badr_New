@@ -439,6 +439,7 @@ def scraper_detail_view(request, slug):
         today = timezone.localdate()
         ctx["input_kind"] = spec.input_kind
         ctx["allows_url"] = spec.input_kind == registry.INPUT_DATE_RANGE_OR_URL
+        ctx["url_required"] = spec.url_required
         ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
         ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)
         ctx["months"] = MONTHS
@@ -469,6 +470,7 @@ def scraper_detail_view(request, slug):
             "date_from": (today - timedelta(days=DEFAULT_RANGE_DAYS)).isoformat(),
             "date_to": today.isoformat(),
             "snapshot_date": (today - timedelta(days=today.weekday())).isoformat(),
+            "tournament_url": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit",
         }
         secret_name = (
             "MATCHMINER_"
@@ -480,7 +482,7 @@ def scraper_detail_view(request, slug):
         ctx["secret_name"] = secret_name
         ctx["input_kind"] = spec.input_kind
         ctx["schedule_curl_json"] = _trigger_example_json(
-            spec.input_kind, sched_defaults
+            spec.input_kind, sched_defaults, url_required=spec.url_required
         )
         ctx["workflow_filename"] = f"{s.slug}-schedule.yml"
         ctx["workflow_yaml"] = _github_workflow_yaml(
@@ -489,6 +491,7 @@ def scraper_detail_view(request, slug):
             secret_name=secret_name,
             input_kind=spec.input_kind,
             defaults=sched_defaults,
+            url_required=spec.url_required,
         )
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
@@ -678,6 +681,13 @@ def validate_run_params(spec, data, *, webhook=False):
                 date_to=None,
                 tournament=url,
             )
+        if kind == registry.INPUT_DATE_RANGE_OR_URL and spec.url_required:
+            raise RunStartError(
+                "invalid_url",
+                "This scraper needs a tournament / box-score / Google-Sheet "
+                "URL — enter one to start the run.",
+                400,
+            )
         if (
             webhook
             and not (get("date_from") or "").strip()
@@ -853,11 +863,13 @@ def scraper_trigger_view(request, slug):
     )
 
 
-def _trigger_example_json(input_kind, defaults):
+def _trigger_example_json(input_kind, defaults, url_required=False):
     """A copy-ready JSON body for the manual ``curl`` example on the Schedule tab."""
     if input_kind == registry.INPUT_YEAR_MONTH:
         return '{"year":"%s","month":"%s"}' % (defaults["year"], defaults["month"])
     if input_kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
+        if url_required:
+            return '{"tournament_url":"%s"}' % defaults["tournament_url"]
         return '{"date_from":"%s","date_to":"%s"}' % (
             defaults["date_from"],
             defaults["date_to"],
@@ -867,7 +879,9 @@ def _trigger_example_json(input_kind, defaults):
     return '{"year":"%s"}' % defaults["year"]
 
 
-def _github_workflow_yaml(*, code, trigger_url, secret_name, input_kind, defaults):
+def _github_workflow_yaml(
+    *, code, trigger_url, secret_name, input_kind, defaults, url_required=False
+):
     """Render the copy-ready GitHub Actions workflow shown on the Schedule tab.
 
     The ``workflow_dispatch`` inputs, ``env`` block and ``curl`` payload are
@@ -894,23 +908,38 @@ def _github_workflow_yaml(*, code, trigger_url, secret_name, input_kind, default
         )
         data = '{\\"year\\":\\"$YEAR\\",\\"month\\":\\"$MONTH\\"}'
     elif input_kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
-        df, dt = defaults["date_from"], defaults["date_to"]
-        inputs = (
-            f"    inputs:\n"
-            f"      date_from:\n"
-            f'        description: "Start date (YYYY-MM-DD)"\n'
-            f"        required: false\n"
-            f'        default: "{df}"\n'
-            f"      date_to:\n"
-            f'        description: "End date (YYYY-MM-DD)"\n'
-            f"        required: false\n"
-            f'        default: "{dt}"\n'
-        )
-        env = (
-            f"          DATE_FROM: ${{{{ github.event.inputs.date_from || '{df}' }}}}\n"
-            f"          DATE_TO: ${{{{ github.event.inputs.date_to || '{dt}' }}}}\n"
-        )
-        data = '{\\"date_from\\":\\"$DATE_FROM\\",\\"date_to\\":\\"$DATE_TO\\"}'
+        if url_required:
+            tu = defaults["tournament_url"]
+            inputs = (
+                f"    inputs:\n"
+                f"      tournament_url:\n"
+                f'        description: "Tournament / box-score / Google-Sheet URL"\n'
+                f"        required: true\n"
+                f'        default: "{tu}"\n'
+            )
+            env = (
+                f"          TOURNAMENT_URL: "
+                f"${{{{ github.event.inputs.tournament_url || '{tu}' }}}}\n"
+            )
+            data = '{\\"tournament_url\\":\\"$TOURNAMENT_URL\\"}'
+        else:
+            df, dt = defaults["date_from"], defaults["date_to"]
+            inputs = (
+                f"    inputs:\n"
+                f"      date_from:\n"
+                f'        description: "Start date (YYYY-MM-DD)"\n'
+                f"        required: false\n"
+                f'        default: "{df}"\n'
+                f"      date_to:\n"
+                f'        description: "End date (YYYY-MM-DD)"\n'
+                f"        required: false\n"
+                f'        default: "{dt}"\n'
+            )
+            env = (
+                f"          DATE_FROM: ${{{{ github.event.inputs.date_from || '{df}' }}}}\n"
+                f"          DATE_TO: ${{{{ github.event.inputs.date_to || '{dt}' }}}}\n"
+            )
+            data = '{\\"date_from\\":\\"$DATE_FROM\\",\\"date_to\\":\\"$DATE_TO\\"}'
     elif input_kind == registry.INPUT_RANK_SNAPSHOT:
         ds = defaults["snapshot_date"]
         inputs = (
