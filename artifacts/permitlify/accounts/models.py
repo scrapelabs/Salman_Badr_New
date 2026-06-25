@@ -102,6 +102,11 @@ class Scraper(models.Model):
     # blank the runner falls back to the server's env credentials, else fails honestly.
     login_username = models.CharField(max_length=255, blank=True, default="")
     login_password = models.CharField(max_length=1024, blank=True, default="")
+    # Single generic secret config value for scrapers that need one credential-bearing
+    # string (e.g. australia_tennis -> Azure Blob SAS URL). Stored per scraper; treated
+    # as a secret (rendered masked with a reveal toggle, never logged). When blank the
+    # runner falls back to the server's env var, else fails honestly.
+    secret_value = models.CharField(max_length=2048, blank=True, default="")
     # Secret bearer token for the public scheduled-trigger webhook (Schedule tab).
     # Auto-assigned on first save and rotatable from the UI; treat it as a password.
     trigger_token = models.CharField(max_length=128, unique=True, blank=True)

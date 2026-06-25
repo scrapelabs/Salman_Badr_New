@@ -388,6 +388,11 @@ def scraper_detail_view(request, slug):
                 if "login_password" in request.POST:
                     s.login_password = request.POST.get("login_password") or ""
                     update_fields.append("login_password")
+            # Scrapers needing a single secret config string (e.g. australia_tennis ->
+            # Azure Blob SAS URL) surface one masked field; only persist when present.
+            if registry.spec_for(s.slug).secret_label and "secret_value" in request.POST:
+                s.secret_value = (request.POST.get("secret_value") or "").strip()
+                update_fields.append("secret_value")
 
             s.save(update_fields=update_fields)
             messages.success(request, "Scraper settings saved.")
@@ -508,6 +513,8 @@ def scraper_detail_view(request, slug):
         ctx["needs_claude"] = registry.spec_for(slug).needs_claude
         ctx["needs_login"] = registry.spec_for(slug).needs_login
         ctx["login_label"] = registry.spec_for(slug).login_label
+        ctx["secret_label"] = registry.spec_for(slug).secret_label
+        ctx["secret_env_var"] = registry.spec_for(slug).secret_env_var
 
     return render(request, "scraper_detail.html", ctx)
 

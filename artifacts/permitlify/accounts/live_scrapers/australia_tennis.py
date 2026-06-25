@@ -30,11 +30,12 @@ fields are always "". The single ``id_type`` column carries the first (winner 1)
 player's id type — the source stored one id type per player but the shared
 items schema has only one column.
 
-The SAS URL is **never** hard-coded — it is read from
-``settings.AUSTRALIA_TENNIS_SAS_URL`` and split into a container URL + SAS query
-with :mod:`urllib.parse`. The SAS query (which carries the ``sig`` signature) is
-passed to the client as request *params*, never embedded in the logged/recorded
-URL, so neither the request CSV nor the run log can leak it.
+The SAS URL is **never** hard-coded — it is read from the scraper's Settings-tab
+secret field (``Scraper.secret_value``), falling back to
+``settings.AUSTRALIA_TENNIS_SAS_URL`` (env). It is split into a container URL +
+SAS query with :mod:`urllib.parse`. The SAS query (which carries the ``sig``
+signature) is passed to the client as request *params*, never embedded in the
+logged/recorded URL, so neither the request CSV nor the run log can leak it.
 
 ``run(run_obj, log)`` returns the standard ``(items_csv, requests_csv,
 errors_csv, row_count, status)`` tuple.
@@ -562,9 +563,15 @@ def run(run_obj, log):
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
-    sas_url = (getattr(settings, "AUSTRALIA_TENNIS_SAS_URL", "") or "").strip()
+    sas_url = (getattr(scraper, "secret_value", "") or "").strip() or (
+        getattr(settings, "AUSTRALIA_TENNIS_SAS_URL", "") or ""
+    ).strip()
     if not sas_url:
-        msg = "Set AUSTRALIA_TENNIS_SAS_URL to run the Australia Tennis scraper."
+        msg = (
+            "Set the Azure Blob SAS URL to run the Australia Tennis scraper \u2014 add it "
+            "on the scraper's Settings tab, or set the AUSTRALIA_TENNIS_SAS_URL "
+            "environment variable."
+        )
         log("ERROR", f"\U0001f6d1 {msg}")
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED

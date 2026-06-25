@@ -51,6 +51,8 @@ class ScraperSpec:
     needs_login: bool = False          # login scraper: surface username/password fields
     login_label: str = ""              # label for the login fields (e.g. "USTA TennisLink")
     accepts_sheet: bool = False        # URL input may be a Google Sheet of Team/Link rows
+    secret_label: str = ""             # label for a single masked secret config field
+    secret_env_var: str = ""           # env var the runner falls back to (for help text)
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -294,6 +296,8 @@ SPECS = {
         slug="australia_tennis",
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.australia_tennis:run",
+        secret_label="Azure Blob SAS URL",
+        secret_env_var="AUSTRALIA_TENNIS_SAS_URL",
     ),
     # --- Polish Tennis (PZT) results — portal.pzt.pl ASP.NET HTML ---------
     # Date-range OR a single tournament URL; the seed URL is validated against

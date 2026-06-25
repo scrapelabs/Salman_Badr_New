@@ -642,6 +642,24 @@
       </div>
       {% endif %}
 
+      {% if secret_label %}
+      <div class="rt-field settings-keyfield">
+        <label class="field-label" for="secretVal">{{ secret_label }}</label>
+        <div class="sch-copyrow">
+          <input class="rt-input sch-secret" id="secretVal" name="secret_value" type="password"
+                 value="{{ s.secret_value }}" autocomplete="off" spellcheck="false"
+                 placeholder="{{ secret_label }}" />
+          <button class="btn btn-ghost btn-sm settings-reveal" type="button" data-target="#secretVal" aria-pressed="false">Reveal</button>
+        </div>
+        <p class="status-note settings-empty">
+          Required to run this scraper. It points to the data source and only needs
+          updating when it expires — set it once here and real-time and scheduled runs
+          reuse it. Leave blank to fall back to the server’s <code>{{ secret_env_var }}</code>
+          environment variable. Treated as a secret — never logged.
+        </p>
+      </div>
+      {% endif %}
+
       {% if needs_login %}
       <div class="rt-field settings-keyfield">
         <label class="field-label" for="loginUser">{{ login_label }} username</label>
