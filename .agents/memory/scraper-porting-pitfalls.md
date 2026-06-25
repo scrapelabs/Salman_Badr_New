@@ -38,6 +38,19 @@ read at runtime from the gitignored source file (`tmp/scripts_new/...`) into
 `settings.XXX_*`. Use a tiny recent window, then assert the creds do not appear anywhere in
 items/requests/errors CSV or the log lines.
 
+## Port value-NORMALIZATION steps, not just the filter
+A keep-filter is only correct if the value it tests was normalized exactly as the source
+normalized it. Carry those tiny "rename this status" lines across or the filter silently
+rejects everything.
+**Why:** the itftennis engine kept matches where `outcome.lower() in ('completed','retired')`,
+but the ITF API actually returns `"Played and completed"`. The source mapped
+`'Played and completed' -> 'Completed'` *before* filtering; the port dropped that line, so
+every real match was rejected — discovery found 113 tournaments yet phase 2 wrote 0 rows
+(looked like an anti-bot/empty-data failure, was a normalization gap).
+**How to apply:** when a port shows healthy discovery but 0 emitted rows with 0 errors,
+suspect a gate (outcome/gender/status keep-filter) testing an un-normalized value; live-probe
+the real field values and diff against the literal strings the filter checks.
+
 ## Reuse the shared 61-col items schema
 Reuse `brazil_results.COLUMNS` verbatim (it's 61 cols despite the "60-col" shorthand in
 replit.md) so every scraper's downloadable items CSV stays uniform. Map source-specific

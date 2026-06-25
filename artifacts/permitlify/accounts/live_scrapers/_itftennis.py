@@ -403,6 +403,12 @@ def _record_from_match(match, round_desc=None):
         winner_team.get("scores", []), loser_team.get("scores", [])
     )
     rec["outcome"] = match.get("resultStatusDesc") or match.get("playStatusDesc") or ""
+    # The ITF feed labels a finished singles/doubles match "Played and completed";
+    # the production spider normalises that to "Completed" *before* the
+    # (completed|retired) keep-filter in _scrape_tournament. Without this every
+    # real match is rejected and the run writes 0 rows despite healthy discovery.
+    if rec["outcome"] == "Played and completed":
+        rec["outcome"] = "Completed"
     return rec
 
 
