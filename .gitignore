@@ -56,5 +56,9 @@ __pycache__/
 *.py[cod]
 artifacts/permitlify/staticfiles/
 
+# patchright persistent browser profiles (Incapsula clearance cookies)
+.browser_profiles/
+artifacts/permitlify/.browser_profiles/
+
 # Local scrape dumps from bat_files/6-8 (scrape_now --out)
 scrape_output/

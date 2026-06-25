@@ -48,12 +48,14 @@ import csv
 import io
 import json
 import math
+import os
 import re
 import threading
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urljoin
 
+from django.conf import settings
 from django.db.models import F
 from django.utils import timezone
 from lxml import etree
@@ -773,8 +775,18 @@ def run(cfg, run_obj, log):
     # does not parallelise it here.
     if tournament_url or tournaments:
         try:
+            profile_root = getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "")
+            user_data_dir = (
+                os.path.join(profile_root, scraper.slug) if profile_root else None
+            )
             with BrowserClient(
-                log=log, tele=tele, proxy=scraper.proxy, allowed_hosts=(_HOST,)
+                log=log,
+                tele=tele,
+                proxy=scraper.proxy,
+                allowed_hosts=(_HOST,),
+                headless=getattr(settings, "SCRAPER_BROWSER_HEADLESS", True),
+                channel=getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or None,
+                user_data_dir=user_data_dir,
             ) as browser:
                 if tournament_url:
                     log(

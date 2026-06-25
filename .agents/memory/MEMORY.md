@@ -13,6 +13,7 @@
 - [Porting source scrapers](scraper-porting-pitfalls.md) — probe the live API for real field/join keys (sources have bugs), drop cosmetic AI, env-creds + honest-fail, in-process validation injecting gitignored creds, reuse brazil's 61-col schema.
 - [url_required scrapers](url-required-scrapers.md) — a no-date-only scraper's URL requirement must be mirrored in lockstep across start form, validate_run_params, AND both Schedule-tab generators or the docs hand back a 400-ing payload.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
+- [itftennis stealth browser](itftennis-patchright-browser.md) — needs patchright not curl; go DIRECT (proxy IP Incapsula-blocked); persistent+headed+real-Chrome on Windows, headless Chromium on Replit; SSRF + async-unsafe traps.
 - [Replit container resource stats](replit-container-resource-stats.md) — for live CPU/mem/disk gauges: cgroup-v2 for memory, BASE_DIR for disk (`/`=0), prime psutil CPU; psutil alone misleads.
 - [Scraper SSRF + dedup rules](scraper-ssrf-and-dedup.md) — ScraperClient validates the initial URL AND every redirect hop via _ssrf (covers discovered second-stage links centrally); dedup keys must include source identity or rematches get dropped.
 - [Confirm dialog convention](confirm-dialog-convention.md) — global #mmConfirm modal in app_base.html; destructive forms opt in via data-confirm attrs; never native confirm().

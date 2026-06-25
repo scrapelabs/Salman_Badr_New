@@ -12,20 +12,47 @@ two-phase design:
   plain `curl_cffi`.
 - **Phase 2 (per-tournament scrape)** — the tournament page + its `TournamentApi`
   calls — gets the Incapsula JS challenge and must be fetched with **patchright**
-  (a stealth fork of Playwright) driving headless Chromium, which executes the
+  (a stealth fork of Playwright) driving a real Chromium/Chrome, which executes the
   challenge JS and earns the cookies. `context.request` then reuses those solved
-  cookies for the API calls. This lives in `_browser.py` (`BrowserClient`).
+  cookies for the API calls. This lives in `_browser.py` (`BrowserClient`); see the
+  "stealth config" section for the persistent-profile / headed / real-Chrome setup.
 
 **Counterintuitive operational fact (NOT derivable from code):** itftennis works
 **DIRECT from Replit with no proxy**. It is the *residential proxy IP* that gets
 Incapsula-challenged/0-rows — the opposite of the Stadion/CloudFront family
 (`cloudfront-datacenter-block.md`), where the datacenter IP is blocked and you
 *need* a residential proxy. So: Stadion → assign a proxy; itftennis → leave the
-proxy off (direct). `BrowserClient(proxy=None, headless=True)`.
+proxy off (direct). Re-confirmed 2026-06-25: Replit direct + headless Chromium
+solved the challenge and fetched the real 251 KB itftennis homepage, 0 errors.
 
 **Why:** Incapsula is a JS-execution challenge tied to IP reputation; the proxy
 pool's IPs are flagged, Replit's egress (for this host) is not. curl_cffi TLS
 impersonation alone can't pass a JS challenge — you need a real JS engine.
+
+# Stealth config: persistent profile + headed + real Chrome (OS-aware)
+
+patchright's recommended max-stealth setup is **launch_persistent_context** (not
+`launch()`+`new_context()`) + a real Google **Chrome** channel + **headed** mode +
+`no_viewport=True` + no extra automation `--flags`. `BrowserClient` takes
+`channel`/`user_data_dir` and reads OS-aware, env-overridable defaults from settings
+(`SCRAPER_BROWSER_HEADLESS` / `_CHANNEL` / `_PROFILE_DIR`):
+- **Local Windows** → headed + `channel="chrome"` + per-scraper persistent profile.
+- **Replit Linux** → headless Chromium (`executable_path`); no real Chrome, no X
+  display — same persistent-profile path, degrades automatically.
+
+**Why persistent:** the Incapsula clearance cookie is earned once and reused, so a
+stable per-scraper profile dir (`<SCRAPER_BROWSER_PROFILE_DIR>/<slug>`, git-ignored)
+cuts re-challenges. Per-slug dirs avoid two circuits sharing one *locked* Chrome
+profile; a crashed run's stale `SingletonLock/Cookie/Socket` are wiped before
+relaunch (safe under the one-running-run-per-scraper DB constraint).
+
+**Operator note:** don't manually open Chrome pointed at a scraper's profile dir
+while a run might start — that's the one case the stale-lock wipe shouldn't hit.
+
+**Persistent-context API gotcha:** `launch_persistent_context` returns the
+BrowserContext directly (no separate `Browser` — `context.close()` tears down the
+Chrome process); it opens with a default page (reuse `context.pages[0]`). All 4 SSRF
+guards attach to this context exactly as before.
 
 # Playwright SSRF blind-spots (the parity gotchas)
 

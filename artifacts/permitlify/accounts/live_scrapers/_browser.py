@@ -35,6 +35,7 @@ an honest error rather than fabricating data.
 import json
 import os
 import shutil
+import tempfile
 import time
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -125,6 +126,8 @@ class BrowserClient:
         api_timeout=30000,
         api_tries=3,
         headless=True,
+        channel=None,
+        user_data_dir=None,
     ):
         self.log = log
         self.tele = tele
@@ -134,10 +137,14 @@ class BrowserClient:
         self.api_timeout = api_timeout
         self.api_tries = max(1, api_tries)
         self.headless = headless
+        self.channel = (channel or "").strip() or None
+        self.user_data_dir = (user_data_dir or "").strip() or None
         self._pw = None
         self._browser = None
         self._context = None
         self._page = None
+        self._profile_dir = None
+        self._owns_profile_dir = False
 
     # -- lifecycle -------------------------------------------------------
     def __enter__(self):
@@ -148,16 +155,35 @@ class BrowserClient:
                 f"patchright is not importable: {exc.__class__.__name__}: {exc}"
             ) from exc
 
-        chrome = shutil.which("chromium") or shutil.which("chromium-browser")
+        # --- choose engine: real Chrome channel (most stealthy) else Chromium --
+        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
         launch_kwargs = {
             "headless": self.headless,
-            "args": list(LAUNCH_ARGS),
             "chromium_sandbox": False,
+            # Context options accepted by launch_persistent_context:
+            "ignore_https_errors": True,
+            # service_workers="block": SW-originated requests bypass
+            # context.route(), so block SWs to keep the SSRF guard authoritative.
+            "service_workers": "block",
+            # patchright stealth guidance: don't override the real window size.
+            "no_viewport": True,
         }
-        if chrome:
-            # Replit/Nix ships Chromium; on Windows leave unset so patchright
-            # uses its bundled browser (`patchright install chromium`).
-            launch_kwargs["executable_path"] = chrome
+        if self.channel:
+            # A real browser channel (e.g. Google "chrome") — patchright resolves
+            # the install itself. Keep the arg list empty so the fingerprint stays
+            # as close to a vanilla Chrome launch as possible (patchright warns
+            # against extra automation flags).
+            launch_kwargs["channel"] = self.channel
+            engine = f"Google {self.channel.title()}"
+        else:
+            # Replit/Nix ships only Chromium; pin its path. In a sandboxed
+            # container it needs these stability flags. (On Windows with no
+            # channel set, leave the path unset so patchright uses its bundled
+            # browser from `patchright install chromium`.)
+            if chromium_path:
+                launch_kwargs["executable_path"] = chromium_path
+            launch_kwargs["args"] = list(LAUNCH_ARGS)
+            engine = "Chromium"
         proxy = browser_proxy(self.proxy)
         if proxy:
             launch_kwargs["proxy"] = proxy
@@ -166,16 +192,15 @@ class BrowserClient:
                 if hasattr(self.proxy, "get_kind_display")
                 else "?"
             )
-            self.log(
-                "INFO",
-                f"\U0001f310 HTTP client: patchright Chromium via {kind} proxy "
-                f"'{getattr(self.proxy, 'name', '?')}'",
-            )
+            conn = f"via {kind} proxy '{getattr(self.proxy, 'name', '?')}'"
         else:
-            self.log(
-                "INFO",
-                "\U0001f310 HTTP client: patchright Chromium (direct \u2014 no proxy)",
-            )
+            conn = "direct \u2014 no proxy"
+        mode = "headless" if self.headless else "headed"
+        persist = "persistent profile" if self.user_data_dir else "ephemeral profile"
+        self.log(
+            "INFO",
+            f"\U0001f310 HTTP client: patchright {engine} ({mode}, {persist}) {conn}",
+        )
 
         # Playwright's sync API drives an asyncio event loop in this thread, so
         # Django's async-safety guard rejects every ORM call the scrape makes
@@ -186,17 +211,36 @@ class BrowserClient:
         self._prev_async_unsafe = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
         os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
         try:
+            # Resolve the profile directory (inside the try so a rare makedirs /
+            # mkdtemp failure still runs close() and restores the env var above).
+            # A caller-supplied (stable, per-scraper) dir lets Incapsula clearance
+            # cookies survive between runs — the whole point of "persistent
+            # profile". Without one we use a throwaway temp dir that close()
+            # deletes. launch_persistent_context needs *some* dir either way.
+            if self.user_data_dir:
+                self._profile_dir = self.user_data_dir
+                os.makedirs(self._profile_dir, exist_ok=True)
+                self._clear_stale_singleton_locks(self._profile_dir)
+            else:
+                self._profile_dir = tempfile.mkdtemp(prefix="mm-browser-")
+                self._owns_profile_dir = True
+
             self._pw = sync_playwright().start()
-            self._browser = self._pw.chromium.launch(**launch_kwargs)
-            # service_workers="block": SW-originated requests bypass
-            # context.route(), so block SWs to keep the SSRF guard authoritative.
-            self._context = self._browser.new_context(
-                ignore_https_errors=True, service_workers="block"
+            # launch_persistent_context returns the BrowserContext directly (no
+            # separate Browser): patchright's recommended, most-stealthy path.
+            # Every SSRF guard attaches to this context exactly as before.
+            self._context = self._pw.chromium.launch_persistent_context(
+                self._profile_dir, **launch_kwargs
             )
             self._context.set_default_timeout(self.api_timeout)
             self._context.route("**/*", self._route_guard)
             self._guard_websockets()
-            self._page = self._context.new_page()
+            # A persistent context opens with a default page; reuse it.
+            self._page = (
+                self._context.pages[0]
+                if self._context.pages
+                else self._context.new_page()
+            )
         except Exception:
             self.close()
             raise
@@ -206,9 +250,10 @@ class BrowserClient:
         self.close()
 
     def close(self):
+        # launch_persistent_context has no separate Browser object — closing the
+        # context tears the whole session (and its Chrome process) down.
         for closer in (
             lambda: self._context and self._context.close(),
-            lambda: self._browser and self._browser.close(),
             lambda: self._pw and self._pw.stop(),
         ):
             try:
@@ -216,6 +261,12 @@ class BrowserClient:
             except Exception:  # noqa: BLE001 - best-effort teardown
                 pass
         self._page = self._context = self._browser = self._pw = None
+        # Delete the throwaway profile dir only when we created a temp one; a
+        # caller-supplied persistent dir is kept so its cookies survive.
+        if self._owns_profile_dir and self._profile_dir:
+            shutil.rmtree(self._profile_dir, ignore_errors=True)
+        self._profile_dir = None
+        self._owns_profile_dir = False
         prev = getattr(self, "_prev_async_unsafe", "__unset__")
         if prev != "__unset__":
             if prev is None:
@@ -223,6 +274,22 @@ class BrowserClient:
             else:
                 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = prev
             self._prev_async_unsafe = "__unset__"
+
+    @staticmethod
+    def _clear_stale_singleton_locks(profile_dir):
+        """Remove a previous crash's Chrome singleton locks before relaunch.
+
+        A persistent profile left behind by a killed/crashed run keeps
+        ``SingletonLock``/``SingletonCookie``/``SingletonSocket`` entries that
+        make Chrome refuse to start ("profile appears to be in use"). At most one
+        run per scraper is ever in flight (DB constraint), so any lock seen here
+        is stale and safe to clear. Best-effort.
+        """
+        for name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+            try:
+                os.unlink(os.path.join(profile_dir, name))
+            except OSError:
+                pass
 
     # -- helpers ---------------------------------------------------------
     def _safe(self, url):

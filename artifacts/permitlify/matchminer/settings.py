@@ -208,3 +208,30 @@ CLAUDE_KEYS = [
     if k.strip()
 ]
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+# --- Stealth browser (patchright) for anti-bot origins (itftennis family) ---
+# www.itftennis.com sits behind Imperva/Incapsula. patchright's recommended
+# stealth configuration is a *persistent* profile (clearance cookies survive
+# between runs) + real Google **Chrome** + *headed* mode. On a local Windows box
+# all three work natively, so those are the defaults there. The Replit Linux
+# container has only headless Chromium (no real Chrome, no X display), so it
+# degrades to headless Chromium automatically. All three are env-overridable.
+_IS_WINDOWS = os.name == "nt"
+# headless: default OFF (headed) on Windows, ON (headless) on Linux/Replit.
+SCRAPER_BROWSER_HEADLESS = (
+    os.environ.get(
+        "SCRAPER_BROWSER_HEADLESS", "False" if _IS_WINDOWS else "True"
+    ).lower()
+    != "false"
+)
+# channel: "chrome" launches real Google Chrome (most stealthy); an empty string
+# falls back to the bundled/Nix Chromium (resolved in _browser.py).
+SCRAPER_BROWSER_CHANNEL = os.environ.get(
+    "SCRAPER_BROWSER_CHANNEL", "chrome" if _IS_WINDOWS else ""
+)
+# Persistent-profile root. Each scraper gets its own sub-directory so Incapsula
+# clearance cookies persist across runs without two scrapers sharing one locked
+# Chrome profile. Git-ignored; created on first use.
+SCRAPER_BROWSER_PROFILE_DIR = os.environ.get(
+    "SCRAPER_BROWSER_PROFILE_DIR", str(BASE_DIR / ".browser_profiles")
+)
