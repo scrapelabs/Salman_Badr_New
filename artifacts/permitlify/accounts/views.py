@@ -33,7 +33,11 @@ from .models import Proxy, Run, Scraper, Ticket
 from .system_stats import collect_system_stats, gauge_card
 from .runs import ALL_TOURNAMENTS
 
-STALE_RUNNING_AFTER = timezone.timedelta(minutes=20)
+# A run is only reaped once its worker has gone *silent* for this long (no new
+# streamed log line). This is an inactivity window, NOT a cap on total run
+# duration — an actively-streaming worker keeps advancing its last-activity time
+# and is never reaped, so legitimately long scrapes run to completion.
+RUN_INACTIVITY_TIMEOUT = timezone.timedelta(minutes=30)
 YEAR_MIN = 2000
 YEAR_MAX = 2030
 IS_WINDOWS = os.name == "nt"
@@ -227,23 +231,38 @@ def _launch_run(run):
 
 
 def _reap_stale_runs(scraper):
-    """Fail runs stuck in RUNNING past the max duration (e.g. the worker died).
+    """Fail runs whose worker has gone silent (died), based on *inactivity*.
+
+    A run is reaped only after it has streamed no new log line for
+    ``RUN_INACTIVITY_TIMEOUT``. This is deliberately NOT a cap on total run
+    duration: a worker actively streaming match results keeps advancing its
+    last-activity timestamp, so legitimately long scrapes are never killed —
+    only genuinely stuck/dead workers (the original reason for reaping) are.
 
     Also force-kills any surviving worker process group so a stuck worker can't
     keep running — or resurface its status — after we release the RUNNING lock.
     """
-    cutoff = timezone.now() - STALE_RUNNING_AFTER
-    for run in scraper.runs.filter(status=Run.Status.RUNNING, started_at__lt=cutoff):
+    now = timezone.now()
+    cutoff = now - RUN_INACTIVITY_TIMEOUT
+    for run in scraper.runs.filter(status=Run.Status.RUNNING):
+        last_line = run.log_lines.order_by("-seq").first()
+        # Last sign of life: the newest streamed log line, else the start time.
+        last_activity = last_line.created_at if last_line else run.started_at
+        if last_activity is None or last_activity >= cutoff:
+            # Still streaming (or only just started) — leave it running.
+            continue
         _terminate_run_worker(run, settle=0)
         run.status = Run.Status.FAILED
-        run.finished_at = timezone.now()
-        run.duration_ms = run.duration_ms or int(
-            STALE_RUNNING_AFTER.total_seconds() * 1000
-        )
+        run.finished_at = now
+        if run.started_at:
+            run.duration_ms = int((now - run.started_at).total_seconds() * 1000)
         if not run.log_text:
             lines = list(run.log_lines.order_by("seq").values_list("text", flat=True))
+            idle_min = int(RUN_INACTIVITY_TIMEOUT.total_seconds() // 60)
             lines.append(
-                "[reaper] Run exceeded the maximum duration and was marked failed."
+                f"[reaper] Worker streamed no new output for {idle_min} min and "
+                "was assumed dead; run marked failed. (This is not a duration cap "
+                "— actively-streaming runs are never reaped.)"
             )
             run.log_text = "\n".join(lines) + "\n"
         run.save(update_fields=["status", "finished_at", "duration_ms", "log_text"])
