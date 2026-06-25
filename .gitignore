@@ -55,3 +55,6 @@ venv/
 __pycache__/
 *.py[cod]
 artifacts/permitlify/staticfiles/
+
+# Local scrape dumps from bat_files/6-8 (scrape_now --out)
+scrape_output/
