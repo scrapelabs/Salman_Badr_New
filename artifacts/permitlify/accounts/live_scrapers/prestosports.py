@@ -418,13 +418,26 @@ def _login(client, username, password):
 
 
 def _fetch_events_page(client, token, season_id, start_str, end_str, page):
-    """Fetch one page of a season's events, or ``None``."""
+    """Fetch one page of a season's events as ``(json_or_None, status_or_None)``.
+
+    Returning the HTTP status alongside the body lets the caller tell a genuine
+    "no events in window" result apart from a 401/403 authorisation denial (the
+    login can succeed while the account still lacks access to a season's data).
+    """
     headers = {"accept": "application/json", "Authorization": f"Bearer {token}"}
     params = {
         "from": start_str, "to": end_str,
         "pageSize": PAGE_SIZE, "pageNumber": page,
     }
-    return client.get_json(EVENTS_URL.format(season_id=season_id), headers=headers, params=params)
+    resp = client.get(EVENTS_URL.format(season_id=season_id), headers=headers, params=params)
+    if resp is None:
+        return None, None
+    if 200 <= resp.status_code < 300:
+        try:
+            return resp.json(), resp.status_code
+        except Exception:  # noqa: BLE001 - body wasn't JSON
+            return None, resp.status_code
+    return None, resp.status_code
 
 
 def _harvest(results, season_type, season_id, events, seen):
@@ -458,13 +471,24 @@ def _harvest(results, season_type, season_id, events, seen):
 
 
 def _discover_events(client, token, start_str, end_str, log):
-    """Return ``[event_dict]`` for every completed event inside the window."""
+    """Return ``(events, auth_denied)`` for every completed event in the window.
+
+    ``auth_denied`` is True when the events endpoint rejected the (valid) token
+    with a 401/403 — i.e. the account authenticated but is not authorised to read
+    these seasons' match data. That lets the caller fail with a clear diagnostic
+    instead of a confusing empty result.
+    """
     events = []
     seen = set()
+    auth_denied = False
     for season in SEASONS:
         season_type = season["season_type"]
         season_id = season["season_id"]
-        first = _fetch_events_page(client, token, season_id, start_str, end_str, 0)
+        first, status = _fetch_events_page(client, token, season_id, start_str, end_str, 0)
+        if status in (401, 403):
+            auth_denied = True
+            log("WARN", f"\u26d4 {season_type} events access denied (HTTP {status})")
+            continue
         if not first:
             continue
         total = first.get("totalElements", 0) or 0
@@ -472,10 +496,10 @@ def _discover_events(client, token, start_str, end_str, log):
         log("INFO", f"\U0001f50e {total} {season_type} event(s) across {pages} page(s)")
         _harvest(first, season_type, season_id, events, seen)
         for page in range(1, pages):
-            results = _fetch_events_page(client, token, season_id, start_str, end_str, page)
+            results, _ = _fetch_events_page(client, token, season_id, start_str, end_str, page)
             if results:
                 _harvest(results, season_type, season_id, events, seen)
-    return events
+    return events, auth_denied
 
 
 def _scrape_event(client, token, event):
@@ -549,7 +573,19 @@ def run(run_obj, log):
             tele.record_error(msg)
             return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
         log("INFO", "\U0001f511 Authenticated \u2014 idToken acquired")
-        events = _discover_events(discovery, token, start_str, end_str, log)
+        events, auth_denied = _discover_events(discovery, token, start_str, end_str, log)
+
+    if not events and auth_denied:
+        msg = (
+            "PrestoSports authenticated successfully, but this account is not "
+            "authorised to read the NAIA tennis match data \u2014 the events endpoint "
+            "returned HTTP 401 'Access denied'. The login works; the account needs "
+            "events/results access for these seasons (or use one that already has it). "
+            "This is an account-permissions issue, not a network/Cloudflare block."
+        )
+        log("ERROR", f"\U0001f6d1 {msg}")
+        tele.record_error(msg)
+        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
     total = len(events)
     Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)

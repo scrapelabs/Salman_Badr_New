@@ -8,6 +8,7 @@
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
 - [MatchMiner live scrapers](matchminer-live-scrapers.md) — full catalogue (37 wired) on shared parameterised engines + standalone modules; many honest-fail until creds/proxy; central SSRF guard in ScraperClient; unwired slugs fail honestly.
+- [PrestoSports auth](prestosports-auth.md) — login (Cognito) works via curl_cffi (no Cloudflare); events 401 "Access denied" = account authorization, not bot detection; patchright can't fix a permissions denial.
 - [Porting source scrapers](scraper-porting-pitfalls.md) — probe the live API for real field/join keys (sources have bugs), drop cosmetic AI, env-creds + honest-fail, in-process validation injecting gitignored creds, reuse brazil's 61-col schema.
 - [url_required scrapers](url-required-scrapers.md) — a no-date-only scraper's URL requirement must be mirrored in lockstep across start form, validate_run_params, AND both Schedule-tab generators or the docs hand back a 400-ing payload.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
