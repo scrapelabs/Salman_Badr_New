@@ -408,13 +408,17 @@ def run(run_obj, log):
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
-    phone = (getattr(settings, "IONCOURT_PHONE", "") or "").strip()
-    password = getattr(settings, "IONCOURT_PASSWORD", "") or ""
+    phone = (getattr(scraper, "login_username", "") or "").strip() or (
+        getattr(settings, "IONCOURT_PHONE", "") or ""
+    ).strip()
+    password = (getattr(scraper, "login_password", "") or "") or (
+        getattr(settings, "IONCOURT_PASSWORD", "") or ""
+    )
     if not (phone and password):
         msg = (
-            "Ioncourt credentials missing \u2014 set IONCOURT_PHONE and "
-            "IONCOURT_PASSWORD (Replit secrets, or the local .env) to enable "
-            "this source."
+            "Ioncourt credentials missing \u2014 add the Ioncourt phone and password on "
+            "the scraper's Settings tab, or set the IONCOURT_PHONE and IONCOURT_PASSWORD "
+            "environment variables, to enable this source."
         )
         log("ERROR", f"\U0001f6d1 {msg}")
         tele.record_error(msg)

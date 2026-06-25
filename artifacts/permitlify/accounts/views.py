@@ -513,6 +513,7 @@ def scraper_detail_view(request, slug):
         ctx["needs_claude"] = registry.spec_for(slug).needs_claude
         ctx["needs_login"] = registry.spec_for(slug).needs_login
         ctx["login_label"] = registry.spec_for(slug).login_label
+        ctx["login_user_label"] = registry.spec_for(slug).login_user_label
         ctx["secret_label"] = registry.spec_for(slug).secret_label
         ctx["secret_env_var"] = registry.spec_for(slug).secret_env_var
 

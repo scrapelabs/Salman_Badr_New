@@ -662,10 +662,10 @@
 
       {% if needs_login %}
       <div class="rt-field settings-keyfield">
-        <label class="field-label" for="loginUser">{{ login_label }} username</label>
+        <label class="field-label" for="loginUser">{{ login_label }} {{ login_user_label }}</label>
         <input class="rt-input" id="loginUser" name="login_username" type="text"
                value="{{ s.login_username }}" autocomplete="off" spellcheck="false"
-               placeholder="{{ login_label }} username" />
+               placeholder="{{ login_label }} {{ login_user_label }}" />
       </div>
       <div class="rt-field settings-keyfield">
         <label class="field-label" for="loginPass">{{ login_label }} password</label>

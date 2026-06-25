@@ -50,6 +50,7 @@ class ScraperSpec:
     url_required: bool = False         # URL input is mandatory (no date-only mode)
     needs_login: bool = False          # login scraper: surface username/password fields
     login_label: str = ""              # label for the login fields (e.g. "USTA TennisLink")
+    login_user_label: str = "username" # noun for the identifier field (e.g. "phone")
     accepts_sheet: bool = False        # URL input may be a Google Sheet of Team/Link rows
     secret_label: str = ""             # label for a single masked secret config field
     secret_env_var: str = ""           # env var the runner falls back to (for help text)
@@ -222,6 +223,9 @@ SPECS = {
         slug="ioncourt",
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.ioncourt:run",
+        needs_login=True,
+        login_label="Ioncourt",
+        login_user_label="phone",
     ),
     # --- prestosports.com JSON+XML API (college dual matches) -------------
     # Date-range scraper over its own hard-coded gameday-api.prestosports.com
