@@ -216,6 +216,16 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.ioncourt:run",
     ),
+    # --- prestosports.com JSON+XML API (college dual matches) -------------
+    # Date-range scraper over its own hard-coded gameday-api.prestosports.com
+    # endpoints (no URL input / host allowlist). Needs login credentials
+    # (PRESTOSPORTS_USERNAME / PRESTOSPORTS_PASSWORD); without them the run
+    # fails honestly, like ioncourt without its credentials.
+    "prestosports": ScraperSpec(
+        slug="prestosports",
+        input_kind=INPUT_DATE_RANGE,
+        runner_path="accounts.live_scrapers.prestosports:run",
+    ),
     # --- cesky-tenis.cz (Czech national tennis) standalone HTML scraper ----
     # A date-range OR single-tournament-URL scraper; the seed URL is validated
     # against the cesky-tenis.cz allowlist at the view layer.
@@ -224,6 +234,29 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.czech_scraper:run",
         allowed_hosts=("cesky-tenis.cz",),
+    ),
+    # --- US high-school feed APIs (date-range; own hard-coded hosts) -------
+    # Vendor feed APIs keyed by a feed api_key (overridable via settings).
+    # No URL input / host allowlist — each calls only its own host.
+    "maxpreps": ScraperSpec(
+        slug="maxpreps",
+        input_kind=INPUT_DATE_RANGE,
+        runner_path="accounts.live_scrapers.maxpreps:run",
+    ),
+    "new_jersey_high_school": ScraperSpec(
+        slug="new_jersey_high_school",
+        input_kind=INPUT_DATE_RANGE,
+        runner_path="accounts.live_scrapers.new_jersey_high_school:run",
+    ),
+    # --- Estonia (tennis.ee discovery + etl.tournamentsoftware.com) -------
+    # Bespoke multi-stage scraper (NOT the shared TS engine). Date-range OR a
+    # single tournament URL; the seed URL is validated against the
+    # etl.tournamentsoftware.com allowlist at the view layer.
+    "estonia_tournament": ScraperSpec(
+        slug="estonia_tournament",
+        input_kind=INPUT_DATE_RANGE_OR_URL,
+        runner_path="accounts.live_scrapers.estonia_tournament:run",
+        allowed_hosts=("etl.tournamentsoftware.com",),
     ),
     # --- player-ranking snapshots (singles + doubles in one run) ----------
     # Not match results: a single snapshot date yields a 9-column ranking
@@ -239,6 +272,13 @@ SPECS = {
         slug="atptour",
         input_kind=INPUT_RANK_SNAPSHOT,
         runner_path="accounts.live_scrapers.atptour:run",
+    ),
+    # padelfip: FIP world padel rankings (www.padelfip.com WordPress API).
+    # A rank-snapshot scraper like wtatennis; only calls its own host.
+    "padelfip": ScraperSpec(
+        slug="padelfip",
+        input_kind=INPUT_RANK_SNAPSHOT,
+        runner_path="accounts.live_scrapers.padelfip:run",
     ),
 }
 

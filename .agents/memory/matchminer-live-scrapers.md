@@ -32,10 +32,22 @@ Engines (all over the shared `_http.ScraperClient` + `telemetry.py`):
   Cloudflare-gated rankings HTML discovery → hero JSON enrich, gender M, **needs a
   residential proxy** like Stadion; rankdate kept as the ISO snapshot, a faithful quirk vs
   WTA's m/d/Y). Uses the `rank_snapshot` input_kind (single date).
+- **Standalone (own-parser) sources** — no shared engine; each its own module over
+  `_http`+`telemetry`+the 61-col COLUMNS (or `_rankings` for padelfip): czech_scraper,
+  uruguay_results, ioncourt, maxpreps, new_jersey_high_school, prestosports, padelfip,
+  estonia_tournament.
+  - **Creds-gated** (honest-fail until set; env vars, ioncourt pattern): ioncourt →
+    `IONCOURT_PHONE`/`IONCOURT_PASSWORD`; prestosports →
+    `PRESTOSPORTS_USERNAME`/`PRESTOSPORTS_PASSWORD`.
+  - **Datacenter-blocked** (honest-fail here; work from a reachable network/proxy):
+    new_jersey_high_school feed, estonia TS finder, atptour Cloudflare.
+  - **padelfip** quirk: the FIP rankings API only serves the **current ISO week**;
+    historical snapshot dates return [] → honest-fail with a diagnostic (faithful to source).
 
 Source quirks worth remembering:
-- **estonia_tournament** deferred — its source uses a *dual parser* that doesn't fit
-  the shared TS-tournament engine; revisit separately, don't force it.
+- **estonia_tournament**: its source uses a *dual parser* that doesn't fit the shared
+  TS-tournament engine, so it's a bespoke standalone module (see above) and keeps a
+  deterministic sha256 id fallback.
 - Asset hosts like `objects.fi` / `objs.fi` in league sources are CDNs — ignore for
   data crawling. `scripts.fi` in finland_league is only a python import path, not a host.
 

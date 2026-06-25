@@ -97,7 +97,7 @@ Django's built-in auth. Seeded login: username `salman` (password set out-of-ban
 
 - Run via the workflow, not `pnpm dev`. After Python/settings changes, restart the `artifacts/permitlify: web` workflow (`--noreload`).
 - The worker shares the same `DATABASE_URL` as the web process (how live cross-process streaming works). Validate the full flow with `django.test.Client` in `manage.py shell` (force_login + POST `{"year": …}` + poll `run_events`) — exercises the real subprocess + cross-process polling without the Secure-cookie/CSRF friction of `curl`.
-- No demo/seeded runs — all runs are real live scrapes; only `billiejeankingcup` is wired. Don't reintroduce simulated runs.
+- No demo/seeded runs — all runs are real live scrapes across the wired catalogue (BJK Cup, Davis Cup, the TS tournament/league families, the itftennis family, the rankings family, and the standalone-HTTP sources). Don't reintroduce simulated runs.
 - A `Proxy.address` may embed credentials — **never render the raw `address`**, always use `display_address`; scrapers must never log it. (The masking regex uses a literal bullet char + `\g<1>`/`\g<2>` group refs; a `\u2022` escape in the replacement template raises "bad escape \u".)
 - Keep brand tokens global in `styles.css` `:root`; scope new-page CSS under that page's root class; use the `--app-*` tokens.
 

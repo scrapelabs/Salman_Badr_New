@@ -176,3 +176,9 @@ else:
 # Ioncourt run fails honestly (like a Stadion scraper without its proxy).
 IONCOURT_PHONE = os.environ.get("IONCOURT_PHONE", "")
 IONCOURT_PASSWORD = os.environ.get("IONCOURT_PASSWORD", "")
+
+# The PrestoSports scraper logs into gameday-api.prestosports.com with a
+# username + password. Same rules as Ioncourt: read from the environment, never
+# hard-coded or logged; when unset the PrestoSports run fails honestly.
+PRESTOSPORTS_USERNAME = os.environ.get("PRESTOSPORTS_USERNAME", "")
+PRESTOSPORTS_PASSWORD = os.environ.get("PRESTOSPORTS_PASSWORD", "")
