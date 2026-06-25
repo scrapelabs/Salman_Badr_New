@@ -54,3 +54,25 @@ image→abort), then one live run to confirm the hardened context still solves t
 challenge (M25 Deauville date-range ≈ 70 rows / 0 errors is the known-good smoke).
 patchright needs its Chromium: `pkgs.chromium` (replit.nix) on Replit and
 `patchright install chromium` for local Windows.
+
+# Playwright sync API + Django ORM = SynchronousOnlyOperation (the real-worker trap)
+
+Playwright's **sync** API drives an asyncio event loop in the calling thread. Once
+`sync_playwright().start()` runs, Django's `async_unsafe` guard sees a running loop
+and raises **`SynchronousOnlyOperation`** on *every* ORM call made while the browser
+is open — i.e. the worker's own `log()`/telemetry `RunLogLine` writes that stream the
+live console. So the browser block dies the moment it logs its first line.
+
+**Fix:** set `DJANGO_ALLOW_ASYNC_UNSAFE=1` for the browser's lifetime (set in
+`BrowserClient.__enter__` right before `start()`, restore in `close()`). It's the
+official Django escape hatch and is *safe here* because the browser phase is
+genuinely single-threaded and sequential (no ThreadPoolExecutor — `Scraper.threads`
+does not parallelise phase 2), so there's no concurrent-coroutine ORM hazard.
+
+**Validation gap that hid this (the expensive lesson):** an in-process smoke test
+whose `log` is a no-op / list-append stub **never touches the ORM**, so it passes
+even though the real worker (whose `log` writes a `RunLogLine`) blows up. Any
+browser-backed scraper MUST be validated with a `log` callback that actually issues
+an ORM query (e.g. `Scraper.objects.count()` per line) — or via a real runserver
+run — never a stub. Real-worker confirmation: single-URL M25 Deauville run via the
+runserver → success, 31 rows, 86 ORM-streamed log lines, 0 async errors.

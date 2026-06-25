@@ -33,6 +33,7 @@ an honest error rather than fabricating data.
 """
 
 import json
+import os
 import shutil
 import time
 from urllib.parse import unquote, urljoin, urlsplit
@@ -176,8 +177,16 @@ class BrowserClient:
                 "\U0001f310 HTTP client: patchright Chromium (direct \u2014 no proxy)",
             )
 
-        self._pw = sync_playwright().start()
+        # Playwright's sync API drives an asyncio event loop in this thread, so
+        # Django's async-safety guard rejects every ORM call the scrape makes
+        # while the browser is open (the log/telemetry RunLogLine writes) with
+        # SynchronousOnlyOperation. Our browser phase is genuinely
+        # single-threaded and sequential, so opt the worker out for the
+        # browser's lifetime and restore the prior value on teardown.
+        self._prev_async_unsafe = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
+        os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
         try:
+            self._pw = sync_playwright().start()
             self._browser = self._pw.chromium.launch(**launch_kwargs)
             # service_workers="block": SW-originated requests bypass
             # context.route(), so block SWs to keep the SSRF guard authoritative.
@@ -207,6 +216,13 @@ class BrowserClient:
             except Exception:  # noqa: BLE001 - best-effort teardown
                 pass
         self._page = self._context = self._browser = self._pw = None
+        prev = getattr(self, "_prev_async_unsafe", "__unset__")
+        if prev != "__unset__":
+            if prev is None:
+                os.environ.pop("DJANGO_ALLOW_ASYNC_UNSAFE", None)
+            else:
+                os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = prev
+            self._prev_async_unsafe = "__unset__"
 
     # -- helpers ---------------------------------------------------------
     def _safe(self, url):
