@@ -48,6 +48,8 @@ class ScraperSpec:
     allowed_hosts: tuple = ()          # host allowlist for URL inputs (SSRF guard)
     needs_claude: bool = False         # AI scraper: surface a Claude API key field
     url_required: bool = False         # URL input is mandatory (no date-only mode)
+    needs_login: bool = False          # login scraper: surface username/password fields
+    login_label: str = ""              # label for the login fields (e.g. "USTA TennisLink")
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -309,6 +311,8 @@ SPECS = {
         slug="usta_team_captains",
         input_kind=INPUT_YEAR,
         runner_path="accounts.live_scrapers.usta_team_captains:run",
+        needs_login=True,
+        login_label="USTA TennisLink",
     ),
     # --- College Dual Match (AI) — Claude box-score extraction -----------
     # An AI-core scraper: given a box-score / schedule / Google-Sheet URL, it

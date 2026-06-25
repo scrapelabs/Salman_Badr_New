@@ -381,6 +381,13 @@ def scraper_detail_view(request, slug):
             if registry.spec_for(s.slug).needs_claude and "claude_api_key" in request.POST:
                 s.claude_api_key = (request.POST.get("claude_api_key") or "").strip()
                 update_fields.append("claude_api_key")
+            if registry.spec_for(s.slug).needs_login:
+                if "login_username" in request.POST:
+                    s.login_username = (request.POST.get("login_username") or "").strip()
+                    update_fields.append("login_username")
+                if "login_password" in request.POST:
+                    s.login_password = request.POST.get("login_password") or ""
+                    update_fields.append("login_password")
 
             s.save(update_fields=update_fields)
             messages.success(request, "Scraper settings saved.")
@@ -498,6 +505,8 @@ def scraper_detail_view(request, slug):
         ctx["thread_min"] = Scraper.THREADS_MIN
         ctx["thread_max"] = Scraper.THREADS_MAX
         ctx["needs_claude"] = registry.spec_for(slug).needs_claude
+        ctx["needs_login"] = registry.spec_for(slug).needs_login
+        ctx["login_label"] = registry.spec_for(slug).login_label
 
     return render(request, "scraper_detail.html", ctx)
 

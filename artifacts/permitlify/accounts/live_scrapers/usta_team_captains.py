@@ -39,8 +39,10 @@ is kept as-is, otherwise the whitespace-split name is rendered ``"Last, First"``
 with the final token treated as the surname. The per-captain DB de-dup the source
 used around that AI call is dropped too (no persistence here).
 
-Credentials come from ``settings.USTA_USERNAME`` / ``settings.USTA_PASSWORD``
-(env vars). They are **never** hard-coded or logged; when unset the run fails
+Credentials come from the scraper's per-scraper ``login_username`` /
+``login_password`` (set on the Lab → Settings tab), falling back to
+``settings.USTA_USERNAME`` / ``settings.USTA_PASSWORD`` (env vars) when those are
+blank. They are **never** hard-coded or logged; when neither is set the run fails
 honestly. The championship year is ``run_obj.params["year"]`` (falling back to
 ``date_from.year`` then the current year) and is passed through wherever the
 source used ``rank_year``.
@@ -574,10 +576,18 @@ def run(run_obj, log):
     log("INFO", f"\U0001f3be USTA Team Captains starting \u2014 championship year {year}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
 
-    username = (getattr(settings, "USTA_USERNAME", "") or "").strip()
-    password = getattr(settings, "USTA_PASSWORD", "") or ""
+    username = (getattr(scraper, "login_username", "") or "").strip() or (
+        getattr(settings, "USTA_USERNAME", "") or ""
+    ).strip()
+    password = (getattr(scraper, "login_password", "") or "") or (
+        getattr(settings, "USTA_PASSWORD", "") or ""
+    )
     if not (username and password):
-        msg = "Set USTA_USERNAME and USTA_PASSWORD to run the USTA Team Captains scraper."
+        msg = (
+            "Set USTA credentials to run the USTA Team Captains scraper — add a "
+            "USTA TennisLink username/password in the Settings tab, or set the "
+            "USTA_USERNAME / USTA_PASSWORD environment variables."
+        )
         log("ERROR", f"\U0001f6d1 {msg}")
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED

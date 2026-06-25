@@ -96,6 +96,12 @@ class Scraper(models.Model):
     # secret: rendered in a password input with a reveal toggle, never logged. When
     # blank the runner falls back to settings.CLAUDE_KEYS (env), else fails honestly.
     claude_api_key = models.CharField(max_length=1024, blank=True, default="")
+    # Login credentials for scrapers that authenticate to an upstream portal
+    # (e.g. usta_team_captains -> USTA TennisLink). Stored per scraper; treated as
+    # secrets (password rendered masked with a reveal toggle, never logged). When
+    # blank the runner falls back to the server's env credentials, else fails honestly.
+    login_username = models.CharField(max_length=255, blank=True, default="")
+    login_password = models.CharField(max_length=1024, blank=True, default="")
     # Secret bearer token for the public scheduled-trigger webhook (Schedule tab).
     # Auto-assigned on first save and rotatable from the UI; treat it as a password.
     trigger_token = models.CharField(max_length=128, unique=True, blank=True)

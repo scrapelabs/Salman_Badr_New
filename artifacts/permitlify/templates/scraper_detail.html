@@ -616,6 +616,29 @@
       </div>
       {% endif %}
 
+      {% if needs_login %}
+      <div class="rt-field settings-keyfield">
+        <label class="field-label" for="loginUser">{{ login_label }} username</label>
+        <input class="rt-input" id="loginUser" name="login_username" type="text"
+               value="{{ s.login_username }}" autocomplete="off" spellcheck="false"
+               placeholder="{{ login_label }} username" />
+      </div>
+      <div class="rt-field settings-keyfield">
+        <label class="field-label" for="loginPass">{{ login_label }} password</label>
+        <div class="sch-copyrow">
+          <input class="rt-input sch-secret" id="loginPass" name="login_password" type="password"
+                 value="{{ s.login_password }}" autocomplete="off" spellcheck="false"
+                 placeholder="{{ login_label }} password" />
+          <button class="btn btn-ghost btn-sm settings-reveal" type="button" data-target="#loginPass" aria-pressed="false">Reveal</button>
+        </div>
+        <p class="status-note settings-empty">
+          Required to log in to {{ login_label }}. Stored per scraper; real-time and
+          scheduled runs use it. Leave blank to fall back to the server’s environment
+          credentials. Treated as a secret — never logged.
+        </p>
+      </div>
+      {% endif %}
+
       {% if not proxies %}
       <p class="status-note settings-empty">No proxy pools yet — <a href="{% url 'proxies' %}">add one</a> to route this scraper through it.</p>
       {% endif %}
