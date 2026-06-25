@@ -50,6 +50,7 @@ class ScraperSpec:
     url_required: bool = False         # URL input is mandatory (no date-only mode)
     needs_login: bool = False          # login scraper: surface username/password fields
     login_label: str = ""              # label for the login fields (e.g. "USTA TennisLink")
+    accepts_sheet: bool = False        # URL input may be a Google Sheet of Team/Link rows
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -325,6 +326,7 @@ SPECS = {
         runner_path="accounts.live_scrapers.college_dual_match:run",
         needs_claude=True,
         url_required=True,
+        accepts_sheet=True,
     ),
 }
 

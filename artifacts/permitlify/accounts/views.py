@@ -447,6 +447,7 @@ def scraper_detail_view(request, slug):
         ctx["input_kind"] = spec.input_kind
         ctx["allows_url"] = spec.input_kind == registry.INPUT_DATE_RANGE_OR_URL
         ctx["url_required"] = spec.url_required
+        ctx["accepts_sheet"] = spec.accepts_sheet
         ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
         ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)
         ctx["months"] = MONTHS

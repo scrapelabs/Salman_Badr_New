@@ -104,6 +104,32 @@
           <label class="field-label" for="rtUrl">Tournament URL <span class="rt-opt">(optional)</span></label>
           <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" placeholder="https://…  — leave blank to scrape the date range" {% if s.is_maintenance or active_run %}disabled{% endif %}>
           {% endif %}
+          {% if accepts_sheet %}
+          <div class="rt-help">
+            <p class="rt-help-lead">This scraper accepts <strong>either</strong> input:</p>
+            <ul class="rt-help-list">
+              <li>
+                <strong>A whole Google Sheet</strong> — paste the sheet link
+                (<code>https://docs.google.com/spreadsheets/…</code>) and every row is
+                scraped in one run. The script reads <strong>only the tab named
+                “Main”</strong> (any other tabs are ignored). That tab needs a header row
+                with a <strong>Link</strong> column — each <em>Link</em> is a box-score /
+                schedule page the scraper opens. A <strong>Team</strong> column is
+                optional: it only helps you organise the sheet and is <em>not</em> included
+                in the scraped output.
+              </li>
+              <li>
+                <strong>A single link</strong> — paste one box-score, schedule, or
+                tournament page URL directly (no Google Sheet needed) to scrape just that page.
+              </li>
+            </ul>
+            <p class="rt-help-note">
+              The Google Sheet must be shared as <em>“Anyone with the link can view”</em> so
+              the script can read it. The Claude API key on the <a href="?tab=settings">Settings tab</a>
+              is required for the AI box-score extraction.
+            </p>
+          </div>
+          {% endif %}
         </div>
         {% endif %}
         {% if not url_required %}
