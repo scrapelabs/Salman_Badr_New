@@ -1,0 +1,184 @@
+🚀 Worker online — Run #c1364176 · ITFJ
+[2026-06-25 20:45:21] INFO  🎾 ITF Juniors starting — 2026-05-26 → 2026-06-25
+[2026-06-25 20:45:21] INFO  🧵 Concurrency: 5 worker thread(s)
+[2026-06-25 20:45:21] INFO  🔌 HTTP client: curl_cffi (impersonate chrome, direct — no proxy)
+[2026-06-25 20:45:21] INFO  ──── phase 1 · discovering tournaments ────
+[2026-06-25 20:45:21] INFO     📅 circuit JT: 113 tournament(s), 2 page(s)
+[2026-06-25 20:45:21] INFO     🔎 page 2: 113 so far
+[2026-06-25 20:45:21] INFO  📋 113 tournament(s) discovered
+[2026-06-25 20:45:21] INFO  ──── phase 2 · scraping tournaments ────
+[2026-06-25 20:45:22] INFO     🏆 Singles: Genereux, Antoine def. Dobrovolsky, Timofey [6-3, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:22] INFO     🏆 Singles: Shibani, Nikolai def. Gorgin, Christian [6-4, 6-1;] @ J60 Ystad
+[2026-06-25 20:45:22] INFO     🏆 Singles: Gao, Ruochen def. Sonawane, Rushikesh [7-5, 6-4;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Paparkar, Arnav def. Sik, Mustafa Ege [6-4, 6-2;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Laughlin, Luke def. Saravanan, Harieshwar [6-1, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Repakis, William def. Neacsa, Erik Adrian [6-2, 3-6, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Persson, Love def. Sehested, Marcus [6-3, 1-6, 7-6;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Gaines Jr, Jerrid def. Fays, Nicolas [6-0, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Krishnan, Arjun def. Vujicic, Filip [6-7, 6-0, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Andersson, Melker def. Hansen, Mingus Zack [6-3, 6-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Pickerd-Barua, Niall def. Engkvist, Fabian [6-3, 7-5;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Frunza, Luca def. Ionescu, Rares Andrei [6-2, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Pantaratorn, Kunanan def. Bidan, Georgio [6-4, 6-4;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Woo, Brayden def. Sharkey, Noah Rock [6-2, 6-0;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bratomi, Emiliano def. Andersch, Knut [0-6, 6-2, 6-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Dragomir, Eduard def. Zecheru, Tudor Alexandru [6-1, 6-0;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Chmielewski, Alexander def. Ljubicic, Leonardo [6-4, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bolivar Idarraga, Juan Miguel def. Rusher, Agassi [6-4, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Colburne, Caden def. Basiji, Luke [6-2, 6-3;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Nachev, Boris def. Shriki, Justin [6-1, 6-2;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Watanabe, Kanta def. Berdin, Nikita [6-4, 6-2;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Larsen, Hugo def. Karmteg, Oscar [4-6, 6-2, 6-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Yu, Alden def. Sharma, Adrian [6-2, 6-3;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Kosev, Stanislav def. Popoaca, Paul [6-2, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: OGUNSAKIN, OLUWASEUN PETER def. Put, Stan [6-4, 2-6, 6-4;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Wang, Lucas def. Lallier, Marc-Edouard [6-0;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Mouffe, Louis def. Flores Avila, Luis Andres [6-3, 6-0;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Enache, Stefan-Cristian def. Meacci, Marco [6-3, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: de Cande, Tristan def. Sorensen, Asger [6-3, 6-3;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Arun, Gadin def. Han, Jerry [6-1, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lee, Jordan def. Doig, Connor [2-6, 6-3, 6-4;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: CERCEL, DAVID def. Li, Jiacheng [6-3, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Tchinda Kepche, Andy def. Guo, Ethan Yichen [6-7, 6-0, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Chelemen, Matei Victor def. Bothma, John [6-3, 1-6, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Iliescu, Luca def. Sucu, Matei [6-2, 7-5;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Rogers, Oliver def. Zhong, Jack [6-3, 1-6, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Wennhall, Gabriel def. Freitag, Moritz [4-6, 6-1, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Kawaguchi, Takahiro def. Thies, Christopher [1-6, 7-6, 7-6;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lopez, Mario def. Junqueira, Felipe [6-1, 6-0;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Stoica, Iulius Maximus def. Corrales Chavarria, Gonzalo [6-1, 2-6, 6-0;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Dong, Daniel def. Pranaitis, Arijus [6-1, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bruhn Aaby, Mads def. Demburg, Maximus [6-0, 4-6, 6-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Raghuram, Navneet def. Vandepoele, Nand [6-3, 6-1;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Kaltenecker, William def. Bronner Lesoil, Daniel [6-0, 7-5;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Dorin, Darius def. Mondini, Niccolo [6-2, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Peng, Sean def. Mactaggart, Patrick [6-3, 6-3;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: yao, quincy def. Popa, Matthew [6-1, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Chabalgoity, Pedro Henrique def. Tazabekov, Daniel [6-2, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Ketola, Kaius def. Agnes, Hugo [7-6, 1-6, 7-6;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Sinescu, Jan Patrick def. Marc, Luca Alexandru [6-2, 6-0;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Clavel, Antoine def. Aminu, Oluwajomiloju [6-1, 6-0;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Brand, Dan def. Salbiev, Marat [3-6, 6-4, 7-5;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Mejia, Gerardo def. Aceituno Bethancourt, Gabriel Emilio [6-1, 6-3;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Pansecchi, Francesco def. Ten, Eric [7-6, 6-3;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Berg, Olav def. Manolache, Iancu [5-7, 6-2, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Malik, Aedan def. Mjeda, Andreas [6-3, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bruno, Andre def. Malhotra, Macksimus [1-6, 6-3, 6-1;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Stolarczyk, Kamil def. Grozdev, Sava [6-1, 6-2;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Mitev, Aleksandar def. Crisan, Matei [6-4, 6-2;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Andersson, Linus def. Johnsen, Scott Authen [6-2, 7-5;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lee, Morgan def. Liu, Yichen [6-2, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Andrei, Lucian Stefan def. Pop, Erich Andrei [6-2, 3-1;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Oestergaard, Magnus def. Wennerstad, Oliver [6-3, 6-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Geladaris, Odysseas def. Cho, Min Hyuk [6-4, 4-6, 6-1;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Avendano Contreras, Marco Andres def. Aguiar, Nicolas [6-4, 5-7, 7-6;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Malacek, Daniel def. Penev, Tommy [6-2, 6-4;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Laughlin, Luke def. Genereux, Antoine [6-3, 6-4;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lucaciu, Florin Cristian def. Farkxodov, Saidaslam [6-2, 6-2;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Woo, Brayden def. Krishnan, Arjun [6-0, 6-4;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Worren, Nicolai Eie def. Grennvall, Tim [6-0, 6-0;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Colburne, Caden def. Yu, Alden [6-2, 7-6;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Shibani, Nikolai def. Persson, Love [6-0, 6-3;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Azam, Safir def. Kawanishi, Hyu [6-2, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Arun, Gadin def. Wang, Lucas [6-1, 6-0;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Galasso, Gianluca def. Pulido Topaga, Juan Diego [6-4, 6-3;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Pickerd-Barua, Niall def. Andersson, Melker [6-3, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Paparkar, Arnav def. Gaines Jr, Jerrid [3-6, 6-2, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Tchinda Kepche, Andy def. Rogers, Oliver [6-4, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Radu, Andrei def. Knight, Ollie [6-1, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bratomi, Emiliano def. Chmielewski, Alexander [6-2, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bolivar Idarraga, Juan Miguel def. Pantaratorn, Kunanan [6-1, 6-1;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: yao, quincy def. Dong, Daniel [6-1, 6-4;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Larsen, Hugo def. de Cande, Tristan [3-6, 6-2, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: OGUNSAKIN, OLUWASEUN PETER def. Watanabe, Kanta [6-2, 7-6;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Gama, Rafael def. VASQUEZ SANDOVAL, ANTHONY DAVID [6-0, 6-0;] @ J60 Santa Tecla
+[2026-06-25 20:45:23] INFO     🏆 Singles: Clavel, Antoine def. Malik, Aedan [6-1, 6-3;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Wennhall, Gabriel def. Bruhn Aaby, Mads [7-5, 7-6;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lee, Jordan def. Mouffe, Louis [6-1, 6-0;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Malacek, Daniel def. Lee, Morgan [6-1, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Kaltenecker, William def. Ketola, Kaius [6-2, 6-3;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Chelemen, Matei Victor def. Kawaguchi, Takahiro [6-2, 6-4;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Missoum, Ali def. Repakis, William [6-0, 6-0;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Laughlin, Luke def. Woo, Brayden [7-6, 6-2;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Pansecchi, Francesco def. Andersson, Linus [6-2, 2-6, 6-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Raghuram, Navneet def. Chabalgoity, Pedro Henrique [6-4, 3-6, 6-4;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Arun, Gadin def. Colburne, Caden [7-6, 7-6;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Worren, Nicolai Eie def. Oestergaard, Magnus [6-2, 6-1;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Brand, Dan def. Stolarczyk, Kamil [7-5, 6-2;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: yao, quincy def. Tchinda Kepche, Andy [4-6, 6-1, 6-3;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Shibani, Nikolai def. Pickerd-Barua, Niall [6-3, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Frunza, Luca def. Mitalas, Georgios [6-2, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:23] INFO     🏆 Singles: Geladaris, Odysseas def. Azam, Safir [6-3, 7-5;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Malacek, Daniel def. Clavel, Antoine [6-2, 7-6;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Bratomi, Emiliano def. Larsen, Hugo [6-2, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Paparkar, Arnav def. Bolivar Idarraga, Juan Miguel [2-6, 6-3, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Arun, Gadin def. Laughlin, Luke [2-6, 6-1, 6-3;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Wennhall, Gabriel def. Kaltenecker, William [6-6;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lee, Jordan def. OGUNSAKIN, OLUWASEUN PETER [2-6, 6-1, 6-3;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: yao, quincy def. Malacek, Daniel [6-4, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Worren, Nicolai Eie def. Pansecchi, Francesco [7-5, 6-2;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Chelemen, Matei Victor def. Raghuram, Navneet [7-5, 6-2;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: yao, quincy def. Arun, Gadin [4-6, 6-0, 6-1;] @ J100 Calgary
+[2026-06-25 20:45:23] INFO     🏆 Singles: Shibani, Nikolai def. Bratomi, Emiliano [4-6, 7-5, 5-4;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Brand, Dan def. Geladaris, Odysseas [6-2, 6-0;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Worren, Nicolai Eie def. Wennhall, Gabriel [6-4, 0-6, 6-1;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Lee, Jordan def. Paparkar, Arnav [6-3, 6-4;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Shibani, Nikolai def. Worren, Nicolai Eie [6-0, 7-6;] @ J60 Ystad
+[2026-06-25 20:45:23] INFO     🏆 Singles: Brand, Dan def. Chelemen, Matei Victor [6-4, 6-1;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:23] INFO     🏆 Singles: Brand, Dan def. Lee, Jordan [6-3, 6-2;] @ J300 Charleroi-Marcinelle
+[2026-06-25 20:45:24] INFO     🏆 Singles: Mosolkin, Ilya def. Dragomir, Eduard [6-3, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Prunescu Nita, Luca Stefan def. Nachev, Boris [6-2, 2-0;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Sahita, Samarth def. Kosev, Stanislav [6-2, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Nistad, Peter def. Diaz, Sebastian [6-0, 6-1;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Aiassa, Mattia def. Enache, Stefan-Cristian [2-6, 6-3, 7-6;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Secara, Vlad def. CERCEL, DAVID [6-3, 6-2;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Martini, Gianluigi def. Cariani, Enzo Badotti [6-4, 3-6, 7-5;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Shibaev, Alexey def. Iliescu, Luca [6-0, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gutierrez, Mateo def. Madero, David [3-6, 6-4, 6-4;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Stoica, Iulius Maximus def. Shikov, Kaloyan [2-6, 6-3, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Quintero Tobon, Matias def. Martinez Mendoza, Jose Anibal [6-1, 6-4;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Dorin, Darius def. Popa, David [7-5, 4-6, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Bvunzawabaya, David III def. Carballo, Barack [3-6, 6-2, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Chetverikov, Rodion def. Sinescu, Jan Patrick [6-4, 7-5;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Vasconcellos, Gustavo def. Castellanos, Antonio Carlos [6-1, 6-4;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Skvortcov, Pavel def. Berg, Olav [7-5, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Escarpeta Tovar, Angel Giovanny def. Soto Ochoa, Sebastian [6-0, 6-0;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Asadullin, Rafael def. Mitev, Aleksandar [7-6, 4-6, 6-2;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Moravec, Nicolas def. Jalilov, Bekzod [6-0, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gao, Ruochen def. Lopez, Mario [6-3, 6-3;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Peng, Sean def. Mejia, Gerardo [6-1, 2-0;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Andrei, Lucian Stefan def. Barbalaco, Edoardo [7-5, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Bruno, Andre def. Avendano Contreras, Marco Andres [6-3, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gama, Rafael def. Galasso, Gianluca [7-5, 6-4;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Burac, David Stefan def. Lucaciu, Florin Cristian [6-4, 3-6, 6-2;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Nistad, Peter def. Martini, Gianluigi [6-3, 7-5;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Quintero Tobon, Matias def. Gutierrez, Mateo [6-0, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Radu, Andrei def. Atkinson, Cody [6-3, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Vasconcellos, Gustavo def. Bvunzawabaya, David III [6-3, 6-4;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Missoum, Ali def. Frunza, Luca [6-1, 2-6, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Moravec, Nicolas def. Escarpeta Tovar, Angel Giovanny [6-2, 6-0;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Mosolkin, Ilya def. Prunescu Nita, Luca Stefan [6-4, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gao, Ruochen def. Peng, Sean [6-2, 4-6, 2-1;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Sahita, Samarth def. Aiassa, Mattia [6-1, 4-6, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gama, Rafael def. Bruno, Andre [6-0, 3-0;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Secara, Vlad def. Shibaev, Alexey [6-2, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Nistad, Peter def. Quintero Tobon, Matias [6-4, 1-6, 6-3;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Stoica, Iulius Maximus def. Dorin, Darius [6-2, 5-7, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Moravec, Nicolas def. Vasconcellos, Gustavo [4-6, 6-4, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Skvortcov, Pavel def. Chetverikov, Rodion [6-3, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gama, Rafael def. Gao, Ruochen [6-1, 5-1;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Asadullin, Rafael def. Andrei, Lucian Stefan [6-2, 7-5;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Moravec, Nicolas def. Nistad, Peter [6-1, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Burac, David Stefan def. Radu, Andrei [6-1, 6-0;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Gama, Rafael def. Moravec, Nicolas [6-1, 6-2;] @ J60 Santa Tecla
+[2026-06-25 20:45:24] INFO     🏆 Singles: Missoum, Ali def. Mosolkin, Ilya [6-2, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Secara, Vlad def. Sahita, Samarth [4-6, 7-5, 5-0;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Skvortcov, Pavel def. Stoica, Iulius Maximus [6-4, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Burac, David Stefan def. Asadullin, Rafael [7-6, 7-5;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Missoum, Ali def. Secara, Vlad [7-5, 6-1;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Burac, David Stefan def. Skvortcov, Pavel [2-6, 7-5, 6-3;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO     🏆 Singles: Burac, David Stefan def. Missoum, Ali [6-1, 1-6, 6-4;] @ J100 Bucharest
+[2026-06-25 20:45:24] INFO  ──── summary ────
+[2026-06-25 20:45:24] INFO  💾 Writing 171 row(s) to CSV
+[2026-06-25 20:45:24] INFO  📊 Telemetry: 335 request(s), 0 error(s)
+[2026-06-25 20:45:24] INFO  🏁 Run finished — status=success, rows=171
