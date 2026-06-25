@@ -236,6 +236,8 @@ SPECS = {
         slug="prestosports",
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.prestosports:run",
+        needs_login=True,
+        login_label="PrestoSports",
     ),
     # --- cesky-tenis.cz (Czech national tennis) standalone HTML scraper ----
     # A date-range OR single-tournament-URL scraper; the seed URL is validated

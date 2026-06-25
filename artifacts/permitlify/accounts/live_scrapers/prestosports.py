@@ -519,13 +519,17 @@ def run(run_obj, log):
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
-    username = (getattr(settings, "PRESTOSPORTS_USERNAME", "") or "").strip()
-    password = getattr(settings, "PRESTOSPORTS_PASSWORD", "") or ""
+    username = (getattr(scraper, "login_username", "") or "").strip() or (
+        getattr(settings, "PRESTOSPORTS_USERNAME", "") or ""
+    ).strip()
+    password = (getattr(scraper, "login_password", "") or "") or (
+        getattr(settings, "PRESTOSPORTS_PASSWORD", "") or ""
+    )
     if not (username and password):
         msg = (
-            "PrestoSports credentials missing \u2014 set PRESTOSPORTS_USERNAME and "
-            "PRESTOSPORTS_PASSWORD (Replit secrets, or the local .env) to enable "
-            "this source."
+            "PrestoSports credentials missing \u2014 add the PrestoSports username and "
+            "password on the scraper's Settings tab, or set the PRESTOSPORTS_USERNAME and "
+            "PRESTOSPORTS_PASSWORD environment variables, to enable this source."
         )
         log("ERROR", f"\U0001f6d1 {msg}")
         tele.record_error(msg)
