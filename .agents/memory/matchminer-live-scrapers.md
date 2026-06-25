@@ -13,6 +13,17 @@ seed migration. Ports are **deterministic and AI-free**: the source AI was only
 cosmetic gender/name guessing — gender left blank, names emitted as scraped
 (cleaned of `[seed]`).
 
+**Catalogue is now COMPLETE at 37 wired runners** (37 SPECs with a runner_path == 37
+seeded `Scraper` rows). The last batch added the 4 originally-"HARD" sources as real
+deterministic ports (no fabrication): **australia_tennis** (Azure Blob via a SAS URL,
+`AUSTRALIA_TENNIS_SAS_URL`, 61-col), **poland_results** (portal.pzt.pl ASP.NET
+WebForms, 61-col, no creds — open site, works direct), **usta_team_captains**
+(TennisLink login `USTA_USERNAME`/`USTA_PASSWORD`, bespoke 15-col; the source's AI
+name-split replaced by a deterministic "Last, First" parser), **college_dual_match**
+(AI-CORE: real Claude extraction via `CLAUDE_KEYS` list + `OPENAI_API_KEY`, bespoke
+23-col, prompt in `college_dual_match_prompt.txt`). All creds are `getattr`-read from
+settings and **honest-fail** when unset (like ioncourt/prestosports/BJK-proxy).
+
 Engines (all over the shared `_http.ScraperClient` + `telemetry.py`):
 - **`_stadion.py`** — ITF/Stadion JSON API (`api.itf-production.sports-data.stadion.io`),
   `StadionConfig(draw_code, …)`. Wrappers: Billie Jean King Cup (`bjkc`), Davis Cup
@@ -59,6 +70,21 @@ Source quirks worth remembering:
   SPEC (input_kind + allowed_hosts for URL inputs = SSRF guard), add an idempotent
   `get_or_create` seed migration, `migrate`, then validate with a bounded in-process
   smoke (see `verifying-background-scrape-runs`).
+- **SSRF is enforced centrally in `_http.ScraperClient.request()`**, not just at the
+  view layer. The client validates the **initial** target URL (not only redirect hops)
+  via `assert_safe_url(url, allowed_hosts=self.allowed_hosts)` — http(s) only, no
+  local/`.internal`/`.local` names, must resolve to a PUBLIC IP, optional host
+  allowlist. A blocked URL is an honest fail (logs a redacted WARN + records an error
+  CSV row + returns `None`), never an exception. **Why:** scrapers that discover
+  second-stage links from external content (college_dual_match → Google Sheets /
+  schedule pages / box-score PDFs) never pass through the view's `validate_run_params`
+  guard, so without central validation a malicious sheet could point the fetcher at
+  `169.254.169.254` / `127.0.0.1` / numeric-obfuscated loopback. Pass `allowed_hosts`
+  to the client when inputs are URL-driven; leave it `None` to allow any public host.
+- When resolving relative links discovered on a page, urljoin against the **full page
+  URL** (`urljoin(current_page_url, href)`), never `scheme://host` — otherwise a
+  relative href like `box.html` under `/teams/x/schedule/` silently flattens to the
+  site root and the crawler under-collects (was a college_dual_match bug).
 - Adding a **brand-new `input_kind`** (the start-form shape) touches ~7 spots in
   lockstep — miss one and the form/webhook/schedule silently desync: in
   `registry.py` (the constant + INPUT_KINDS set + the per-SPEC `input_kind`), and in

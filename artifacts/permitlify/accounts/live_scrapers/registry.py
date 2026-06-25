@@ -280,6 +280,44 @@ SPECS = {
         input_kind=INPUT_RANK_SNAPSHOT,
         runner_path="accounts.live_scrapers.padelfip:run",
     ),
+    # --- Tennis Australia (Azure Blob match feed) -------------------------
+    # Date-range scraper reading match JSON from an Azure Blob container via a
+    # SAS URL (settings.AUSTRALIA_TENNIS_SAS_URL — a credential). No URL input
+    # / host allowlist: it only calls its own SAS-signed container. Without the
+    # SAS URL the run fails honestly, like the Stadion scrapers without a proxy.
+    "australia_tennis": ScraperSpec(
+        slug="australia_tennis",
+        input_kind=INPUT_DATE_RANGE,
+        runner_path="accounts.live_scrapers.australia_tennis:run",
+    ),
+    # --- Polish Tennis (PZT) results — portal.pzt.pl ASP.NET HTML ---------
+    # Date-range OR a single tournament URL; the seed URL is validated against
+    # the portal.pzt.pl allowlist at the view layer. Fully deterministic.
+    "poland_results": ScraperSpec(
+        slug="poland_results",
+        input_kind=INPUT_DATE_RANGE_OR_URL,
+        runner_path="accounts.live_scrapers.poland_results:run",
+        allowed_hosts=("portal.pzt.pl",),
+    ),
+    # --- USTA League Team Captains (tennislink.usta.com) ------------------
+    # A championship-year scraper (INPUT_YEAR) that logs into USTA TennisLink
+    # (settings.USTA_USERNAME / USTA_PASSWORD) and walks the team rosters.
+    # Bespoke 15-column captains schema. Without credentials it fails honestly.
+    "usta_team_captains": ScraperSpec(
+        slug="usta_team_captains",
+        input_kind=INPUT_YEAR,
+        runner_path="accounts.live_scrapers.usta_team_captains:run",
+    ),
+    # --- College Dual Match (AI) — Claude box-score extraction -----------
+    # An AI-core scraper: given a box-score / schedule / Google-Sheet URL, it
+    # extracts matches with Anthropic Claude (settings.CLAUDE_KEYS). URL input
+    # with an open allowlist (arbitrary athletics sites); the view still applies
+    # the SSRF public-IP guard. Without Claude keys the run fails honestly.
+    "college_dual_match": ScraperSpec(
+        slug="college_dual_match",
+        input_kind=INPUT_DATE_RANGE_OR_URL,
+        runner_path="accounts.live_scrapers.college_dual_match:run",
+    ),
 }
 
 # Used for slugs without a registry entry so the UI / validation degrade

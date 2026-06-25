@@ -336,6 +336,27 @@ class ScraperClient:
         redirects_left = self.max_redirects
         last_exc = None
         try:
+            # Validate the INITIAL target too, not just redirect hops. A scraper
+            # may fetch URLs it discovered from external content (Google Sheets,
+            # schedule pages, PDF/box-score links) that never passed through the
+            # view's validate_run_params SSRF guard. Same rules as redirects:
+            # http(s) only, no local names, must resolve to a public IP (with the
+            # optional host allowlist). This makes the public-IP guard apply to
+            # every request the client issues, closing second-stage SSRF.
+            try:
+                assert_safe_url(current_url, allowed_hosts=self.allowed_hosts)
+            except UnsafeUrlError as exc:
+                self.log(
+                    "WARN",
+                    redact_secrets(
+                        f"\U0001f6e1\ufe0f blocked unsafe URL "
+                        f"{current_url}: {exc}"
+                    ),
+                )
+                self.tele.record_error(
+                    redact_secrets(f"Unsafe URL blocked for {current_url}: {exc}")
+                )
+                return None
             while True:
                 resp, last_exc = self._fetch_one(
                     cur_method, current_url, merged=merged, params=cur_params,

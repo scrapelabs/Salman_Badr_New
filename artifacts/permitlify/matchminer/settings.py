@@ -182,3 +182,29 @@ IONCOURT_PASSWORD = os.environ.get("IONCOURT_PASSWORD", "")
 # hard-coded or logged; when unset the PrestoSports run fails honestly.
 PRESTOSPORTS_USERNAME = os.environ.get("PRESTOSPORTS_USERNAME", "")
 PRESTOSPORTS_PASSWORD = os.environ.get("PRESTOSPORTS_PASSWORD", "")
+
+# The Australia Tennis scraper reads match JSON from an Azure Blob container via
+# a SAS URL (a credential: it embeds a signature). Read from the environment,
+# never hard-coded or logged; when unset the run fails honestly.
+AUSTRALIA_TENNIS_SAS_URL = os.environ.get("AUSTRALIA_TENNIS_SAS_URL", "")
+
+# The USTA Team Captains scraper logs into tennislink.usta.com with a USTA
+# account email + password. Same rules: read from the environment, never
+# hard-coded or logged; when unset the run fails honestly.
+USTA_USERNAME = os.environ.get("USTA_USERNAME", "")
+USTA_PASSWORD = os.environ.get("USTA_PASSWORD", "")
+
+# The College Dual Match (AI) scraper extracts matches from box-score PDFs/HTML
+# with Anthropic Claude. Keys come from the environment as a comma-separated
+# list (CLAUDE_KEYS) and/or a single ANTHROPIC_API_KEY; the worker rotates
+# across them. When none are set the run fails honestly. OPENAI_API_KEY is an
+# optional fallback used only to recover a missing tournament date.
+CLAUDE_KEYS = [
+    k.strip()
+    for k in (
+        os.environ.get("CLAUDE_KEYS", "").split(",")
+        + [os.environ.get("ANTHROPIC_API_KEY", "")]
+    )
+    if k.strip()
+]
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")

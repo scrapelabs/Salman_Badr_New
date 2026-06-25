@@ -12,9 +12,19 @@ tournament URL. Two layers guard against SSRF, both centralised in
 1. **Seed validation** (`views._validate_tournament_url`) — scheme http(s), reject IP
    literals + local names, enforce the per-spec host allowlist, AND resolve the host and
    reject any private/loopback/link-local/reserved/multicast result.
-2. **Redirect validation** (`_http.ScraperClient`) — the client sets `allow_redirects=False`
-   and follows redirects **manually**, re-validating each hop with `assert_safe_url` (public-IP
-   only; no allowlist) before fetching it. 301/302/303 drop to a bodyless GET; 307/308 preserve.
+2. **Client validation (initial URL + every redirect hop)** (`_http.ScraperClient.request()`) —
+   the client validates the **initial** target URL too, not only redirects, via
+   `assert_safe_url(url, allowed_hosts=self.allowed_hosts)`. It sets `allow_redirects=False`
+   and follows redirects **manually**, re-validating each hop with `assert_safe_url` before
+   fetching it. 301/302/303 drop to a bodyless GET; 307/308 preserve. A blocked URL is an
+   honest fail (redacted WARN log + errors-CSV row + returns `None`), never an exception.
+
+   **Why the initial URL too:** the seed view-layer guard only covers URLs the *user* supplies.
+   Scrapers that **discover second-stage links** from external content (e.g.
+   `college_dual_match` → Google Sheets / schedule pages / box-score PDFs) fetch URLs that never
+   passed through `validate_run_params`. Centralising validation in `request()` makes the
+   public-IP guard apply to **every** request the client issues, closing that hole in one place.
+   Pass `allowed_hosts` to the client for URL-input scrapers; leave `None` to allow any public host.
 
 **Why:** validating only the seed is a hole — an allowlisted host can serve a 30x to
 `169.254.169.254` / `127.0.0.1` / a private IP, and `curl_cffi` follows redirects by default,
