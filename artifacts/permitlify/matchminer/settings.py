@@ -168,3 +168,11 @@ else:
     SESSION_COOKIE_SAMESITE = "None"
     CSRF_COOKIE_SECURE = True
     CSRF_COOKIE_SAMESITE = "None"
+
+# --- Scraper credentials ---------------------------------------------------
+# The Ioncourt scraper authenticates against api.ioncourt.com with a phone +
+# password. These are read from the environment (Replit secrets in the hosted
+# app, or the local .env) and are NEVER hard-coded or logged. When unset, the
+# Ioncourt run fails honestly (like a Stadion scraper without its proxy).
+IONCOURT_PHONE = os.environ.get("IONCOURT_PHONE", "")
+IONCOURT_PASSWORD = os.environ.get("IONCOURT_PASSWORD", "")

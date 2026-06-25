@@ -22,5 +22,10 @@ Trigger the run through the **already-running `runserver` workflow** over HTTP. 
 ## Cleanup
 A worker killed mid-run leaves an orphaned `RUNNING` row that blocks the next run until `_reap_stale_runs` reaps it (20 min). Delete such debris rows (or wait for the reaper) before launching a fresh run.
 
+## Bounded in-process smoke harness (validating an engine fast)
+For wiring/porting work it's enough to exercise the engine's real code path on a *tiny* slice rather than a full run. Pattern that fits the bash ceiling: in `manage.py shell <`, build a `ScraperClient(log, tele=Telemetry(), proxies=None)` and call the engine's internal discover → enumerate → parse helpers on **one** unit of work. Two gotchas that each cost a wasted timeout:
+- **Buffering:** `manage.py shell < file` runs non-interactively, so stdout is *block-buffered* — if a `timeout` kills it, you get **zero** output even for work that finished. Run with `PYTHONUNBUFFERED=1` and `sys.stdout.flush()` after each print so partial progress survives.
+- **Bound the fan-out:** don't call a whole-competition enumerator (e.g. league `_enumerate_tournament` walks *every* draw-group → dozens of requests). Enumerate just the **first** draw-group / first tie, take the first parseable match, print one row, return. tournamentsoftware.com + tennisassa.fi work **direct (no proxy)**; Stadion (BJK/Davis) still need the residential proxy.
+
 ## Validating code that runs *after* a scrape finishes
 For a synchronous CLI run (e.g. the `scrape_now` management command, which runs the worker in-process via `call_command`), the bash-timeout trap still bites: a real Brazil/Croatia scrape (33+ tournaments) outruns the ~120s ceiling, so the foreground call is killed before the run's final-save / file-export code executes. Don't keep retrying full runs to test post-completion code. Instead exercise that code **directly against an already-completed `Run` row** — e.g. `Command()._write_outputs(dir, slug, completed_run)` against a prior `status=success` run with populated `csv_data`. That deterministically validates the post-run path in seconds without any network scrape.

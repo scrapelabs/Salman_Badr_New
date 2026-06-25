@@ -8,6 +8,7 @@
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
 - [MatchMiner live scrapers](matchminer-live-scrapers.md) — catalogue trimmed to ONLY BJK Cup (Davis Cup removed, re-addable via parameterised _stadion); unwired slugs fail honestly.
+- [Porting source scrapers](scraper-porting-pitfalls.md) — probe the live API for real field/join keys (sources have bugs), drop cosmetic AI, env-creds + honest-fail, in-process validation injecting gitignored creds, reuse brazil's 61-col schema.
 - [Django on a Replit artifact](django-on-replit-artifact.md) — running Python/Django in a Node-only `web` artifact: proxy/iframe, artifact.toml, and workflow-cwd gotchas.
 - [Scraper SSRF + dedup rules](scraper-ssrf-and-dedup.md) — URL-input scrapers must re-validate every redirect hop (not just the seed) via _ssrf; dedup keys must include source identity or rematches get dropped.
 - [Confirm dialog convention](confirm-dialog-convention.md) — global #mmConfirm modal in app_base.html; destructive forms opt in via data-confirm attrs; never native confirm().

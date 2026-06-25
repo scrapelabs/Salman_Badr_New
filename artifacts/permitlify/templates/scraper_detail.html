@@ -109,6 +109,11 @@
           <label class="field-label" for="rtTo">To</label>
           <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
         </div>
+        {% elif input_kind == 'rank_snapshot' %}
+        <div class="rt-field">
+          <label class="field-label" for="rtSnap">Ranking date</label>
+          <input class="rt-input" id="rtSnap" name="snapshot_date" type="date" value="{{ default_snapshot_date }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+        </div>
         {% else %}
         <div class="rt-field">
           <label class="field-label" for="rtYear">Season year</label>

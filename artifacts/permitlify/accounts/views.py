@@ -274,6 +274,11 @@ def scraper_detail_view(request, slug):
         ctx["default_date_from"] = (
             today - timedelta(days=DEFAULT_RANGE_DAYS)
         ).isoformat()
+        # Rankings publish weekly on Mondays, so default the snapshot picker to
+        # the most recent Monday rather than an arbitrary mid-week day.
+        ctx["default_snapshot_date"] = (
+            today - timedelta(days=today.weekday())
+        ).isoformat()
     elif tab == "calls":
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
@@ -290,6 +295,7 @@ def scraper_detail_view(request, slug):
             "month": 0,
             "date_from": (today - timedelta(days=DEFAULT_RANGE_DAYS)).isoformat(),
             "date_to": today.isoformat(),
+            "snapshot_date": (today - timedelta(days=today.weekday())).isoformat(),
         }
         secret_name = (
             "MATCHMINER_"
@@ -474,6 +480,18 @@ def validate_run_params(spec, data, *, webhook=False):
             date_from=date(year, 1, 1),
             date_to=date(year, 12, 31),
             tournament=f"{year} · all months",
+        )
+
+    if kind == registry.INPUT_RANK_SNAPSHOT:
+        if webhook and not (get("snapshot_date") or "").strip():
+            snap = timezone.localdate()
+        else:
+            snap = _parse_iso_date(get("snapshot_date"), "snapshot")
+        return RunInputs(
+            params={"single_date": snap.isoformat()},
+            date_from=snap,
+            date_to=snap,
+            tournament=f"ranking @ {snap.isoformat()}",
         )
 
     if kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
@@ -670,6 +688,8 @@ def _trigger_example_json(input_kind, defaults):
             defaults["date_from"],
             defaults["date_to"],
         )
+    if input_kind == registry.INPUT_RANK_SNAPSHOT:
+        return '{"snapshot_date":"%s"}' % defaults["snapshot_date"]
     return '{"year":"%s"}' % defaults["year"]
 
 
@@ -717,6 +737,20 @@ def _github_workflow_yaml(*, code, trigger_url, secret_name, input_kind, default
             f"          DATE_TO: ${{{{ github.event.inputs.date_to || '{dt}' }}}}\n"
         )
         data = '{\\"date_from\\":\\"$DATE_FROM\\",\\"date_to\\":\\"$DATE_TO\\"}'
+    elif input_kind == registry.INPUT_RANK_SNAPSHOT:
+        ds = defaults["snapshot_date"]
+        inputs = (
+            f"    inputs:\n"
+            f"      snapshot_date:\n"
+            f'        description: "Ranking snapshot date (YYYY-MM-DD)"\n'
+            f"        required: false\n"
+            f'        default: "{ds}"\n'
+        )
+        env = (
+            f"          SNAPSHOT_DATE: "
+            f"${{{{ github.event.inputs.snapshot_date || '{ds}' }}}}\n"
+        )
+        data = '{\\"snapshot_date\\":\\"$SNAPSHOT_DATE\\"}'
     else:  # INPUT_YEAR
         dy = defaults["year"]
         inputs = (
