@@ -1162,6 +1162,7 @@ def run_events_view(request, slug, run_uuid):
             "progress_done": run.progress_done,
             "progress_total": run.progress_total,
             "progress_percent": run.progress_percent,
+            "eta_label": run.eta_label,
             "size_label": run.size_label,
             "duration_label": run.duration_label,
             "has_csv": run.has_csv,

@@ -345,7 +345,9 @@
         progFill.style.width = pct + '%';
         progBar.setAttribute('aria-valuenow', pct);
         progPhase.textContent = 'Scraping ties';
-        progCount.textContent = d.progress_done + ' / ' + d.progress_total + ' ties · ' + pct + '%';
+        var txt = d.progress_done + ' / ' + d.progress_total + ' ties · ' + pct + '%';
+        if (d.eta_label) { txt += ' · ' + d.eta_label; }
+        progCount.textContent = txt;
       } else {
         progBar.classList.add('is-indeterminate');
         progFill.style.width = '';

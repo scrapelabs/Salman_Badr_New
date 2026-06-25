@@ -258,6 +258,55 @@ class Run(models.Model):
             return min(100, round(self.progress_done / self.progress_total * 100))
         return 0
 
+    def eta_seconds(self, now=None):
+        """Estimated seconds remaining for a *running* run, or ``None`` when it
+        cannot yet be estimated (not running, total unknown, or nothing done).
+
+        Uses the cumulative average completion rate ``progress_done / elapsed``
+        rather than an instantaneous rate: scrapers process their work units
+        (ties / tournaments / matches) concurrently in a thread pool, so the
+        running average is far steadier than a momentary one. ``elapsed`` is
+        measured from ``started_at`` (it therefore folds in the short discovery
+        phase, which makes the estimate slightly conservative — the safe
+        direction for "when should I check back?").
+        """
+        if self.status != self.Status.RUNNING:
+            return None
+        if not (self.progress_total and self.progress_done):
+            return None
+        started = self.started_at
+        if started is None:
+            return None
+        now = now or timezone.now()
+        elapsed = (now - started).total_seconds()
+        if elapsed <= 0:
+            return None
+        remaining = self.progress_total - self.progress_done
+        if remaining <= 0:
+            return 0.0
+        rate = self.progress_done / elapsed  # work units per second
+        if rate <= 0:
+            return None
+        return remaining / rate
+
+    @property
+    def eta_label(self):
+        """Human ``~Xm Ys left`` estimate for the live progress bar (blank when
+        not yet computable)."""
+        secs = self.eta_seconds()
+        if secs is None:
+            return ""
+        if secs <= 0:
+            return "finishing…"
+        secs = int(round(secs))
+        if secs < 60:
+            return f"~{max(secs, 1)}s left"
+        minutes, s = divmod(secs, 60)
+        if minutes < 60:
+            return f"~{minutes}m {s:02d}s left"
+        hours, m = divmod(minutes, 60)
+        return f"~{hours}h {m:02d}m left"
+
     @property
     def has_csv(self):
         return bool(self.csv_data)
