@@ -86,7 +86,7 @@ Django's built-in auth. Seeded login: username `salman` (password set out-of-ban
 
 ## Legacy / cleanup
 
-`artifacts/api-server/` (Express) and `lib/api-spec/` are unused by MatchMiner (Django replaced them) but remain in the repo; api-server's workflow still runs. The old Express `users`/`session` Postgres tables are unused too (Django uses `auth_user`/`django_session`). Removable on request.
+The old React+Vite frontend and Express API stack has been **removed**: `artifacts/api-server/` (Express) plus the `lib/api-spec`, `lib/api-client-react`, `lib/api-zod`, and `lib/db` (Drizzle ORM) workspace packages are gone, along with the api-server artifact/workflow and the now-empty root `tsconfig.json` `references`. MatchMiner is Django-only (`artifacts/permitlify`); the canvas design tool (`artifacts/mockup-sandbox`) is unrelated infrastructure and stays. The old Express `users`/`session` Postgres tables are still unused (Django uses `auth_user`/`django_session`) and can be dropped from the DB on request.
 
 ## User preferences
 

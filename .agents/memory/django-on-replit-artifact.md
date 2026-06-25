@@ -32,6 +32,14 @@ The preview embeds the app in a cross-origin iframe behind a TLS-terminating pat
 - `CSRF_TRUSTED_ORIGINS` must include the Replit wildcard domains (`https://*.replit.dev`, `.replit.app`, `.riker.replit.dev`, …) plus `REPLIT_DOMAINS`.
 - `ALLOWED_HOSTS = ["*"]` (proxy forwards arbitrary Host).
 
+## Removing an artifact + its workflow
+
+`removeWorkflow` **fails on an artifact-managed workflow** (`PROHIBITED_ACTION ... managed by an
+artifact and cannot be deleted`). To delete an artifact and its workflow, just `rm -rf` the
+artifact directory — the framework auto-deregisters the artifact and removes its workflow.
+After deleting workspace packages, run `pnpm install` to prune the lockfile and clear any
+`tsconfig.json` `references` that point at the removed `lib/*` packages, then `pnpm run typecheck`.
+
 ## Testing auth
 
 Because the cookies are `Secure`, `curl` will **not** send them over plain `http://localhost:80`.
