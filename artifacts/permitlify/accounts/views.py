@@ -190,7 +190,7 @@ def _run_brief(run):
         "rows": run.row_count,
         "duration_label": run.duration_label,
         "log_url": reverse("run_log", args=[run.scraper.slug, run.uuid]),
-        "detail_url": reverse("scraper_detail", args=[run.scraper.slug]),
+        "detail_url": f"{reverse('scraper_detail', args=[run.scraper.slug])}?tab=real-time",
     }
 
 

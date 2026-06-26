@@ -91,7 +91,7 @@
 
     function rowHtml(r) {
       return (
-        '<tr data-href="' + esc(r.log_url) + '">' +
+        '<tr data-href="' + esc(r.detail_url) + '">' +
           '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
             '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
           '<td><span class="run-badge run-st-' + esc(r.state) + '">' + esc(r.status_label) + "</span></td>" +
