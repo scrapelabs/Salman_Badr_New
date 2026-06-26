@@ -451,7 +451,10 @@ def scraper_detail_view(request, slug):
     ctx = _app_ctx("scrapers", s=s, tab=tab, tab_label=TAB_LABELS[tab])
 
     if tab == "real-time":
-        _reap_stale_runs(s)
+        # Reap dead runs across ALL scrapers so the browser-exclusivity check
+        # below reflects reality (a crashed browser run elsewhere mustn't keep
+        # every other source's start button disabled forever).
+        _reap_stale_runs()
         active_run = (
             s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
         )
@@ -479,6 +482,15 @@ def scraper_detail_view(request, slug):
             ctx["log_page"] = paginator.get_page(request.GET.get("logpage"))
             ctx["log_total"] = len(log_lines)
         spec = registry.spec_for(slug)
+        # Mirror the backend browser-exclusivity guard in the UI: while a
+        # browser-based source (itftennis family) is RUNNING no other source may
+        # start, and a browser source can't start while ANY other run is live.
+        # Disable the start controls so the button isn't clickable into a 409.
+        blocker, this_uses_browser = _exclusivity_blocker(s)
+        ctx["exclusivity_blocker"] = blocker
+        ctx["start_disabled"] = bool(s.is_maintenance or active_run or blocker)
+        if blocker is not None:
+            ctx["start_block_msg"] = _exclusivity_block_msg(blocker, this_uses_browser)
         current_year = timezone.localdate().year
         today = timezone.localdate()
         ctx["input_kind"] = spec.input_kind
@@ -550,6 +562,67 @@ def scraper_detail_view(request, slug):
         ctx["secret_env_var"] = registry.spec_for(slug).secret_env_var
 
     return render(request, "scraper_detail.html", ctx)
+
+
+def _exclusivity_blocker(scraper):
+    """A RUNNING run on another scraper that blocks ``scraper`` from starting
+    under the browser-exclusivity rule, or ``None``.
+
+    Mirrors the guard in :func:`_create_guarded_run` so the Lab UI can disable the
+    start controls in lockstep: a browser source (the itftennis family) can't
+    start while ANY other run is live, and no source can start while a browser run
+    is live. Returns ``(blocker_run_or_None, this_uses_browser)``.
+    """
+    spec = registry.spec_for(scraper.slug)
+    this_uses_browser = bool(spec and spec.uses_browser)
+    others = (
+        Run.objects.filter(status=Run.Status.RUNNING)
+        .exclude(scraper=scraper)
+        .select_related("scraper")
+    )
+    if this_uses_browser:
+        return others.first(), this_uses_browser
+    for other in others:
+        ospec = registry.spec_for(other.scraper.slug)
+        if ospec and ospec.uses_browser:
+            return other, this_uses_browser
+    return None, this_uses_browser
+
+
+def _exclusivity_block_msg(blocker, this_uses_browser):
+    """Human explanation for why the start controls are disabled right now."""
+    if this_uses_browser:
+        return (
+            "This is a browser-based source and needs the server to itself, but "
+            f"“{blocker.scraper.name}” is running. Start is disabled until it finishes."
+        )
+    return (
+        f"A browser-based scrape (“{blocker.scraper.name}”) is running and needs the "
+        "server to itself. Start is disabled until it finishes."
+    )
+
+
+@login_required
+@require_http_methods(["GET"])
+def scraper_start_status_view(request, slug):
+    """JSON poll for the real-time tab: is this scraper's start blocked right now?
+
+    Lets an open Lab page disable/re-enable its start controls live as browser
+    runs elsewhere come and go — without a full page reload.
+    """
+    s = get_object_or_404(Scraper, slug=slug)
+    _reap_stale_runs()
+    blocker, this_uses_browser = _exclusivity_blocker(s)
+    return JsonResponse(
+        {
+            "own_running": s.runs.filter(status=Run.Status.RUNNING).exists(),
+            "blocked": blocker is not None,
+            "block_msg": (
+                _exclusivity_block_msg(blocker, this_uses_browser) if blocker else None
+            ),
+            "maintenance": s.is_maintenance,
+        }
+    )
 
 
 class RunStartError(Exception):

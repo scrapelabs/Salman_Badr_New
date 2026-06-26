@@ -10,6 +10,11 @@ urlpatterns = [
     path("scrapers/<slug:slug>/", views.scraper_detail_view, name="scraper_detail"),
     path("scrapers/<slug:slug>/run/", views.scraper_run_view, name="scraper_run"),
     path(
+        "scrapers/<slug:slug>/start-status/",
+        views.scraper_start_status_view,
+        name="scraper_start_status",
+    ),
+    path(
         "scrapers/<slug:slug>/runs/<uuid:run_uuid>/log/",
         views.run_log_view,
         name="run_log",

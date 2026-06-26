@@ -79,7 +79,7 @@
         {% if input_kind == 'year_month' %}
         <div class="rt-field">
           <label class="field-label" for="rtYear">Season year</label>
-          <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <select class="rt-input" id="rtYear" name="year" {% if start_disabled %}disabled{% endif %}>
             {% for y in years %}
             <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
@@ -87,7 +87,7 @@
         </div>
         <div class="rt-field">
           <label class="field-label" for="rtMonth">Month</label>
-          <select class="rt-input" id="rtMonth" name="month" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <select class="rt-input" id="rtMonth" name="month" {% if start_disabled %}disabled{% endif %}>
             <option value="0" {% if default_month == 0 %}selected{% endif %}>All months</option>
             {% for m_val, m_label in months %}
             <option value="{{ m_val }}" {% if m_val == default_month %}selected{% endif %}>{{ m_label }}</option>
@@ -99,10 +99,10 @@
         <div class="rt-field rt-field-wide">
           {% if url_required %}
           <label class="field-label" for="rtUrl">Google Sheet / tournament URL <span class="rt-req">(required)</span></label>
-          <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" required placeholder="https://docs.google.com/spreadsheets/d/…  (sheet of Team / Link rows)" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" required placeholder="https://docs.google.com/spreadsheets/d/…  (sheet of Team / Link rows)" {% if start_disabled %}disabled{% endif %}>
           {% else %}
           <label class="field-label" for="rtUrl">Tournament URL <span class="rt-opt">(optional)</span></label>
-          <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" placeholder="https://…  — leave blank to scrape the date range" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" placeholder="https://…  — leave blank to scrape the date range" {% if start_disabled %}disabled{% endif %}>
           {% endif %}
           {% if accepts_sheet %}
           <div class="rt-help">
@@ -135,39 +135,91 @@
         {% if not url_required %}
         <div class="rt-field">
           <label class="field-label" for="rtFrom">From</label>
-          <input class="rt-input" id="rtFrom" name="date_from" type="date" value="{{ default_date_from }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <input class="rt-input" id="rtFrom" name="date_from" type="date" value="{{ default_date_from }}" {% if start_disabled %}disabled{% endif %}>
         </div>
         <div class="rt-field">
           <label class="field-label" for="rtTo">To</label>
-          <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if start_disabled %}disabled{% endif %}>
         </div>
         {% endif %}
         {% elif input_kind == 'rank_snapshot' %}
         <div class="rt-field">
           <label class="field-label" for="rtSnap">Ranking date</label>
-          <input class="rt-input" id="rtSnap" name="snapshot_date" type="date" value="{{ default_snapshot_date }}" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <input class="rt-input" id="rtSnap" name="snapshot_date" type="date" value="{{ default_snapshot_date }}" {% if start_disabled %}disabled{% endif %}>
         </div>
         {% else %}
         <div class="rt-field">
           <label class="field-label" for="rtYear">Season year</label>
-          <select class="rt-input" id="rtYear" name="year" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+          <select class="rt-input" id="rtYear" name="year" {% if start_disabled %}disabled{% endif %}>
             {% for y in years %}
             <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
         </div>
         {% endif %}
-        <button class="btn btn-primary rt-start-btn" type="submit" id="rtStartBtn" {% if s.is_maintenance or active_run %}disabled{% endif %}>
+        <button class="btn btn-primary rt-start-btn" type="submit" id="rtStartBtn" {% if start_disabled %}disabled{% endif %}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
           Run scrape
         </button>
       </div>
-      <p class="rt-start-note {% if s.is_maintenance %}is-warn{% elif active_run %}is-info{% else %}is-ready{% endif %}" id="rtStartNote">
+      <p class="rt-start-note {% if s.is_maintenance %}is-warn{% elif active_run %}is-info{% elif exclusivity_blocker %}is-info{% else %}is-ready{% endif %}" id="rtStartNote">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        <span id="rtStartNoteText">{% if s.is_maintenance %}Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.{% elif active_run %}A run is in progress — stop it or wait for it to finish before starting another.{% else %}The run starts immediately and streams its log in the console below.{% endif %}</span>
+        <span id="rtStartNoteText">{% if s.is_maintenance %}Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.{% elif active_run %}A run is in progress — stop it or wait for it to finish before starting another.{% elif exclusivity_blocker %}{{ start_block_msg }}{% else %}The run starts immediately and streams its log in the console below.{% endif %}</span>
       </p>
     </div>
   </form>
+
+  {% if not active_run and not s.is_maintenance %}
+  {# Live exclusivity poll: a browser-based source (itftennis family) needs the
+     server to itself, so while one is RUNNING every other source's start button
+     is disabled — and re-enabled the moment that run stops or finishes, without
+     a manual refresh. Mirrors the backend guard so the button never sits clickable
+     into a guaranteed 409. #}
+  <script>
+  (function () {
+    var btn = document.getElementById('rtStartBtn');
+    var form = document.querySelector('.rt-start');
+    var note = document.getElementById('rtStartNote');
+    var noteText = document.getElementById('rtStartNoteText');
+    if (!btn || !form) return;
+    var inputs = form.querySelectorAll('.rt-input');
+    var url = "{% url 'scraper_start_status' s.slug %}";
+    var READY = 'The run starts immediately and streams its log in the console below.';
+    var MAINT = 'Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.';
+    function setNote(kind, text) {
+      if (note) note.className = 'rt-start-note is-' + kind;
+      if (noteText) noteText.textContent = text;
+    }
+    function setDisabled(d) {
+      btn.disabled = d;
+      for (var i = 0; i < inputs.length; i++) inputs[i].disabled = d;
+    }
+    function tick() {
+      fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          // This scraper was started from elsewhere — reload to attach the live
+          // console + stop controls.
+          if (d.own_running) { window.location.reload(); return; }
+          if (d.maintenance) {
+            setDisabled(true);
+            setNote('warn', MAINT);
+          } else if (d.blocked) {
+            setDisabled(true);
+            setNote('info', d.block_msg || 'Start is disabled while a browser-based scrape is running.');
+          } else {
+            setDisabled(false);
+            setNote('ready', READY);
+          }
+        })
+        .catch(function () {});
+    }
+    tick();
+    setInterval(tick, 4000);
+  })();
+  </script>
+  {% endif %}
 
   {# Run controls (stop + downloads) — for the live run, or the last run when idle #}
   {% if display_run %}
