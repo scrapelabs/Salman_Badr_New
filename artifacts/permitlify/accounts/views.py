@@ -56,6 +56,8 @@ IS_WINDOWS = os.name == "nt"
 DEFAULT_RANGE_DAYS = 30   # webhook window when a scheduled call omits dates
 MAX_RANGE_DAYS = 400      # reject absurd windows
 MAX_URL_LEN = 2048
+MAX_API_KEY_LEN = 200     # cap a user-supplied feed API key
+FEED_GENDERS = ("both", "boys", "girls")  # feed gender selector options
 MONTHS = [
     (1, "January"), (2, "February"), (3, "March"), (4, "April"),
     (5, "May"), (6, "June"), (7, "July"), (8, "August"),
@@ -539,6 +541,10 @@ def scraper_detail_view(request, slug):
         ctx["default_snapshot_date"] = (
             today - timedelta(days=today.weekday())
         ).isoformat()
+        ctx["feed_api_key"] = spec.feed_api_key
+        ctx["feed_api_key_default"] = spec.feed_api_key_default
+        ctx["feed_gender"] = spec.feed_gender
+        ctx["default_gender"] = "both"
     elif tab == "calls":
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
@@ -557,6 +563,8 @@ def scraper_detail_view(request, slug):
             "date_to": today.isoformat(),
             "snapshot_date": (today - timedelta(days=today.weekday())).isoformat(),
             "tournament_url": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit",
+            "api_key": spec.feed_api_key_default,
+            "gender": "both",
         }
         secret_name = (
             "MATCHMINER_"
@@ -568,7 +576,11 @@ def scraper_detail_view(request, slug):
         ctx["secret_name"] = secret_name
         ctx["input_kind"] = spec.input_kind
         ctx["schedule_curl_json"] = _trigger_example_json(
-            spec.input_kind, sched_defaults, url_required=spec.url_required
+            spec.input_kind,
+            sched_defaults,
+            url_required=spec.url_required,
+            feed_api_key=spec.feed_api_key,
+            feed_gender=spec.feed_gender,
         )
         ctx["workflow_filename"] = f"{s.slug}-schedule.yml"
         ctx["workflow_yaml"] = _github_workflow_yaml(
@@ -578,6 +590,8 @@ def scraper_detail_view(request, slug):
             input_kind=spec.input_kind,
             defaults=sched_defaults,
             url_required=spec.url_required,
+            feed_api_key=spec.feed_api_key,
+            feed_gender=spec.feed_gender,
         )
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
@@ -785,6 +799,28 @@ def _validate_tournament_url(raw, allowed_hosts):
     return url
 
 
+def _normalize_feed_api_key(raw, default):
+    """A feed API key: trimmed and length-capped; blank falls back to ``default``."""
+    key = (raw or "").strip()
+    if not key:
+        return default
+    if len(key) > MAX_API_KEY_LEN:
+        raise RunStartError("invalid_api_key", "That API key is too long.", 400)
+    return key
+
+
+def _normalize_feed_gender(raw, *, default="both"):
+    """A feed gender selector: ``boys`` / ``girls`` / ``both`` (blank -> default)."""
+    gender = (raw or "").strip().lower()
+    if not gender:
+        return default
+    if gender not in FEED_GENDERS:
+        raise RunStartError(
+            "invalid_gender", "Gender must be boys, girls, or both.", 400
+        )
+    return gender
+
+
 def validate_run_params(spec, data, *, webhook=False):
     """Validate the start inputs for ``spec`` from a dict-like ``data``.
 
@@ -864,11 +900,22 @@ def validate_run_params(spec, data, *, webhook=False):
                 f"Keep the date range within {MAX_RANGE_DAYS} days.",
                 400,
             )
+        params = {"date_from": start.isoformat(), "date_to": end.isoformat()}
+        label = f"{start.isoformat()} → {end.isoformat()}"
+        if spec.feed_api_key:
+            params["api_key"] = _normalize_feed_api_key(
+                get("api_key"), spec.feed_api_key_default
+            )
+        if spec.feed_gender:
+            gender = _normalize_feed_gender(get("gender"))
+            params["gender"] = gender
+            if gender != "both":
+                label = f"{label} · {gender}"
         return RunInputs(
-            params={"date_from": start.isoformat(), "date_to": end.isoformat()},
+            params=params,
             date_from=start,
             date_to=end,
-            tournament=f"{start.isoformat()} → {end.isoformat()}",
+            tournament=label,
         )
 
     # Default / INPUT_YEAR.
@@ -1082,24 +1129,39 @@ def scraper_trigger_view(request, slug):
     )
 
 
-def _trigger_example_json(input_kind, defaults, url_required=False):
+def _trigger_example_json(
+    input_kind, defaults, url_required=False, feed_api_key=False, feed_gender=False
+):
     """A copy-ready JSON body for the manual ``curl`` example on the Schedule tab."""
     if input_kind == registry.INPUT_YEAR_MONTH:
         return '{"year":"%s","month":"%s"}' % (defaults["year"], defaults["month"])
     if input_kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):
         if url_required:
             return '{"tournament_url":"%s"}' % defaults["tournament_url"]
-        return '{"date_from":"%s","date_to":"%s"}' % (
-            defaults["date_from"],
-            defaults["date_to"],
-        )
+        parts = [
+            '"date_from":"%s"' % defaults["date_from"],
+            '"date_to":"%s"' % defaults["date_to"],
+        ]
+        if feed_api_key:
+            parts.append('"api_key":"%s"' % defaults["api_key"])
+        if feed_gender:
+            parts.append('"gender":"%s"' % defaults["gender"])
+        return "{%s}" % ",".join(parts)
     if input_kind == registry.INPUT_RANK_SNAPSHOT:
         return '{"snapshot_date":"%s"}' % defaults["snapshot_date"]
     return '{"year":"%s"}' % defaults["year"]
 
 
 def _github_workflow_yaml(
-    *, code, trigger_url, secret_name, input_kind, defaults, url_required=False
+    *,
+    code,
+    trigger_url,
+    secret_name,
+    input_kind,
+    defaults,
+    url_required=False,
+    feed_api_key=False,
+    feed_gender=False,
 ):
     """Render the copy-ready GitHub Actions workflow shown on the Schedule tab.
 
@@ -1142,23 +1204,57 @@ def _github_workflow_yaml(
             )
             data = '{\\"tournament_url\\":\\"$TOURNAMENT_URL\\"}'
         else:
-            df, dt = defaults["date_from"], defaults["date_to"]
+            # Leave the date inputs blank by default so a *scheduled* run posts an
+            # empty window — the server then computes a fresh trailing window
+            # (ending today) on every run, instead of freezing the dates that were
+            # baked in when this YAML was generated. Manual dispatch can still type
+            # exact dates (fill both together).
             inputs = (
                 f"    inputs:\n"
                 f"      date_from:\n"
-                f'        description: "Start date (YYYY-MM-DD)"\n'
+                f'        description: "Start date (YYYY-MM-DD; blank = last {DEFAULT_RANGE_DAYS} days)"\n'
                 f"        required: false\n"
-                f'        default: "{df}"\n'
+                f'        default: ""\n'
                 f"      date_to:\n"
-                f'        description: "End date (YYYY-MM-DD)"\n'
+                f'        description: "End date (YYYY-MM-DD; blank = today)"\n'
                 f"        required: false\n"
-                f'        default: "{dt}"\n'
+                f'        default: ""\n'
             )
             env = (
-                f"          DATE_FROM: ${{{{ github.event.inputs.date_from || '{df}' }}}}\n"
-                f"          DATE_TO: ${{{{ github.event.inputs.date_to || '{dt}' }}}}\n"
+                f"          DATE_FROM: ${{{{ github.event.inputs.date_from || '' }}}}\n"
+                f"          DATE_TO: ${{{{ github.event.inputs.date_to || '' }}}}\n"
             )
-            data = '{\\"date_from\\":\\"$DATE_FROM\\",\\"date_to\\":\\"$DATE_TO\\"}'
+            data_parts = [
+                '\\"date_from\\":\\"$DATE_FROM\\"',
+                '\\"date_to\\":\\"$DATE_TO\\"',
+            ]
+            if feed_api_key:
+                ak = defaults["api_key"]
+                inputs += (
+                    f"      api_key:\n"
+                    f'        description: "Feed API key"\n'
+                    f"        required: false\n"
+                    f'        default: "{ak}"\n'
+                )
+                env += (
+                    f"          API_KEY: "
+                    f"${{{{ github.event.inputs.api_key || '{ak}' }}}}\n"
+                )
+                data_parts.append('\\"api_key\\":\\"$API_KEY\\"')
+            if feed_gender:
+                gd = defaults["gender"]
+                inputs += (
+                    f"      gender:\n"
+                    f'        description: "boys, girls, or both"\n'
+                    f"        required: false\n"
+                    f'        default: "{gd}"\n'
+                )
+                env += (
+                    f"          GENDER: "
+                    f"${{{{ github.event.inputs.gender || '{gd}' }}}}\n"
+                )
+                data_parts.append('\\"gender\\":\\"$GENDER\\"')
+            data = "{%s}" % ",".join(data_parts)
     elif input_kind == registry.INPUT_RANK_SNAPSHOT:
         ds = defaults["snapshot_date"]
         inputs = (

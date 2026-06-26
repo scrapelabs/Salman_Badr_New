@@ -142,6 +142,22 @@
           <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if start_disabled %}disabled{% endif %}>
         </div>
         {% endif %}
+        {% if feed_gender %}
+        <div class="rt-field">
+          <label class="field-label" for="rtGender">Gender</label>
+          <select class="rt-input" id="rtGender" name="gender" {% if start_disabled %}disabled{% endif %}>
+            <option value="both" {% if default_gender == 'both' %}selected{% endif %}>Both</option>
+            <option value="boys" {% if default_gender == 'boys' %}selected{% endif %}>Boys</option>
+            <option value="girls" {% if default_gender == 'girls' %}selected{% endif %}>Girls</option>
+          </select>
+        </div>
+        {% endif %}
+        {% if feed_api_key %}
+        <div class="rt-field rt-field-wide">
+          <label class="field-label" for="rtApiKey">API key</label>
+          <input class="rt-input" id="rtApiKey" name="api_key" type="text" value="{{ feed_api_key_default }}" autocomplete="off" spellcheck="false" placeholder="Feed API key" {% if start_disabled %}disabled{% endif %}>
+        </div>
+        {% endif %}
         {% elif input_kind == 'rank_snapshot' %}
         <div class="rt-field">
           <label class="field-label" for="rtSnap">Ranking date</label>

@@ -3,15 +3,16 @@
 Ports the production ``new_jersey_high_school`` spider onto MatchMiner's shared
 HTTP client (:mod:`accounts.live_scrapers._http`) + telemetry. The source is a
 single JSON feed — for each day in the run window it GETs the UTR results feed
-once per gender (boys + girls) and emits one CSV row per individual match.
+once per requested gender and emits one CSV row per individual match.
 
 Flow:
 
 1. Read the run's date window (``date_from`` / ``date_to``); expand it to one
    ``date`` per day (the source chunks the range one day at a time).
 2. For each day, GET ``/Feeds/UTRResults/`` with ``key`` / ``gender`` /
-   ``gamedate`` params, iterating **both** genders (``boys`` then ``girls``)
-   exactly as the source's URL template does. ``gamedate`` is ``m/d/Y``.
+   ``gamedate`` params, iterating the run's requested gender(s) — ``boys``,
+   ``girls``, or both (the default), exactly as the source's URL template does.
+   ``gamedate`` is ``m/d/Y``.
 3. Walk ``games.games[].matches[]``; a match with a ``winner2``/``loser2`` is a
    doubles match. Gender comes from the game's ``sportGender`` (``Boys`` -> M /
    Male, ``Girls`` -> F / Female); player names are ``"lastName, firstName"``.
@@ -21,10 +22,11 @@ college-normalization, so nothing AI-flavoured had to be removed — every field
 is mapped straight off the feed. The college columns simply stay blank as in the
 source.
 
-The feed API key is a module constant (:data:`NJ_HS_API_KEY`), overridable via
-``settings.NJ_HS_API_KEY``; it is not a secret in the source but is kept
-configurable. The scraper's proxy is honoured via :func:`build_proxies` and is
-never logged.
+The feed API key, gender, and date range are **run-time parameters** (set on the
+real-time start form or the schedule webhook and persisted on ``Run.params``).
+The key falls back to ``settings.NJ_HS_API_KEY`` then the module constant
+(:data:`NJ_HS_API_KEY`) when a run doesn't supply one; gender falls back to both.
+The scraper's proxy is honoured via :func:`build_proxies` and is never logged.
 
 ``run(run_obj, log)`` returns the standard ``(items_csv, requests_csv,
 errors_csv, row_count, status)`` tuple.
@@ -124,6 +126,20 @@ def _iter_dates(start_d, end_d):
     while current <= end_d:
         yield current
         current += timedelta(days=1)
+
+
+def _genders_for(value):
+    """Map the run's ``gender`` param to the feed genders to fetch.
+
+    ``boys`` / ``girls`` restrict to that one feed; anything else (including the
+    default ``both``) fetches both, exactly as the source's URL template did.
+    """
+    gender = (value or "both").strip().lower()
+    if gender == "boys":
+        return ("boys",)
+    if gender == "girls":
+        return ("girls",)
+    return GENDERS
 
 
 # ---------------------------------------------------------------------------
@@ -229,11 +245,11 @@ def _parse_feed(results):
     return rows
 
 
-def _scrape_day(client, api_key, job_date, log):
-    """Fetch + parse both genders for one day; return a list of row dicts."""
+def _scrape_day(client, api_key, genders, job_date, log):
+    """Fetch + parse the requested genders for one day; return a list of row dicts."""
     rows = []
     gamedate = job_date.strftime("%m/%d/%Y")
-    for gender in GENDERS:
+    for gender in genders:
         params = {"key": api_key, "gender": gender, "gamedate": gamedate}
         results = client.get_json(FEED_URL, params=params)
         if not results:
@@ -249,13 +265,20 @@ def run(run_obj, log):
     workers = scraper.worker_count
     start_d = run_obj.date_from
     end_d = run_obj.date_to
-    api_key = getattr(settings, "NJ_HS_API_KEY", NJ_HS_API_KEY)
+    params = run_obj.params or {}
+    # API key + gender(s) are run-time params (set on the start form / webhook);
+    # fall back to the settings/module key and to both genders when unset.
+    api_key = (params.get("api_key") or "").strip() or getattr(
+        settings, "NJ_HS_API_KEY", NJ_HS_API_KEY
+    )
+    genders = _genders_for(params.get("gender"))
 
     log(
         "INFO",
         f"\U0001f3be NJ high-school tennis starting \u2014 window "
         f"{start_d} \u2192 {end_d}",
     )
+    log("INFO", f"\U0001f465 Gender(s): {', '.join(genders)}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
 
     if not (start_d and end_d):
@@ -272,7 +295,7 @@ def run(run_obj, log):
 
     total = len(job_dates)
     Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
-    log("INFO", f"\U0001f4cb {total} day(s) to scrape (boys + girls each)")
+    log("INFO", f"\U0001f4cb {total} day(s) to scrape ({', '.join(genders)} each)")
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -284,7 +307,7 @@ def run(run_obj, log):
     def process(job_date):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
         try:
-            rows = _scrape_day(client, api_key, job_date, log)
+            rows = _scrape_day(client, api_key, genders, job_date, log)
             for row in rows:
                 # Dedup on the match id + players + score (mirrors the source's
                 # existence check), so a match never lands twice.

@@ -55,6 +55,9 @@ class ScraperSpec:
     accepts_sheet: bool = False        # URL input may be a Google Sheet of Team/Link rows
     secret_label: str = ""             # label for a single masked secret config field
     secret_env_var: str = ""           # env var the runner falls back to (for help text)
+    feed_api_key: bool = False         # surface a run-time feed API-key field
+    feed_api_key_default: str = ""     # prefilled / fallback feed API key
+    feed_gender: bool = False          # surface a boys/girls/both gender selector
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -265,6 +268,9 @@ SPECS = {
         slug="new_jersey_high_school",
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.new_jersey_high_school:run",
+        feed_api_key=True,
+        feed_api_key_default="4f59cee1-3db0-4128-84ba-bd7995dadd95",
+        feed_gender=True,
     ),
     # --- Estonia (tennis.ee discovery + etl.tournamentsoftware.com) -------
     # Bespoke multi-stage scraper (NOT the shared TS engine). Date-range OR a
