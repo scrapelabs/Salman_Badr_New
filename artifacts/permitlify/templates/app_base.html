@@ -59,6 +59,12 @@
         {% block breadcrumb %}<span class="crumb current">MatchMiner</span>{% endblock %}
       </nav>
       <div class="topbar-right">
+        <div class="server-clock" id="serverClock" data-epoch="{% now 'U' %}" title="Current server time (UTC)">
+          <span class="server-clock-dot" aria-hidden="true"></span>
+          <svg class="server-clock-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg>
+          <span class="server-clock-time" id="serverClockTime">--:--:--</span>
+          <span class="server-clock-zone">UTC</span>
+        </div>
         {% block topbar_actions %}{% endblock %}
         {% include "partials/notifications_bell.html" %}
         <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">
@@ -188,6 +194,32 @@
         open();
       });
     });
+  })();
+
+  (function () {
+    var el = document.getElementById("serverClock");
+    if (!el) return;
+    var timeEl = document.getElementById("serverClockTime");
+    var epochSec = parseInt(el.getAttribute("data-epoch"), 10);
+    if (!epochSec || !timeEl) return;
+    // Lock the display to the server's clock: capture the offset between the
+    // server time rendered into the page and this device's clock at load, then
+    // tick from the device clock corrected by that offset (no per-second drift
+    // to a wrong local clock).
+    var offset = epochSec * 1000 - Date.now();
+    var timeFmt = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "UTC", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    });
+    var dateFmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC", weekday: "short", month: "short", day: "numeric"
+    });
+    function tick() {
+      var now = new Date(Date.now() + offset);
+      timeEl.textContent = timeFmt.format(now);
+      el.setAttribute("title", "Server time \u2014 " + dateFmt.format(now) + ", " + timeFmt.format(now) + " UTC. Scheduled runs fire on this clock.");
+    }
+    tick();
+    setInterval(tick, 1000);
   })();
 </script>
 {% endblock %}
