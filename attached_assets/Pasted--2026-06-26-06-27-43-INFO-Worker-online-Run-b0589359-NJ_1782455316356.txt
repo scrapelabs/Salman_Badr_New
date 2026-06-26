@@ -1,0 +1,23 @@
+[2026-06-26 06:27:43] INFO  🚀 Worker online — Run #b0589359 · NJHS
+[2026-06-26 06:27:43] INFO  🔁 Retry budget: 4 tries per request
+[2026-06-26 06:27:43] INFO  🎾 NJ high-school tennis starting — window 2026-05-27 → 2026-06-26
+[2026-06-26 06:27:43] INFO  👥 Gender(s): boys, girls
+[2026-06-26 06:27:43] INFO  🧵 Concurrency: 5 worker thread(s)
+[2026-06-26 06:27:43] INFO  🔌 HTTP client: curl_cffi (impersonate chrome) via Datacenter proxy 'plainproxies.com'
+[2026-06-26 06:27:43] INFO  📋 31 day(s) to scrape (boys, girls each)
+[2026-06-26 06:27:43] INFO  ──── scraping days ────
+[2026-06-26 06:27:52] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 06:27:52] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 06:27:52] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 06:27:52] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 06:27:52] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 06:28:02] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 06:28:03] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 06:28:03] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 06:28:03] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 06:28:03] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 06:28:14] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 06:28:14] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 06:28:14] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 06:28:14] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 06:28:14] WARN  ⚠️ GET https://www.njschoolsports.com/Feeds/UTRResults/ → ProxyError: Failed to perform, curl: (56) CONNECT tunnel failed, response 400. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
