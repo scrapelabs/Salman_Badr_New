@@ -1,0 +1,167 @@
+[2026-06-26 05:15:02] INFO     🎾 Singles: Derache, Mathieu def. Iser, Felipe [6-1 6-4;] — Dual Match: Univ. Of Indianapolis vs Ferris State University - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Kovacevic, Anamarija def. Bordean, Ema Norma [6-3;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Tollenaar, Luke def. Mcdonald, Brendan [6-2 6-4;] — Dual Match: University Of Delaware vs Bucknell University - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Bruns, Pauline def. Null, Molly [6-3 6-1;] — Dual Match: Austin Peay State University vs Murray State University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Gorbatenko, Vladislav def. Kovacs, Erik [3-6 6-1 6-4;] — Dual Match: Univ. Of Indianapolis vs Ferris State University - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Lucero, Ivanova def. Carter, Jane [6-0;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Bezianis, Aristotelis def. Kilmer, Liam [5-7 7-5 6-2;] — Dual Match: University Of Delaware vs Bucknell University - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Thiel, Elena def. Dethridge, Arden [6-0 6-0;] — Dual Match: Austin Peay State University vs Murray State University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Matovic, Jovan def. Pichika, Praneel [6-3 6-1;] — Dual Match: Univ. Of Indianapolis vs Ferris State University - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Zaytseva, Polina def. Garcia Gama, Maria [6-1;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Robinson, William def. Mackenzie, Euan  [3-6 6-3 6-4;] — Dual Match: University Of Delaware vs Bucknell University - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Vincler, Andrew def. Di Cursi, Lorenzo [6-1 6-3;] — Dual Match: Univ. Of Indianapolis vs Ferris State University - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Kovacevic, Anamarija def. Mendoza Romero, Cristina [6-0 6-2;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Tapiro, Itamar def. Bain, Oscar [6-2 7-6;] — Dual Match: University Of Delaware vs Bucknell University - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Salek Rivero, Maria Valentina def. Bordean, Ema Norma [6-0 6-2;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Ouellet, Audrey def. Grogan, Niamh [6-1 6-0;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Zaytseva, Polina def. Deogaonkar, Alisha [6-0 6-0;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Lucero, Ivanova def. Carter, Jane [6-1 6-0;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Gombitova, Ivana def. Garcia Gama, Maria [6-2 6-1;] — Dual Match: University Of Findlay vs Univ. Of Illinois, Springfield - Women
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Lemongo, Lorie def. Forkner, Maggie [7-5;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Kavounov, Anastasia def. Vlassis, Giselle [6-4;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Yonehara, Skye def. Snitko, Sofia [6-3;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Lemongo, Lorie def. Forkner, Maggie [6-3 6-2;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Dogadalski, Lena def. Snitko, Sofia [6-2 3-6 6-4;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Kavounov, Anastasia def. Vlassis, Giselle [6-1 7-6(0);] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Dabah , Adva def. Khromchenko, Ronit [6-2 6-4;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Fiedler, Rebecca def. Yonehara, Skye [6-1 6-1;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Singles: Shyani, Alina def. Chowgule, Olivia [6-1 6-2;] — Dual Match: Drexel University vs Lehigh University - Women
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Dlimi, Yassine def. Claverie, Lorenzo [7-6(0);] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Abderrahman, Wissam def. Perez Ramos, Pablo [6-4;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Timini, Andreas def. Oliveira, Nicolas [6-4;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Dlimi, Yassine def. Ganesan, Adhithya [6-2 6-4;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Abderrahman, Wissam def. Jefferson, Henry [2-6 6-2 7-6(4);] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Claverie, Lorenzo def. Benchakroun, Mehdi [6-3 6-2;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Perez Ramos, Pablo def. Colin, Paul [6-1 2-6 6-2;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Oliveira, Nicolas def. Timini, Andreas [6-7(5) 6-3 6-4;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Lemire, Clement def. Edengren, Kevin [7-5 6-6;] — Dual Match: University Of Central Florida vs University of Florida - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Sodan, Ivan def. Carlson, Matthew [6-4;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Callery, Teddy def. Wasserman, Elliot [6-6;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Doubles: Luo, Toby def. Jhaveri, Aayush [6-4;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Sodan, Ivan def. Carlson, Matthew [6-1 7-5;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Phimvongsa, Lukas def. De La Plaza, Ezequiel [6-4 6-2;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Yang, Robert def. Ling, Patrick [6-1 6-1;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Koong, Alexander def. Callery, Teddy [6-2 6-3;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Murphy, Theo def. Illanes, Camilo [7-6 6-3;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:02] INFO     🎾 Singles: Luo, Toby def. Jhaveri, Aayush [6-3 6-0;] — Dual Match: Brown University vs Holy Cross - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Inchauspe, Paul def. Auytayakul, Siwanat [6-2;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Gogineni, Vignesh def. Pham, Derek [6-4;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Bigun, Meecah def. Sparks, Benjamin [7-5;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Ferrando Farras, Marc def. Coates, Landon [6-4;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Shuler, Jason def. Kobelt, Nicolas [6-2;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Vorwerk, Guy def. Markovits, Milan [6-4;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Duggan, Aj def. Teysseire, Laurent [6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Basile, Alessio def. Gupta, Krish [6-2;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Pullen, Juliana def. Riley, Sasha [6-4;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Inchauspe, Paul def. Santiago Arraez, Rodrigo [6-2 6-2;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Pikulin, Andrey def. Laphitz, Sabri [6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Gogineni, Vignesh def. Basile, Alessio [6-3 6-3;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Adkins, Jade def. Bougioukou, Eleni [6-2;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Roothman, Carl def. Nidunjianzan, Top [7-5 6-2;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Lopez Guillen, Sergio def. Coates, Landon [6-1 6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Liao, Edward def. Pham, Derek [3-6 6-4 7-5;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Liles, Peja def. Errington, Elyse [6-1;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Sec, Sebastian def. Auytayakul, Siwanat [6-3 6-1;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Ferrando Farras, Marc def. Teysseire, Laurent [7-5 6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Shuler, Jason def. Bracks, Ian [7-6 6-3;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Carlini, Gianluca def. Delattre, Gregoire [6-2;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Pullen, Juliana def. Meiners, Elizabeth [6-1 6-1;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Ekpenyong, David def. Mitric, Aleksandar [4-6 6-4 7-6;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Pikulin, Andrey def. Aboufirassi, Haitam [6-1 6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Williams, Aaron def. Ji, Zhengqing [6-4 3-6 7-6;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Biagiotti, Richard def. Mirarchi, William [6-3;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Lyons, Addison def. Williams, Abigail [6-1 6-0;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Sparks, Benjamin def. Markovits, Milan [6-4 6-7 6-3;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Duggan, Aj def. Laphitz, Sabri [6-3 6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Valentine, Charlie def. Chung, Ethan [6-3 7-5;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Clement, Christophe def. Mitchell, Matthew [5-5  ABD;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Bougioukou, Eleni def. Riley, Sasha [6-2 6-2;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Robinson, Chase def. Wen, Evan [6-0 6-3;] — Dual Match: Liberty University vs Princeton University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Perez Garcia, Juan def. Horobeanu, Andres [6-1 6-1;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Gokpinar, Haydar Cem def. Gupta, Krish [6-2 6-2;] — Dual Match: Yale University vs Oklahoma State University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Clement, Christophe def. Delattre, Gregoire [6-4 6-1;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Kimbouris, Soussana def. Richmond, Lauren [6-4 6-2;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Buschmaas, Finn def. Pinnoo, Ian [6-0 6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Schoenmakers, Hidde def. Saar, Albert [7-5 7-6;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Krause, Daryn def. Errington, Elyse [6-4 6-2;] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Carlini, Gianluca def. Santoni, Edoardo [6-0 6-0;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Deguzman, Sophia def. Adkins, Jade [6-3 5-7 [10-7];] — Dual Match: Kalamazoo College vs College Of Wooster - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Irwanto, Jonathan def. Mirarchi, William [6-3 6-4;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Shokry, Elias def. Taylor, Davis [6-2 6-0;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Biagiotti, Richard def. Widell, Albert [6-2 6-1;] — Dual Match: Georgia Tech vs Georgia Southern University - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Matuszewski, Savannah def. Bigari, Bella [7-6;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Shahbaz, Sarah def. Fermo, Olivia [6-2;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Mcdonnell, Caoimhe def. Khmara, Yuliia [6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Jung, Jimin def. Borch-Nielsen, Jacob [7-6;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Garcia Acebo, Aingeru def. Dubourg, Julian [6-2;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Jordaan, Anna def. Bristow, Alana [4-5  ABD;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Nikonenko, Alexandra def. Danilovic, Danijela [6-4;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Hanna, Jack def. Beaudry, Benjamin [7-5;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Meyers, Grant def. Jurgensmeyer, Wyatt [6-4;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Fontana, Asia def. Lee, Mackenzie [6-4;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Matuszewski, Savannah def. Nikonenko, Alexandra [4-6 7-6 6-3;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Danilovic, Danijela def. Bigari, Bella [6-1 6-0;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Feldman, Facundo def. Moeller, Ethan [6-2;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Bristow, Alana def. Gu, Emma [6-1 6-3;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Cruz, Alejandra def. Patel, Aneka [6-2;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Sebastain, Marcus def. Chastang, Alexis [5-6  INC;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Ciampa, Giada def. Cojocaru, Emily [2-6 7-6 6-4;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Rezaeyan, Saman def. Dubourg, Julian [3-6 6-2 [11-9];] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Shahbaz, Sarah def. Fermo, Olivia [6-0 6-2;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Carneiro, Olivia def. Artigas Taberner, Irene  [5-5  ABD;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Armistead, Jackson def. Bennaton, Guillermo Alfonso [6-1 6-1;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Amorocho, Valeria Amorocho Hernandez def. Mcdonnell, Caoimhe [6-0 6-2;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Marcelo Escribano, Jorge def. Mossman, Manaye [6-1 6-0;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Rana, Priyanka def. Fu, Nicole [6-2 4-6 6-3;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Tanjuatco, Isabelle def. Li, Grace [7-6 6-7 [10-8];] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Jung, Jimin def. Munoz, Alessandro [6-2 6-3;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Rose, Emily def. Khmara, Yuliia [6-0 6-0;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Meyers, Grant def. Moeller, Ethan [6-0 6-1;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Doubles: Karantali, Eleni def. Kaneko, Sae [6-1;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Fontana, Asia def. Cha, Jina [6-3 6-7 [10-7];] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Ton, Alan def. Cebrian Moral, Hector Cebrian Moral [7-6(0) 1-0;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Ukic, Anamarija def. Gomez, Brigitte [6-2 6-1;] — Dual Match: Northwood University/MI vs Michigan Technological U. - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Feldman, Facundo def. Jurgensmeyer, Wyatt [6-1 6-2;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Cruz, Alejandra def. Ramenskaja, Polina [7-5 4-1  ABD;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Wiskowski, Anna def. Barrera, Gabby [0-6 7-6 6-2;] — Dual Match: Ball State University vs U.S. Naval Academy - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Choi, Daniel def. Borch-Nielsen, Jacob [6-1 6-2;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Asensio Moreno, Arturo def. Tabbert, Kolten [6-4 6-0;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Licht, Taly def. Sambola, Isabella [6-1 6-2;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Culpepper, Tucker def. Arredondo, Nicolas [6-2 5-5;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Galloway, Henry def. Meyer, Jack [6-3 2-6 [10-7];] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Roach, Given def. Artigas Taberner, Irene  [6-2 4-4  ABD;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Mazzola, Rudy def. Chastang, Alexis [6-7(0) 2-3;] — Dual Match: U.S. Military Academy vs Stonehill College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: ? def. Cox, Brennan [6-0;] — Dual Match: Augustana College/IL vs Southwestern Illinois College - Men
+[2026-06-26 05:15:03] INFO     🎾 Singles: Carneiro, Olivia def. Rodriguez-Rizo, Angeles [6-1 7-5;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Dozier, Sabritt def. Roche Gonzalez, Alba [6-1 6-1;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:03] INFO     🎾 Singles: Karantali, Eleni def. Kaneko, Sae [6-3 5-4  ABD;] — Dual Match: Georgia Tech vs Jacksonville State University - Women
+[2026-06-26 05:15:33] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697f5f5e36cd30e2cc861765/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:15:33] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697900ff36cd30e2cc51e9db/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:15:33] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697e9d6436cd30e2cc7fb7a4/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:15:33] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697cead036cd30e2cc5e3f13/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:15:33] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/694fa23f36cd30e2ccb8b89a/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:16:04] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697900ff36cd30e2cc51e9db/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:16:05] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/694fa23f36cd30e2ccb8b89a/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:16:05] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697f5f5e36cd30e2cc861765/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:16:05] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697e9d6436cd30e2cc7fb7a4/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:16:05] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697cead036cd30e2cc5e3f13/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:16:37] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697900ff36cd30e2cc51e9db/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 05:16:37] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697e9d6436cd30e2cc7fb7a4/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 05:16:37] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697f5f5e36cd30e2cc861765/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 05:16:37] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/694fa23f36cd30e2ccb8b89a/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 05:16:38] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697cead036cd30e2cc5e3f13/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 3/4)
+[2026-06-26 05:17:11] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697900ff36cd30e2cc51e9db/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 4/4)
+[2026-06-26 05:17:11] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697e9d6436cd30e2cc7fb7a4/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 4/4)
+[2026-06-26 05:17:11] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/694fa23f36cd30e2ccb8b89a/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 4/4)
+[2026-06-26 05:17:11] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697f5f5e36cd30e2cc861765/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 4/4)
+[2026-06-26 05:17:12] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697cead036cd30e2cc5e3f13/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 4/4)
+[2026-06-26 05:17:41] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/6977e92c36cd30e2cc4fe238/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:17:41] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697a4d6236cd30e2cc552a80/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:17:41] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697a4de236cd30e2cc55308b/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:17:41] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/69759d3c36cd30e2cc462932/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:17:42] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697e771736cd30e2cc7ab84e/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 1/4)
+[2026-06-26 05:18:12] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697a4d6236cd30e2cc552a80/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:18:12] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/6977e92c36cd30e2cc4fe238/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:18:12] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697a4de236cd30e2cc55308b/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:18:13] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/69759d3c36cd30e2cc462932/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)
+[2026-06-26 05:18:13] WARN  ⚠️ POST https://api.ioncourt.com/api/tie/697e771736cd30e2cc7ab84e/info → Timeout: Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details. (retry 2/4)

@@ -20,3 +20,4 @@
 - [Confirm dialog convention](confirm-dialog-convention.md) — global #mmConfirm modal in app_base.html; destructive forms opt in via data-confirm attrs; never native confirm().
 - [QA rich-text sanitization](qa-rich-text-sanitization.md) — QA ticket/comment HTML is server-allowlisted; img src limited to attachment-prefix/https, Quill paste/drop must upload (capture phase) not base64, or content silently vanishes.
 - [WhiteNoise vendored sourcemaps](whitenoise-vendored-sourcemaps.md) — collectstatic (ManifestStaticFilesStorage) fails if a vendored JS/CSS has a sourceMappingURL/url() pointing to a file you didn't vendor; strip the comment or include the .map.
+- [ioncourt /info throttling](ioncourt-info-throttling.md) — curl-28 0-byte timeouts on tie-detail POSTs are server throttling (reproduced direct, no proxy), not a bug; runner retries 4× then skips → partial data is expected.
