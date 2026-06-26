@@ -71,7 +71,7 @@
           <div class="avatar">{{ user.username|first|upper }}</div>
           <div class="user-meta">
             <span class="user-name">{{ user.username }}</span>
-            <span class="user-role">Super admin</span>
+            <span class="user-role">{% if user.is_superuser %}Super admin{% else %}Member{% endif %}</span>
           </div>
         </div>
         <form method="post" action="{% url 'logout' %}">
