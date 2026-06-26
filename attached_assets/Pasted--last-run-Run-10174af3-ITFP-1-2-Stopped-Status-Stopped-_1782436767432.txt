@@ -1,0 +1,113 @@
+
+last run · Run #10174af3 · ITFP
+«
+‹
+1
+2
+›
+»
+Stopped
+Status
+Stopped
+Rows
+0
+Size
+0 B
+Duration
+33.7s
+[2026-06-26 01:18:21] INFO  🚀 Worker online — Run #10174af3 · ITFP
+[2026-06-26 01:18:21] INFO  🎾 ITF Men's Pro Circuit starting — 2026-05-27 → 2026-06-26
+[2026-06-26 01:18:21] INFO  🧵 Concurrency: 5 worker thread(s)
+[2026-06-26 01:18:21] INFO  🔌 HTTP client: curl_cffi (impersonate chrome) via Datacenter proxy 'plainproxies.com'
+[2026-06-26 01:18:21] INFO  ──── phase 1 · discovering tournaments ────
+[2026-06-26 01:18:22] INFO     📅 circuit MT: 77 tournament(s), 1 page(s)
+[2026-06-26 01:18:22] INFO  📋 77 tournament(s) discovered
+[2026-06-26 01:18:22] INFO  ──── phase 2 · scraping tournaments (patchright) ────
+[2026-06-26 01:18:22] INFO  🌐 HTTP client: patchright Google Chrome (headed, ephemeral profile) via Datacenter proxy 'plainproxies.com' (rotating IP)
+[2026-06-26 01:18:22] INFO  🧵 per-request rotation: up to 5 browsers in parallel — a fresh browser + IP per tournament
+[2026-06-26 01:18:23] INFO     ⏳ loading M-ITF-FRA-2026-010 …
+[2026-06-26 01:18:23] INFO     ⏳ loading M-ITF-SRB-2026-003 …
+[2026-06-26 01:18:23] INFO     ⏳ loading M-ITF-GER-2026-019 …
+[2026-06-26 01:18:23] INFO     ⏳ loading M-ITF-ITA-2026-033 …
+[2026-06-26 01:18:23] INFO     ⏳ loading M-ITF-CRO-2026-006 …
+[2026-06-26 01:18:31] INFO     🏟️ M25 Grado — Grado, Italy · Clay
+[2026-06-26 01:18:32] INFO     🏟️ M25 Carnac — Carnac, France · Clay
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Crawford, Oliver def. Marino, Pietro [6-0, 6-4;]
+[2026-06-26 01:18:32] INFO     🏟️ M25 Kursumlijska Banja — Kursumlijska Banja , Serbia · Clay
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Leroux, Jules def. Added, Dan [7-6, 6-4;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Pizzigoni, Massimo def. Pedretti, Tommaso [0-6, 6-4, 4-0;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Stankovic, Simeon def. Sharipov, Marat [2-6, 7-5, 2-0;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Reco, Alexandre def. Livet Novkirichka, Ferdinand [4-6, 6-3, 7-6;]
+[2026-06-26 01:18:32] INFO     🏟️ M25 Bol — Bol, Croatia · Clay
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Sciahbasi, Matteo def. Pampanin, Pietro [4-0;]
+[2026-06-26 01:18:32] INFO     🏟️ M25 Troisdorf — Troisdorf, Germany · Clay
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Kaouk, Mickael def. Coppi, Thomas [6-2, 6-2;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Pereira, Tiago def. Jovanovic, Petar [6-3, 6-3;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Mazza, Manuel def. Zanini, Andrea [6-3, 6-1;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Chazal, Maxime def. Lalami, Younes [2-6, 6-0, 7-6;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Martineau, Matteo def. De Krom, Michiel [7-6, 6-4;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Lopez Cherubino, Noah def. Uehling, Zen David [6-2, 6-2;]
+[2026-06-26 01:18:32] INFO        🎾 Singles 1st Round: Nagel, Arthur def. Lagarrigue, Leo [6-2, 6-2;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Zick, Sydney def. Nittmann, Yannic [6-3, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Sorger, Sebastian def. Parizzia, Nicolas [6-4, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: BERARD, Tristan def. Aubriot, Alexandre [7-6, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Wazny, Alan def. Fidler, Tomas [6-1, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: McDonald, Niels def. Williams, Aaron James [7-5, 4-6, 7-6;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Jovic, Nikola def. Chestovaliev, Samuil [6-3, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Sakellaridis, Dimitris def. Overbeck, Carl Emil [4-6, 7-6, 6-4;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Borrelli, Leonardo def. Cocola, Sebastiano [6-2, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Nunez, Daniel Antonio def. Trufelli, Timeo [3-6, 6-4, 6-2;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Zielinski, Marcel def. Nijboer, Ryan [6-2, 4-6, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Pisaric, Aleksa def. Jankanj, Vlado [6-1, 7-6;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Wehnelt, Kai def. Negritu, Christoph [6-4, 1-0;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Malige, Mae def. Delage, Pierre [6-2, 6-4;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Bielinskyi, Viacheslav def. Botta, Adriano [6-0, 6-0;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Plunger, Manuel def. Gandolfi, Giammarco [6-3, 6-4;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Hewitt, Cruz def. Sperle, John [6-4, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Perot, Raphael def. Bouquet, Lucas [3-6, 6-2, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Demanet, Emilien def. Trochu, Pablo [3-6, 6-3, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Juhas, Kristijan def. Yazdani, Ali [6-3, 7-6;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Donald, Matthew William def. Baragiola Mordini, Tobia Costanzo [7-6, 3-6, 6-2;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Visser, Mac def. Poertner, Lasse [5-7, 6-4, 6-2;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Maksimovic, Marko def. Petrovic, Drazen [6-7, 7-6, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Schlageter, Justin def. Deckers, Alec [7-6, 6-4;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Oradini, Giovanni def. Borsoi, Jacopo [6-3, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Popovic, Stefan def. Valle, Federico [6-0, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Vukadin, Noa def. Galus, Piotr [6-1, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Oetzbach, Adrian def. Horak, Ondrej [7-6, 5-7, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Zanada, Edoardo def. Callerio, Filippo [6-4, 6-3;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Wallin, Olle def. Planinsek, Filip Jeff [6-1, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Ciavarella, Niccolo def. Coccioli, Alessandro [6-4, 6-2;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Vasilev, Alexander def. Giraldi, Carlos [6-1, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Chepelev, Andrey def. Barun, Bozo [6-2, 4-6, 6-0;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Wessels, Louis def. Oezcelik, Maximilian [6-3, 6-3;]
+[2026-06-26 01:18:33] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800587045 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Arzhankin, Anton def. Peranovic, Leon [6-4, 7-5;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Mashtakov, Nikita def. Kajin, Karlo [6-2, 6-4;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Klok, Denis def. Novakovic, Novak [6-4, 6-1;]
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Karma, Noah def. Tabata, Ryo [6-7, 1-1;]
+[2026-06-26 01:18:33] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800478885 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:33] INFO        🎾 Singles 1st Round: Aunion, Pablo def. Mirarchi, William [6-3, 6-4;]
+[2026-06-26 01:18:34] INFO        🎾 Singles 1st Round: Hipfl, Nico def. Milev, Yanaki [6-1, 6-3;]
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800486628 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800375837 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800516515 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800587045 → anti-bot challenge (HTTP 200, retry 2/3)
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800478885 → anti-bot challenge (HTTP 200, retry 2/3)
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800486628 → anti-bot challenge (HTTP 200, retry 2/3)
+[2026-06-26 01:18:34] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800375837 → anti-bot challenge (HTTP 200, retry 2/3)
+[2026-06-26 01:18:35] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800516515 → anti-bot challenge (HTTP 200, retry 2/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800587045 → anti-bot challenge (HTTP 200, retry 3/3)
+[2026-06-26 01:18:36] INFO        🎾 Singles 1st Round: MARTIN, Matisse def. Sanogo, Elijah [7-6, 6-3;]
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800708045 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800478885 → anti-bot challenge (HTTP 200, retry 3/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800577882 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800486628 → anti-bot challenge (HTTP 200, retry 3/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800566440 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800375837 → anti-bot challenge (HTTP 200, retry 3/3)
+[2026-06-26 01:18:36] INFO        🎾 Singles 1st Round: Durasovic, Viktor def. Zeuch, Tom [6-4, 6-2;]
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800540159 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800516515 → anti-bot challenge (HTTP 200, retry 3/3)
+[2026-06-26 01:18:36] INFO        🎾 Singles 1st Round: Shirokii, Dmitrii def. George, Benjamin Thomas [0-6, 7-5, 6-2;]
+[2026-06-26 01:18:36] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800413636 → anti-bot challenge (HTTP 200, retry 1/3)
+[2026-06-26 01:18:37] WARN  🛡️ GET https://www.itftennis.com/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails?playerId=800708045 → anti-bot challenge (HTTP 200, retry 2/3)
