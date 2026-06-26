@@ -165,6 +165,7 @@ class BrowserClient:
         allowed_hosts=None,
         nav_timeout=45000,
         api_timeout=30000,
+        settle_timeout=20000,
         api_tries=3,
         headless=True,
         channel=None,
@@ -178,6 +179,7 @@ class BrowserClient:
         self.allowed_hosts = tuple(allowed_hosts) if allowed_hosts else None
         self.nav_timeout = nav_timeout
         self.api_timeout = api_timeout
+        self.settle_timeout = settle_timeout
         self.api_tries = max(1, api_tries)
         self.headless = headless
         self.channel = (channel or "").strip() or None
@@ -494,6 +496,26 @@ class BrowserClient:
             )
 
     # -- read surface ----------------------------------------------------
+    def _settle(self):
+        """Block until the page has actually finished loading.
+
+        ``goto(wait_until="domcontentloaded")`` returns the moment the HTML is
+        parsed \u2014 before subresources and JS/XHR-driven content render \u2014 so
+        reading ``page.content()`` straight after gets a half-loaded document.
+        Wait for the full ``load`` event and then ``networkidle`` so the read
+        sees a fully-rendered page. Both waits are **tolerant**: a page with
+        persistent polling/websockets never reaches ``networkidle``, and that
+        must not fail the read, so a timeout just falls through to whatever has
+        loaded so far.
+        """
+        for state in ("load", "networkidle"):
+            try:
+                self._page.wait_for_load_state(
+                    state, timeout=self.settle_timeout
+                )
+            except Exception:  # noqa: BLE001 - tolerate a page that never settles
+                pass
+
     def get_selector(self, url, **kwargs):
         """Navigate to ``url`` (solving any challenge) and return a Selector."""
         if not self._safe(url):
@@ -503,16 +525,15 @@ class BrowserClient:
             resp = self._page.goto(
                 url, wait_until="domcontentloaded", timeout=self.nav_timeout
             )
+            self._settle()
             html = self._page.content()
             status = resp.status if resp is not None else None
             if self._looks_blocked(status, html):
                 # Incapsula's JS interstitial auto-resolves and reloads; give it
-                # one beat, then re-read the settled document.
+                # one beat, let the reloaded page fully settle, then re-read.
                 try:
                     self._page.wait_for_timeout(4000)
-                    self._page.wait_for_load_state(
-                        "domcontentloaded", timeout=self.nav_timeout
-                    )
+                    self._settle()
                 except Exception:  # noqa: BLE001 - tolerate a flaky settle
                     pass
                 html = self._page.content()

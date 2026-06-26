@@ -54,6 +54,19 @@ BrowserContext directly (no separate `Browser` — `context.close()` tears down 
 Chrome process); it opens with a default page (reuse `context.pages[0]`). All 4 SSRF
 guards attach to this context exactly as before.
 
+**Page-load settle (don't read on `domcontentloaded`):** `goto` waits only for
+`wait_until="domcontentloaded"`, which returns the instant the HTML is parsed —
+*before* subresources and JS/XHR-driven content render — so reading `page.content()`
+straight after gets a half-loaded page (the symptom: "chrome is not waiting until
+page load", short/empty content). After `goto` (and after the challenge auto-reload
+beat) call a `_settle()` that waits for the full `load` event then `networkidle`.
+**Both waits MUST be tolerant** (swallow timeouts): a page with persistent
+polling/websockets never reaches `networkidle`, so a hard wait would hang/fail the
+read — on timeout just fall through to whatever has loaded. Bound by
+`settle_timeout` (default 20s). Confirmed 2026-06-26: settled read of the itftennis
+homepage returned the full ~282 KB document (vs ~251 KB on the bare `domcontentloaded`
+read), valid `<title>`, 0 errors.
+
 # Per-request rotation (the DEFAULT as of 2026-06-25): fresh browser + IP per tournament
 
 A single persistent identity still gets Incapsula-re-challenged "after a few
