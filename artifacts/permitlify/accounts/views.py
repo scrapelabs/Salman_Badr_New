@@ -18,7 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import IntegrityError
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Count, Exists, Max, OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -38,6 +38,10 @@ from .runs import ALL_TOURNAMENTS
 # duration — an actively-streaming worker keeps advancing its last-activity time
 # and is never reaped, so legitimately long scrapes run to completion.
 RUN_INACTIVITY_TIMEOUT = timezone.timedelta(minutes=30)
+# Postgres advisory-lock key that serializes run-start decisions so the
+# in-flight / browser-exclusivity checks in ``_start_scraper_run`` are race-free
+# even when several triggers (e.g. scheduled webhooks) fire at the same instant.
+RUN_START_LOCK_KEY = 0x6D6D7273  # "mmrs" — MatchMiner run-start
 YEAR_MIN = 2000
 YEAR_MAX = 2030
 IS_WINDOWS = os.name == "nt"
@@ -230,7 +234,7 @@ def _launch_run(run):
     run.save(update_fields=["pid"])
 
 
-def _reap_stale_runs(scraper):
+def _reap_stale_runs(scraper=None):
     """Fail runs whose worker has gone silent (died), based on *inactivity*.
 
     A run is reaped only after it has streamed no new log line for
@@ -241,10 +245,19 @@ def _reap_stale_runs(scraper):
 
     Also force-kills any surviving worker process group so a stuck worker can't
     keep running — or resurface its status — after we release the RUNNING lock.
+
+    With ``scraper=None`` the sweep covers **every** scraper, not just one. The
+    run-start path uses that so a crashed run on another source can't hold the
+    cross-source browser-exclusivity lock (below) forever.
     """
     now = timezone.now()
     cutoff = now - RUN_INACTIVITY_TIMEOUT
-    for run in scraper.runs.filter(status=Run.Status.RUNNING):
+    running = (
+        Run.objects.filter(status=Run.Status.RUNNING)
+        if scraper is None
+        else scraper.runs.filter(status=Run.Status.RUNNING)
+    )
+    for run in running:
         last_line = run.log_lines.order_by("-seq").first()
         # Last sign of life: the newest streamed log line, else the start time.
         last_activity = last_line.created_at if last_line else run.started_at
@@ -764,39 +777,104 @@ def validate_run_params(spec, data, *, webhook=False):
     )
 
 
-def _start_scraper_run(scraper, *, inputs, launched_by):
-    """Apply the run guards and launch the worker, returning the new Run.
+def _create_guarded_run(scraper, *, inputs, launched_by):
+    """Apply every run-start guard and create the RUNNING row (does NOT launch).
 
-    Shared by the real-time browser form and the GitHub-Actions trigger webhook so
-    both honour maintenance, stale-run reaping, the single-in-flight-run rule, and
-    launch-failure handling identically. ``inputs`` is a validated
-    :class:`RunInputs`. Raises RunStartError on any guard failure.
+    The single choke-point for *all* run creation — the real-time web form and the
+    schedule webhook (via :func:`_start_scraper_run`) and the ``scrape_now`` CLI —
+    so maintenance, stale-run reaping, the single-in-flight-run rule, and the
+    browser-exclusivity rule are enforced identically everywhere. ``inputs`` is a
+    validated :class:`RunInputs`. Raises RunStartError on any guard failure;
+    returns the created :class:`Run`.
     """
     if scraper.is_maintenance:
         raise RunStartError(
             "maintenance", "This source is in maintenance — runs are blocked.", 503
         )
-    _reap_stale_runs(scraper)
-    if scraper.runs.filter(status=Run.Status.RUNNING).exists():
-        raise RunStartError(
-            "already_running", "A run is already in progress for this source.", 409
-        )
+    # Sweep dead workers across ALL sources (not just this one): a crashed
+    # browser run elsewhere would otherwise hold the exclusivity lock below.
+    _reap_stale_runs()
+
+    starting_spec = registry.spec_for(scraper.slug)
+    starting_uses_browser = bool(starting_spec and starting_spec.uses_browser)
+
     try:
-        run = Run.objects.create(
-            scraper=scraper,
-            launched_by=launched_by,
-            tournament=(inputs.tournament or ALL_TOURNAMENTS)[:120],
-            date_from=inputs.date_from,
-            date_to=inputs.date_to,
-            params=inputs.params,
-            status=Run.Status.RUNNING,
-            started_at=timezone.now(),
-        )
+        with transaction.atomic():
+            # Serialize run-start decisions so the in-flight / exclusivity checks
+            # below can't race when several triggers fire at once (e.g. multiple
+            # scheduled webhooks at the same minute). The advisory lock auto-
+            # releases when this transaction commits — by which point the new
+            # RUNNING row is visible to the next contender.
+            with connection.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", [RUN_START_LOCK_KEY])
+
+            if scraper.runs.filter(status=Run.Status.RUNNING).exists():
+                raise RunStartError(
+                    "already_running",
+                    "A run is already in progress for this source.",
+                    409,
+                )
+
+            # Browser-based runs (the itftennis family) each drive a pool of
+            # headless-Chrome instances, so they need the host to themselves: a
+            # browser run can't start while ANY other run is live, and no run can
+            # start while a browser run is live. Lightweight (curl) sources may
+            # still run concurrently with one another.
+            others = (
+                Run.objects.filter(status=Run.Status.RUNNING)
+                .exclude(scraper=scraper)
+                .select_related("scraper")
+            )
+            blocker = None
+            if starting_uses_browser:
+                blocker = others.first()
+            else:
+                for other in others:
+                    other_spec = registry.spec_for(other.scraper.slug)
+                    if other_spec and other_spec.uses_browser:
+                        blocker = other
+                        break
+            if blocker is not None:
+                if starting_uses_browser:
+                    msg = (
+                        f"Can't start a browser-based run while “{blocker.scraper.name}” "
+                        "is running — browser sources need the server to themselves. "
+                        "Wait for it to finish or stop it first."
+                    )
+                else:
+                    msg = (
+                        f"A browser-based run (“{blocker.scraper.name}”) is in progress "
+                        "and is using the server's resources. Wait for it to finish or "
+                        "stop it first."
+                    )
+                raise RunStartError("busy", msg, 409)
+
+            return Run.objects.create(
+                scraper=scraper,
+                launched_by=launched_by,
+                tournament=(inputs.tournament or ALL_TOURNAMENTS)[:120],
+                date_from=inputs.date_from,
+                date_to=inputs.date_to,
+                params=inputs.params,
+                status=Run.Status.RUNNING,
+                started_at=timezone.now(),
+            )
     except IntegrityError:
         # Lost the race to the partial-unique constraint: another run is live.
         raise RunStartError(
             "already_running", "A run is already in progress for this source.", 409
         )
+
+
+def _start_scraper_run(scraper, *, inputs, launched_by):
+    """Guard + create the run (:func:`_create_guarded_run`) then launch the worker.
+
+    Shared by the real-time browser form and the GitHub-Actions trigger webhook so
+    both honour maintenance, stale-run reaping, the single-in-flight-run rule, the
+    browser-exclusivity rule, and launch-failure handling identically. ``inputs``
+    is a validated :class:`RunInputs`. Raises RunStartError on any guard failure.
+    """
+    run = _create_guarded_run(scraper, inputs=inputs, launched_by=launched_by)
     try:
         _launch_run(run)
     except Exception:  # noqa: BLE001

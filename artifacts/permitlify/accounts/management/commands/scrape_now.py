@@ -31,12 +31,10 @@ import os
 
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.db import IntegrityError
 from django.utils import timezone
 
 from accounts.live_scrapers.registry import get_spec
 from accounts.models import Run, Scraper
-from accounts.runs import ALL_TOURNAMENTS
 
 
 class Command(BaseCommand):
@@ -72,7 +70,7 @@ class Command(BaseCommand):
         # and we don't pull the view stack into unrelated management commands.
         from accounts.views import (
             RunStartError,
-            _reap_stale_runs,
+            _create_guarded_run,
             validate_run_params,
         )
 
@@ -109,36 +107,15 @@ class Command(BaseCommand):
         except RunStartError as exc:
             raise CommandError(str(exc))
 
-        if scraper.is_maintenance:
-            raise CommandError(
-                f"'{slug}' is in maintenance mode — runs are blocked. "
-                f"Flip it to Production first (Lab → Status)."
-            )
-
-        _reap_stale_runs(scraper)
-        if scraper.runs.filter(status=Run.Status.RUNNING).exists():
-            raise CommandError(
-                f"A run is already in progress for '{slug}'. "
-                f"Wait for it to finish (or stop it) before starting another."
-            )
-
+        # The single guarded create path shared with the website + webhook:
+        # maintenance, stale-run reaping, the single-in-flight rule, AND the
+        # browser-exclusivity rule (a browser source like the itftennis family
+        # needs the host to itself — it can't start while any other run is live,
+        # and nothing else can start while it is). RunStartError → CommandError.
         try:
-            run = Run.objects.create(
-                scraper=scraper,
-                launched_by=None,
-                tournament=(inputs.tournament or ALL_TOURNAMENTS)[:120],
-                date_from=inputs.date_from,
-                date_to=inputs.date_to,
-                params=inputs.params,
-                status=Run.Status.RUNNING,
-                started_at=timezone.now(),
-            )
-        except IntegrityError:
-            # Lost the race to the partial-unique constraint (another run is live).
-            raise CommandError(
-                f"A run is already in progress for '{slug}'. "
-                f"Wait for it to finish before starting another."
-            )
+            run = _create_guarded_run(scraper, inputs=inputs, launched_by=None)
+        except RunStartError as exc:
+            raise CommandError(str(exc))
 
         self.stdout.write(
             self.style.MIGRATE_HEADING(

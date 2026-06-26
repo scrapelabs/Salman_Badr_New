@@ -46,6 +46,7 @@ class ScraperSpec:
     input_kind: str = INPUT_YEAR
     runner_path: str = ""              # "accounts.live_scrapers.foo:run"
     allowed_hosts: tuple = ()          # host allowlist for URL inputs (SSRF guard)
+    uses_browser: bool = False         # drives a headless-Chrome pool (resource-heavy)
     needs_claude: bool = False         # AI scraper: surface a Claude API key field
     url_required: bool = False         # URL input is mandatory (no date-only mode)
     needs_login: bool = False          # login scraper: surface username/password fields
@@ -197,24 +198,28 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.itftennis_juniors:run",
         allowed_hosts=("www.itftennis.com",),
+        uses_browser=True,
     ),
     "itftennis_masters": ScraperSpec(
         slug="itftennis_masters",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.itftennis_masters:run",
         allowed_hosts=("www.itftennis.com",),
+        uses_browser=True,
     ),
     "itftennis_mens": ScraperSpec(
         slug="itftennis_mens",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.itftennis_mens:run",
         allowed_hosts=("www.itftennis.com",),
+        uses_browser=True,
     ),
     "itftennis_womens": ScraperSpec(
         slug="itftennis_womens",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.itftennis_womens:run",
         allowed_hosts=("www.itftennis.com",),
+        uses_browser=True,
     ),
     # --- ioncourt.com JSON API (college dual matches) ---------------------
     # A pure date-range scraper (no tournament URL). No host allowlist: it
