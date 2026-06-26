@@ -32,6 +32,11 @@ REM --- 2. Update from GitHub (origin/main) -----------------------------------
 REM  gc.auto=0 stops git repacking old pack files mid-pull, which is what
 REM  triggers Windows "Unlink of file '.git/objects/pack/*.idx' failed" errors
 REM  when an editor / the server / antivirus / OneDrive has the repo open.
+REM  The "< nul" feeds git an empty stdin so its "Unlink ... Should I try
+REM  again? (y/n)" retry prompt reads EOF and auto-answers "no" instead of
+REM  hanging forever; the skipped file is a redundant *.idx (harmless, git
+REM  cleans it on the next gc). Close the editor / server / File Explorer and
+REM  pause antivirus / OneDrive, then re-run for a fully clean pull.
 git --version >nul 2>&1
 if errorlevel 1 (
     echo [WARN] Git was not found on your PATH - skipping the GitHub update.
@@ -39,7 +44,7 @@ if errorlevel 1 (
     echo.
 ) else (
     echo Pulling latest code from origin/main ...
-    git -c gc.auto=0 pull origin main
+    git -c gc.auto=0 pull origin main < nul
     if errorlevel 1 (
         echo.
         echo [WARN] git pull did not complete cleanly - continuing with the code
