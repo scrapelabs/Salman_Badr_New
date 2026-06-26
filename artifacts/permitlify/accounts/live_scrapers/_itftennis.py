@@ -63,7 +63,7 @@ from lxml import etree
 
 from accounts.models import Run
 
-from ._browser import BrowserClient, allow_async_unsafe
+from ._browser import BrowserClient, allow_async_unsafe, browser_proxy
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
@@ -497,9 +497,13 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
     """Scrape one tournament: page → filters → drawsheets → rows via ``emit``."""
     tournament_url = tournament.get("tournament_url", "")
     tournament_id = tournament.get("tournament_id", "")
+    # The page load (Incapsula challenge + full settle) is the slow step, so name
+    # which tournament is loading *before* we block on it — otherwise a stall looks
+    # like a hang. The friendly name replaces this once the page metadata parses.
+    log("INFO", f"   \u23f3 loading {tournament_id or tournament_url} \u2026")
     sel = client.get_selector(tournament_url)
     if sel is None:
-        return
+        return 0
 
     surface = _ns(sel, '//span[@id="ga__tournament-surface"]').split("-")[0].strip()
     name = _ns(sel, '//h1[@id="ga__tournament-name"]')
@@ -513,7 +517,7 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
         country = (location.get("address") or {}).get("addressCountry", "")
 
     if not (name and start_date and end_date):
-        return
+        return 0
 
     filters = client.get_json(
         f"{API_ROOT}/tennis/api/TournamentApi/GetEventFilters"
@@ -521,7 +525,15 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
         headers=_API_HEADERS,
     )
     if not filters:
-        return
+        return 0
+
+    where = ", ".join(p for p in (city, country) if p)
+    log(
+        "INFO",
+        f"   \U0001f3df\ufe0f {name}"
+        + (f" \u2014 {where}" if where else "")
+        + (f" \u00b7 {surface}" if surface else ""),
+    )
 
     tctx = {
         "tournament_name": name,
@@ -534,6 +546,7 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
         "tournament_country_code": (country or "")[:3].upper(),
     }
 
+    emitted = 0
     code_list, desc_map = _parse_filters(filters)
     for json_data in code_list:
         draw_team_type = desc_map.get("matchTypeCode", {}).get(
@@ -578,7 +591,16 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
                 client, cfg, tctx, draw_name, draw_team_type, draw_gender,
                 player_gender, rec, dob_cache, dob_lock,
             )
-            emit(row)
+            if emit(row):
+                emitted += 1
+
+    log(
+        "INFO",
+        f"   \u2705 {name}: {emitted} match(es)"
+        if emitted
+        else f"   \u2205 {name}: no completed matches",
+    )
+    return emitted
 
 
 def _build_row(
@@ -678,6 +700,41 @@ def _window(run_obj):
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
+def _client_summary(scraper, rotate):
+    """One-line browser-client description for the phase-2 header.
+
+    The per-tournament browsers launch silently (``announce=False``) so this is
+    emitted ONCE per run instead of once per launch. Mirrors
+    ``BrowserClient.__enter__``'s wording and defers the direct-vs-proxy call to
+    ``browser_proxy`` (the single source of truth, which never exposes the raw
+    address).
+    """
+    channel = (getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or "").strip()
+    engine = f"Google {channel.title()}" if channel else "Chromium"
+    mode = (
+        "headless" if getattr(settings, "SCRAPER_BROWSER_HEADLESS", True) else "headed"
+    )
+    # Mirror make_browser: a persistent profile is only used when rotation is OFF
+    # *and* a profile dir is configured; otherwise every launch is ephemeral.
+    profile_root = (getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "") or "").strip()
+    persist = (
+        "persistent profile"
+        if (not rotate and profile_root)
+        else "ephemeral profile"
+    )
+    proxy = scraper.proxy
+    if browser_proxy(proxy):
+        kind = proxy.get_kind_display() if hasattr(proxy, "get_kind_display") else "?"
+        conn = f"via {kind} proxy '{getattr(proxy, 'name', '?')}'"
+        if rotate:
+            conn += " (rotating IP)"
+    else:
+        conn = "direct \u2014 no proxy"
+    return (
+        f"\U0001f310 HTTP client: patchright {engine} ({mode}, {persist}) {conn}"
+    )
+
+
 def run(cfg, run_obj, log):
     """Execute one itftennis circuit scrape; return the standard 5-tuple."""
     tele = Telemetry()
@@ -731,17 +788,18 @@ def run(cfg, run_obj, log):
         )
         with lock:
             if key in seen:
-                return
+                return False
             seen.add(key)
             writer.writerow([sanitize_cell(row.get(c, "")) for c in COLUMNS])
             counter["rows"] += 1
         log(
             "INFO",
-            f"   \U0001f3c6 {row.get('draw_team_type', '')}: "
+            f"      \U0001f3be {row.get('draw_team_type', '')} "
+            f"{row.get('round', '')}: "
             f"{row.get('winner_1_name') or '?'} def. "
-            f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
-            f"@ {row.get('tournament_name') or cfg.label}",
+            f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}]".rstrip(),
         )
+        return True
 
     def crawl_one(browser, tournament):
         try:
@@ -805,6 +863,7 @@ def run(cfg, run_obj, log):
                 user_data_dir=None if rotate else user_data_dir,
                 rotate_proxy_session=rotate,
                 manage_async_unsafe=False,
+                announce=False,
             )
 
         def announce_phase2():
@@ -816,6 +875,9 @@ def run(cfg, run_obj, log):
                 "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping tournaments "
                 "(patchright) \u2500\u2500\u2500\u2500",
             )
+            # The per-tournament browsers launch silently (announce=False) so the
+            # identical client line isn't repeated once per tournament; say it once.
+            log("INFO", _client_summary(scraper, rotate))
 
         def crawl_isolated(tournament):
             # One tournament in its *own* fresh browser. Used both serially and as

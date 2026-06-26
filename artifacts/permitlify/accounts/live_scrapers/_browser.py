@@ -172,6 +172,7 @@ class BrowserClient:
         user_data_dir=None,
         rotate_proxy_session=False,
         manage_async_unsafe=True,
+        announce=True,
     ):
         self.log = log
         self.tele = tele
@@ -189,6 +190,11 @@ class BrowserClient:
         # (possibly concurrent) browser phase via allow_async_unsafe(); when True
         # (the default, for a lone sequential client) this instance manages it.
         self.manage_async_unsafe = bool(manage_async_unsafe)
+        # When False this client stays quiet about its own launch (engine/mode/
+        # proxy). A run that spins up many browsers (per-request rotation) would
+        # otherwise repeat the identical "HTTP client:" line once per launch and
+        # bury the actual scrape output — so the engine announces it ONCE itself.
+        self.announce = bool(announce)
         self._session_token = None
         self._pw = None
         self._browser = None
@@ -256,10 +262,12 @@ class BrowserClient:
             conn = "direct \u2014 no proxy"
         mode = "headless" if self.headless else "headed"
         persist = "persistent profile" if self.user_data_dir else "ephemeral profile"
-        self.log(
-            "INFO",
-            f"\U0001f310 HTTP client: patchright {engine} ({mode}, {persist}) {conn}",
-        )
+        if self.announce:
+            self.log(
+                "INFO",
+                f"\U0001f310 HTTP client: patchright {engine} ({mode}, {persist}) "
+                f"{conn}",
+            )
 
         # Playwright's sync API drives an asyncio event loop in this thread, so
         # Django's async-safety guard rejects every ORM call the scrape makes
