@@ -662,3 +662,53 @@ class ScraperSchedule(models.Model):
             f"Schedule({self.scraper_id}, {self.frequency}, "
             f"enabled={self.enabled})"
         )
+
+
+class ScheduleEvent(models.Model):
+    """One row per in-app-scheduler fire attempt — the Lab's "Cron history".
+
+    The scheduler thread (:mod:`accounts.scheduler`) writes one of these every
+    time a schedule comes due, recording what happened so operators can see the
+    cron is alive and why any given cycle did or didn't start a fresh run:
+
+    - ``LAUNCHED`` — a run was started (it streams live on the Real-time tab).
+    - ``SKIPPED_IN_FLIGHT`` — a run was already in progress, so the cycle was a
+      healthy skip (the cron passed — a job is already working).
+    - ``SKIPPED_MAINTENANCE`` — the source is in maintenance.
+    - ``SKIPPED_DISABLED`` — the schedule was turned off between claim and launch.
+    - ``FAILED`` — the run could not be started (``detail`` says why).
+
+    ``created_at`` is when the cron fired; ``scheduled_for`` is the UTC instant
+    the cycle was due for.
+    """
+
+    class Outcome(models.TextChoices):
+        LAUNCHED = "launched", "Launched"
+        SKIPPED_IN_FLIGHT = "skipped_in_flight", "Skipped — run already in progress"
+        SKIPPED_MAINTENANCE = "skipped_maintenance", "Skipped — in maintenance"
+        SKIPPED_DISABLED = "skipped_disabled", "Skipped — schedule disabled"
+        FAILED = "failed", "Failed to start"
+
+    scraper = models.ForeignKey(
+        Scraper, on_delete=models.CASCADE, related_name="schedule_events"
+    )
+    outcome = models.CharField(max_length=24, choices=Outcome.choices)
+    detail = models.CharField(max_length=500, blank=True, default="")
+    # UTC instant the cycle was due for (the schedule's next_run_at at claim
+    # time); the actual fire time is ``created_at``.
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    run = models.ForeignKey(
+        "Run", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["scraper", "-created_at"])]
+
+    @property
+    def is_failure(self):
+        return self.outcome == self.Outcome.FAILED
+
+    def __str__(self):
+        return f"ScheduleEvent({self.scraper_id}, {self.outcome})"

@@ -52,6 +52,24 @@ spawning **zero** runs (maintenance → `RunStartError` → `_launch` skip, no
 worker). Reset `last_fired_at=None` before the probe so the change is unambiguous.
 For pure math, unit-test `scheduling.compute_next_run` directly (no DB).
 
+## Cron history (ScheduleEvent) — visibility into every fire
+Each `_launch()` cycle persists a `ScheduleEvent`; the Schedule tab's "Cron
+history" panel reads the most recent ones.
+**Why:** operators need proof the cron is alive and a reason when no fresh run
+started. A cycle that finds a run already in flight is a *healthy* skip ("cron
+passed, a job is working"), NOT a failure — only a genuine launch/validation
+error is a failure.
+**How to apply:** map `RunStartError.code` → outcome with `already_running` /
+`busy` as the only healthy "in-flight" skips and **`FAILED` as the default for
+any unknown code** — a misconfigured schedule (e.g. URL-required with no URL)
+must never masquerade as "already running". Persisted `detail` must stay
+secret-safe: render the curated `RunStartError.message`, but for an *unexpected*
+exception store a generic string and keep the traceback in the server log only
+(raw exception text can carry the proxy address). A scheduler-launched run is a
+normal `Run`, so it **already streams in the Real-time tab** (that tab attaches
+to any `RUNNING` run for the scraper, launcher-agnostic) — no extra wiring.
+Recording is best-effort/after-commit (consistent with at-most-once, no backfill).
+
 ## Restart after changes
 `runserver --noreload` + the long-lived thread mean the running scheduler holds
 **old code** until you restart the `artifacts/permitlify: web` workflow. Always

@@ -1048,6 +1048,53 @@
     })();
   </script>
 
+  <div class="panel sched-history">
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Automation · visibility</div>
+          <div class="status-name">Cron history</div>
+        </div>
+        <span class="ptype {% if schedule.enabled %}datacenter{% else %}direct{% endif %}">{% if schedule.enabled %}Scheduler on{% else %}Scheduler off{% endif %}</span>
+      </div>
+
+      <p class="rt-intro">
+        Each time this schedule comes due, the background scheduler logs what happened here —
+        live proof the cron is running. A launched run streams on the
+        <a href="?tab=real-time">Real-time test</a> tab; if a run is already in progress the
+        cycle is logged as a healthy skip (the cron passed — a job is already working); a real
+        failure shows exactly why it couldn't start.
+      </p>
+
+      {% if cron_events %}
+      <ul class="ch-list">
+        {% for ev in cron_events %}
+        <li class="ch-row ch-{{ ev.outcome }}">
+          <span class="ch-dot" aria-hidden="true"></span>
+          <div class="ch-body">
+            <div class="ch-top">
+              <span class="ch-outcome">{{ ev.get_outcome_display }}</span>
+              <time class="ch-when" title="{{ ev.created_at|date:'Y-m-d H:i:s' }} UTC">{{ ev.created_at|date:'M j, Y H:i' }} UTC</time>
+            </div>
+            {% if ev.detail %}<div class="ch-detail">{{ ev.detail }}</div>{% endif %}
+            <div class="ch-meta">
+              {% if ev.scheduled_for %}<span class="ch-due">Due {{ ev.scheduled_for|date:'M j, H:i' }} UTC</span>{% endif %}
+              {% if ev.run %}<a class="ch-runlink" href="{% url 'run_log' s.slug ev.run.uuid %}">Run #{{ ev.run.short_id }} · {{ ev.run.get_status_display }}</a>{% endif %}
+            </div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="status-note settings-empty">
+        No scheduled fires yet. Once “Run automatically” is on and the next due time passes,
+        every attempt — launched, skipped, or failed — appears here with the reason and a link
+        to the run.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
   {% else %}
   <div class="panel">
     <div class="panel-empty">

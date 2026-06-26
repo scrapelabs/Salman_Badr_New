@@ -758,6 +758,11 @@ def scraper_detail_view(request, slug):
             if (sched.enabled and sched.next_run_at)
             else None
         )
+        # Cron history: the most recent scheduler fire attempts for this scraper,
+        # each annotated with what happened (launched / healthy skip / failure).
+        ctx["cron_events"] = list(
+            s.schedule_events.select_related("run").order_by("-created_at")[:25]
+        )
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
         ctx["thread_min"] = Scraper.THREADS_MIN
@@ -842,11 +847,14 @@ class RunStartError(Exception):
     (which returns JSON + status) share one validation/launch path.
     """
 
-    def __init__(self, code, message, status):
+    def __init__(self, code, message, status, run=None):
         super().__init__(message)
         self.code = code
         self.message = message
         self.status = status
+        # The created-but-failed Run when a launch fails after the row exists,
+        # so callers (e.g. the scheduler's Cron history) can link to it.
+        self.run = run
 
 
 def _parse_year(raw, *, default_current=False):
@@ -1214,7 +1222,10 @@ def _start_scraper_run(scraper, *, inputs, launched_by):
         run.log_text = "Failed to launch the scraper process.\n"
         run.save(update_fields=["status", "finished_at", "log_text"])
         raise RunStartError(
-            "launch_failed", "Could not start the run. Please try again.", 503
+            "launch_failed",
+            "Could not start the run. Please try again.",
+            503,
+            run=run,
         )
     return run
 

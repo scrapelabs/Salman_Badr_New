@@ -116,7 +116,7 @@ def tick(now=None):
     close_old_connections()
     try:
         now = now or timezone.now()
-        to_launch = []  # [(scraper, schedule_pk), …]
+        to_launch = []  # [(scraper, schedule_pk, due_at), …]
         with transaction.atomic():
             with connection.cursor() as cur:
                 cur.execute("SELECT pg_try_advisory_xact_lock(%s)", [SCHED_LOCK_KEY])
@@ -133,6 +133,9 @@ def tick(now=None):
                 .order_by("next_run_at")
             )
             for sched in due:
+                # The instant this cycle was due for (recorded on the Cron-history
+                # event below); captured before we advance to the next occurrence.
+                due_at = sched.next_run_at
                 sched.next_run_at = scheduling.compute_next_run(
                     frequency=sched.frequency,
                     time_of_day=sched.time_of_day,
@@ -146,24 +149,64 @@ def tick(now=None):
                 sched.save(
                     update_fields=["next_run_at", "last_fired_at", "updated_at"]
                 )
-                to_launch.append((sched.scraper, sched.pk))
-        for scraper, sched_pk in to_launch:
-            _launch(scraper, sched_pk)
+                to_launch.append((sched.scraper, sched.pk, due_at))
+        for scraper, sched_pk, due_at in to_launch:
+            _launch(scraper, sched_pk, due_at)
     finally:
         close_old_connections()
 
 
-def _launch(scraper, sched_pk):
-    """Launch one due scraper via the shared run-start path; record the run."""
+def _launch(scraper, sched_pk, due_at=None):
+    """Launch one due scraper via the shared run-start path; record the outcome.
+
+    Every cycle writes a :class:`~accounts.models.ScheduleEvent` (the Lab's
+    "Cron history") so operators can see the scheduler is alive and why a given
+    cycle did or didn't start a fresh run: launched, a healthy skip (a run was
+    already in flight / the source is in maintenance / the schedule was just
+    disabled), or a real launch failure with the reason attached.
+    """
     from .live_scrapers import registry
-    from .models import ScraperSchedule
+    from .models import ScheduleEvent, ScraperSchedule
     from .views import RunStartError, _start_scraper_run, validate_run_params
+
+    Outcome = ScheduleEvent.Outcome
+    # Map the shared run-start guard's error codes onto cron-history outcomes.
+    # Only "already in progress" / browser-busy are *healthy* skips; maintenance
+    # is a skip; anything else (a launch failure or an unknown/validation code,
+    # e.g. a URL-required schedule with no URL) is a real FAILED — so the default
+    # is FAILED, never a misleading "already running".
+    outcome_for_code = {
+        "maintenance": Outcome.SKIPPED_MAINTENANCE,
+        "already_running": Outcome.SKIPPED_IN_FLIGHT,
+        "busy": Outcome.SKIPPED_IN_FLIGHT,
+        "launch_failed": Outcome.FAILED,
+    }
+
+    # Best-effort Cron-history write. Events are recorded *after* the claim txn
+    # commits (the schedule is already advanced), so a crash between commit and
+    # here loses the event for that one fire — acceptable under the at-most-once,
+    # no-backfill policy. An event-write failure must never break the launch.
+    def record(outcome, *, detail="", run=None):
+        try:
+            ScheduleEvent.objects.create(
+                scraper=scraper,
+                outcome=outcome,
+                detail=(detail or "")[:500],
+                run=run,
+                scheduled_for=due_at,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to record cron event for %s.", scraper.slug)
 
     # Re-check the schedule is still enabled: the user may have turned it off
     # between this cycle's claim/advance and now, so honour that immediately
     # rather than firing one last already-claimed run.
     if not ScraperSchedule.objects.filter(pk=sched_pk, enabled=True).exists():
         logger.info("Scheduled run for %s skipped: schedule disabled.", scraper.slug)
+        record(
+            Outcome.SKIPPED_DISABLED,
+            detail="The schedule was turned off before this run could start.",
+        )
         return
 
     try:
@@ -171,11 +214,23 @@ def _launch(scraper, sched_pk):
         inputs = validate_run_params(spec, {}, webhook=True)
         run = _start_scraper_run(scraper, inputs=inputs, launched_by=None)
     except RunStartError as exc:
-        # Maintenance / already-running / browser-exclusivity — skip this cycle.
-        logger.info("Scheduled run for %s skipped: %s", scraper.slug, exc.message)
+        # already-running / browser-busy = healthy skip; maintenance = skip;
+        # launch failure / unknown / validation code = real FAILED. The
+        # RunStartError message is curated operator-facing copy (no secrets); a
+        # failed launch carries its Run so the history can link to it.
+        outcome = outcome_for_code.get(exc.code, Outcome.FAILED)
+        logger.info("Scheduled run for %s not started: %s", scraper.slug, exc.message)
+        record(outcome, detail=exc.message, run=getattr(exc, "run", None))
         return
     except Exception:  # noqa: BLE001
+        # Keep the full traceback in the server log only — raw exception text can
+        # carry secrets / proxy addresses, so the persisted detail stays generic.
         logger.exception("Scheduled run for %s failed to start.", scraper.slug)
+        record(
+            Outcome.FAILED,
+            detail="The run could not be started (unexpected error). See server logs.",
+        )
         return
     ScraperSchedule.objects.filter(pk=sched_pk).update(last_run=run)
+    record(Outcome.LAUNCHED, run=run, detail=f"Run #{run.short_id} started.")
     logger.info("Scheduled run #%s launched for %s.", run.short_id, scraper.slug)
