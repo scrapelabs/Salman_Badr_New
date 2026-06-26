@@ -53,6 +53,7 @@ import math
 import os
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -465,31 +466,106 @@ def _extract_records(data):
 _DOB_NS = {"ns": "http://schemas.datacontract.org/2004/07/Itf.Tennis.Core.Models.Api"}
 
 
-def _parse_dob(client, name, player_id, dob_cache, dob_lock):
-    """Resolve a player's DOB via ``GetHeadToHeadPlayerDetails`` (XML), cached."""
-    if not (name and player_id):
-        return ""
-    key = str(player_id)
-    with dob_lock:
-        if key in dob_cache:
-            return dob_cache[key]
-    dob = ""
-    url = (
-        f"{API_ROOT}/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails"
-        f"?playerId={player_id}"
-    )
-    resp = client.get(url)
-    if resp is not None and 200 <= resp.status_code < 300:
-        try:
-            tree = etree.fromstring(resp.content)
-            text = tree.xpath("string(./ns:DateOfBirth)", namespaces=_DOB_NS)
-            if text:
-                dob = _to_mdy(text.strip()[:19], "%Y-%m-%dT%H:%M:%S")
-        except Exception:  # noqa: BLE001 - bad XML can't kill the run
-            dob = ""
-    with dob_lock:
-        dob_cache[key] = dob
-    return dob
+def _extract_dob(resp):
+    """Pull ``DateOfBirth`` (→ m/d/Y) out of a ``GetHeadToHeadPlayerDetails``
+    XML body. Returns "" for a missing/blank DOB or unparseable XML."""
+    try:
+        tree = etree.fromstring(resp.content)
+        text = tree.xpath("string(./ns:DateOfBirth)", namespaces=_DOB_NS)
+        if text:
+            return _to_mdy(text.strip()[:19], "%Y-%m-%dT%H:%M:%S")
+    except Exception:  # noqa: BLE001 - bad XML can't kill the run
+        pass
+    return ""
+
+
+class _DobResolver:
+    """Per-tournament player-DOB lookups, tuned for the Incapsula *rate*
+    re-challenge that ``GetHeadToHeadPlayerDetails`` trips under a burst.
+
+    The tournament's browser already holds Incapsula clearance (that's why the
+    drawsheet API calls succeed), but dozens of DOB fetches per second from one
+    session re-trigger a rate challenge. So:
+
+    * **pace** each lookup (a short sleep) so the per-IP rate stays under the
+      re-challenge threshold — most DOBs resolve in the *same* browser, fast;
+    * when a lookup is **still** blocked, *rotate* — relaunch the browser for a
+      fresh exit IP (on a rotating proxy) + re-solved clearance, then retry that
+      one lookup, bounded to ``max_rotations`` relaunches;
+    * DOB is **best-effort** — once the rotation budget is spent it yields ""
+      rather than stalling the run, so a match row is never lost over a DOB.
+
+    Results are cached per run (shared across the worker threads) so a repeat
+    player costs no network call. One resolver owns one browser (one thread);
+    relaunching it never touches another thread's browser.
+    """
+
+    def __init__(
+        self, client, tournament_url, log, cache, lock, *, delay, max_rotations
+    ):
+        self.client = client
+        self.tournament_url = tournament_url
+        self.log = log
+        self.cache = cache
+        self.lock = lock
+        self.delay = max(0.0, delay)
+        self.max_rotations = max(0, max_rotations)
+
+    def resolve(self, name, player_id):
+        if not (name and player_id):
+            return ""
+        key = str(player_id)
+        with self.lock:
+            if key in self.cache:
+                return self.cache[key]
+        dob = self._lookup(player_id)
+        with self.lock:
+            # Re-check under the lock: another worker thread may have resolved
+            # this same player while we were looking it up. A best-effort blank
+            # must never clobber a good DOB already cached by that thread (that
+            # would poison every later row for the player), so only write when we
+            # have a value or the slot is still empty.
+            cached = self.cache.get(key, "")
+            if cached and not dob:
+                return cached
+            self.cache[key] = dob
+        return dob
+
+    def _lookup(self, player_id):
+        url = (
+            f"{API_ROOT}/tennis/Api/PlayerApi/GetHeadToHeadPlayerDetails"
+            f"?playerId={player_id}"
+        )
+        for rotation in range(self.max_rotations + 1):
+            # Pace the burst: the clearance cookie stays valid, but too many DOB
+            # fetches per second from one IP re-trigger the rate challenge.
+            if self.delay:
+                time.sleep(self.delay)
+            resp = self.client.get(url)
+            if resp is not None and 200 <= resp.status_code < 300:
+                return _extract_dob(resp)
+            # Still blocked (``get`` already retried the in-page fetch). Rotate to
+            # a fresh IP + clearance and retry, unless the budget is spent.
+            if rotation < self.max_rotations:
+                self.log(
+                    "INFO",
+                    "   \U0001f504 DOB blocked \u2014 rotating browser "
+                    "(fresh IP) and retrying",
+                )
+                try:
+                    self.client.relaunch()
+                    # Re-solve the Incapsula challenge on the fresh identity so
+                    # the next in-page DOB fetch inherits clearance.
+                    self.client.get_selector(self.tournament_url)
+                except Exception as exc:  # noqa: BLE001 - best-effort rotation
+                    self.log(
+                        "WARN",
+                        redact_secrets(
+                            f"   \u26a0\ufe0f DOB rotation failed: "
+                            f"{exc.__class__.__name__}: {exc}"
+                        ),
+                    )
+        return ""  # best-effort: never stall a run on a stubborn DOB
 
 
 # ======================================================================
@@ -548,6 +624,12 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
         "tournament_country_code": (country or "")[:3].upper(),
     }
 
+    dob_resolver = _DobResolver(
+        client, tournament_url, log, dob_cache, dob_lock,
+        delay=getattr(settings, "SCRAPER_ITF_DOB_DELAY_MS", 250) / 1000.0,
+        max_rotations=getattr(settings, "SCRAPER_ITF_DOB_MAX_ROTATIONS", 2),
+    )
+
     emitted = 0
     code_list, desc_map = _parse_filters(filters)
     for json_data in code_list:
@@ -590,8 +672,8 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
             if (rec.get("outcome", "") or "").lower() not in ("completed", "retired"):
                 continue
             row = _build_row(
-                client, cfg, tctx, draw_name, draw_team_type, draw_gender,
-                player_gender, rec, dob_cache, dob_lock,
+                dob_resolver, cfg, tctx, draw_name, draw_team_type, draw_gender,
+                player_gender, rec,
             )
             if emit(row):
                 emitted += 1
@@ -606,8 +688,8 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
 
 
 def _build_row(
-    client, cfg, tctx, draw_name, draw_team_type, draw_gender, player_gender,
-    rec, dob_cache, dob_lock,
+    dob_resolver, cfg, tctx, draw_name, draw_team_type, draw_gender,
+    player_gender, rec,
 ):
     """Assemble one items row from a match record + DOB lookups."""
     w1_name = rec.get("winner_1_name", "")
@@ -628,9 +710,8 @@ def _build_row(
         "score": rec.get("score", ""),
         "winner_1_name": w1_name,
         "winner_1_gender": player_gender if w1_name else "",
-        "winner_1_dob": _parse_dob(
-            client, w1_name, rec.get("winner_1_third_party_id", ""),
-            dob_cache, dob_lock,
+        "winner_1_dob": dob_resolver.resolve(
+            w1_name, rec.get("winner_1_third_party_id", "")
         ),
         "winner_1_third_party_id": rec.get("winner_1_third_party_id", ""),
         "winner_1_city": "",
@@ -638,9 +719,8 @@ def _build_row(
         "winner_1_country": rec.get("winner_1_country", ""),
         "winner_2_name": w2_name,
         "winner_2_gender": player_gender if w2_name else "",
-        "winner_2_dob": _parse_dob(
-            client, w2_name, rec.get("winner_2_third_party_id", ""),
-            dob_cache, dob_lock,
+        "winner_2_dob": dob_resolver.resolve(
+            w2_name, rec.get("winner_2_third_party_id", "")
         ),
         "winner_2_third_party_id": rec.get("winner_2_third_party_id", ""),
         "winner_2_city": "",
@@ -648,9 +728,8 @@ def _build_row(
         "winner_2_country": rec.get("winner_2_country", ""),
         "loser_1_name": l1_name,
         "loser_1_gender": player_gender if l1_name else "",
-        "loser_1_dob": _parse_dob(
-            client, l1_name, rec.get("loser_1_third_party_id", ""),
-            dob_cache, dob_lock,
+        "loser_1_dob": dob_resolver.resolve(
+            l1_name, rec.get("loser_1_third_party_id", "")
         ),
         "loser_1_third_party_id": rec.get("loser_1_third_party_id", ""),
         "loser_1_city": "",
@@ -658,9 +737,8 @@ def _build_row(
         "loser_1_country": rec.get("loser_1_country", ""),
         "loser_2_name": l2_name,
         "loser_2_gender": player_gender if l2_name else "",
-        "loser_2_dob": _parse_dob(
-            client, l2_name, rec.get("loser_2_third_party_id", ""),
-            dob_cache, dob_lock,
+        "loser_2_dob": dob_resolver.resolve(
+            l2_name, rec.get("loser_2_third_party_id", "")
         ),
         "loser_2_third_party_id": rec.get("loser_2_third_party_id", ""),
         "loser_2_city": "",

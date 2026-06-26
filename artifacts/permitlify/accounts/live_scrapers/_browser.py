@@ -205,6 +205,50 @@ class BrowserClient:
 
     # -- lifecycle -------------------------------------------------------
     def __enter__(self):
+        # The async-unsafe env var is owned for the whole session lifetime: set
+        # once here, restored once in close(). It must survive a mid-session
+        # relaunch(), so it lives here rather than in the shared _launch() body.
+        #
+        # Playwright's sync API drives an asyncio event loop in this thread, so
+        # Django's async-safety guard rejects every ORM call the scrape makes
+        # while the browser is open (the log/telemetry RunLogLine writes) with
+        # SynchronousOnlyOperation. DJANGO_ALLOW_ASYNC_UNSAFE is the official
+        # opt-out. It is *process-global*, so when several BrowserClients run
+        # concurrently (one per thread) the caller must set it ONCE around the
+        # whole pool via allow_async_unsafe() and construct each client with
+        # manage_async_unsafe=False — a per-instance set/restore would race (one
+        # thread's teardown unsets it under another still-running thread). A lone
+        # sequential client manages it itself and restores it on teardown.
+        if self.manage_async_unsafe:
+            self._prev_async_unsafe = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
+            os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
+        try:
+            self._launch(announce=self.announce)
+        except Exception:
+            self.close()
+            raise
+        return self
+
+    def relaunch(self):
+        """Shed the current identity and open a fresh browser (a new session
+        token → a new exit IP on a rotating proxy, plus a fresh ephemeral
+        profile) **without** releasing the async-unsafe env var the surrounding
+        phase owns. Used mid-tournament to escape an accumulated anti-bot
+        challenge; re-solving the page challenge afterwards (navigate to a
+        cleared URL) is the caller's job. On failure the exception propagates and
+        the (now browser-less) client returns honest failures until close()."""
+        self._teardown_browser()
+        self._launch(announce=False)
+        return self
+
+    def _launch(self, *, announce=False):
+        """Open a fresh Chromium context (engine, proxy/session, profile, page).
+
+        Shared by :meth:`__enter__` and :meth:`relaunch`. A new session token
+        here forces a new exit IP from a sticky/rotating proxy. Does **not**
+        touch the process-global async-unsafe env var (owned once by __enter__).
+        On failure it propagates; the caller decides whether to ``close()``.
+        """
         try:
             from patchright.sync_api import sync_playwright
         except Exception as exc:  # noqa: BLE001 - surfaced as honest failure
@@ -262,68 +306,75 @@ class BrowserClient:
             conn = "direct \u2014 no proxy"
         mode = "headless" if self.headless else "headed"
         persist = "persistent profile" if self.user_data_dir else "ephemeral profile"
-        if self.announce:
+        if announce:
             self.log(
                 "INFO",
                 f"\U0001f310 HTTP client: patchright {engine} ({mode}, {persist}) "
                 f"{conn}",
             )
 
-        # Playwright's sync API drives an asyncio event loop in this thread, so
-        # Django's async-safety guard rejects every ORM call the scrape makes
-        # while the browser is open (the log/telemetry RunLogLine writes) with
-        # SynchronousOnlyOperation. DJANGO_ALLOW_ASYNC_UNSAFE is the official
-        # opt-out. It is *process-global*, so when several BrowserClients run
-        # concurrently (one per thread) the caller must set it ONCE around the
-        # whole pool via allow_async_unsafe() and construct each client with
-        # manage_async_unsafe=False — a per-instance set/restore would race (one
-        # thread's teardown unsets it under another still-running thread). A lone
-        # sequential client manages it itself and restores it on teardown.
-        if self.manage_async_unsafe:
-            self._prev_async_unsafe = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
-            os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
-        try:
-            # Resolve the profile directory (inside the try so a rare makedirs /
-            # mkdtemp failure still runs close() and restores the env var above).
-            # A caller-supplied (stable, per-scraper) dir lets Incapsula clearance
-            # cookies survive between runs — the whole point of "persistent
-            # profile". Without one we use a throwaway temp dir that close()
-            # deletes. launch_persistent_context needs *some* dir either way.
-            if self.user_data_dir:
-                self._profile_dir = self.user_data_dir
-                os.makedirs(self._profile_dir, exist_ok=True)
-                self._clear_stale_singleton_locks(self._profile_dir)
-            else:
-                self._profile_dir = tempfile.mkdtemp(prefix="mm-browser-")
-                self._owns_profile_dir = True
+        # Resolve the profile directory. A caller-supplied (stable, per-scraper)
+        # dir lets Incapsula clearance cookies survive between runs — the whole
+        # point of "persistent profile". Without one we use a throwaway temp dir
+        # that _teardown_browser() deletes. In the default rotate-per-request
+        # path the client carries NO user_data_dir, so every relaunch() lands in
+        # the else-branch below: a fresh ephemeral profile (sheds cookies) plus
+        # the fresh session token minted above (a new exit IP on a rotating
+        # proxy) — exactly what DOB rate-challenge recovery needs. In the
+        # non-rotate persistent path relaunch() instead reuses this same dir and
+        # mints no new token, so it keeps the same IP/cookies and is effectively
+        # a no-op for challenge recovery (a documented limitation; that path is
+        # not the production DOB path). launch_persistent_context needs *some*
+        # dir either way. Exceptions propagate to the caller (__enter__ calls
+        # close(); relaunch() leaves the client browser-less, returning honest
+        # failures until close()).
+        if self.user_data_dir:
+            self._profile_dir = self.user_data_dir
+            os.makedirs(self._profile_dir, exist_ok=True)
+            self._clear_stale_singleton_locks(self._profile_dir)
+        else:
+            self._profile_dir = tempfile.mkdtemp(prefix="mm-browser-")
+            self._owns_profile_dir = True
 
-            self._pw = sync_playwright().start()
-            # launch_persistent_context returns the BrowserContext directly (no
-            # separate Browser): patchright's recommended, most-stealthy path.
-            # Every SSRF guard attaches to this context exactly as before.
-            self._context = self._pw.chromium.launch_persistent_context(
-                self._profile_dir, **launch_kwargs
-            )
-            self._context.set_default_timeout(self.api_timeout)
-            self._context.route("**/*", self._route_guard)
-            self._guard_websockets()
-            # A persistent context opens with a default page; reuse it.
-            self._page = (
-                self._context.pages[0]
-                if self._context.pages
-                else self._context.new_page()
-            )
-        except Exception:
-            self.close()
-            raise
-        return self
+        self._pw = sync_playwright().start()
+        # launch_persistent_context returns the BrowserContext directly (no
+        # separate Browser): patchright's recommended, most-stealthy path.
+        # Every SSRF guard attaches to this context exactly as before.
+        self._context = self._pw.chromium.launch_persistent_context(
+            self._profile_dir, **launch_kwargs
+        )
+        self._context.set_default_timeout(self.api_timeout)
+        self._context.route("**/*", self._route_guard)
+        self._guard_websockets()
+        # A persistent context opens with a default page; reuse it.
+        self._page = (
+            self._context.pages[0]
+            if self._context.pages
+            else self._context.new_page()
+        )
 
     def __exit__(self, *exc):
         self.close()
 
     def close(self):
+        # Tear the browser down, then release the async-unsafe env var this client
+        # owns (set once in __enter__). relaunch() reuses only the first half via
+        # _teardown_browser() so the env var survives the rotation.
+        self._teardown_browser()
+        prev = getattr(self, "_prev_async_unsafe", "__unset__")
+        if prev != "__unset__":
+            if prev is None:
+                os.environ.pop("DJANGO_ALLOW_ASYNC_UNSAFE", None)
+            else:
+                os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = prev
+            self._prev_async_unsafe = "__unset__"
+
+    def _teardown_browser(self):
         # launch_persistent_context has no separate Browser object — closing the
-        # context tears the whole session (and its Chrome process) down.
+        # context tears the whole session (and its Chrome process) down. Leaves
+        # the async-unsafe env-var state alone (close() owns that) so it is safe
+        # to call from relaunch(). Safe to call repeatedly / on a half-open
+        # client.
         for closer in (
             lambda: self._context and self._context.close(),
             lambda: self._pw and self._pw.stop(),
@@ -339,13 +390,6 @@ class BrowserClient:
             shutil.rmtree(self._profile_dir, ignore_errors=True)
         self._profile_dir = None
         self._owns_profile_dir = False
-        prev = getattr(self, "_prev_async_unsafe", "__unset__")
-        if prev != "__unset__":
-            if prev is None:
-                os.environ.pop("DJANGO_ALLOW_ASYNC_UNSAFE", None)
-            else:
-                os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = prev
-            self._prev_async_unsafe = "__unset__"
 
     @staticmethod
     def _clear_stale_singleton_locks(profile_dir):

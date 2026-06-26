@@ -203,3 +203,42 @@ not a no-op. Confirmed 2026-06-26: 3 concurrent browsers, all ORM writes OK, no
 race, env restored to unset after every scope; negative control raised as expected.
 Earlier single-thread confirmation: single-URL M25 Deauville via runserver →
 success, 31 rows, 86 ORM-streamed log lines, 0 async errors.
+
+# Player-DOB (`GetHeadToHeadPlayerDetails`) is its own anti-bot battle (Option A, 2026-06-26)
+
+The per-player DOB XML endpoint is gated **separately** from the drawsheet:
+- **It's JS-challenge-gated on the FIRST hit.** Probe: direct `curl_cffi` on the DOB
+  URL = 29/30 CHALLENGE on request #1. So DOB can't be fetched out-of-browser, and
+  "fresh IP per request via curl / fresh-IP-per-request" is **useless** — it must come
+  from inside the Incapsula-cleared patchright browser (in-page fetch, like the API).
+- **But a burst trips a RATE re-challenge** even while `TournamentApi` still works:
+  dozens of DOB fetches/sec from one session re-challenge that one identity.
+
+**Chosen design (Option A — NOT per-request relaunch):** pace each DOB lookup (a
+short `time.sleep`, `SCRAPER_ITF_DOB_DELAY_MS`) so the per-IP rate stays under the
+threshold → most resolve in the *same* browser, fast. Only when a lookup is *still*
+blocked, **relaunch** the browser (`BrowserClient.relaunch()` → fresh exit IP on a
+rotating proxy + re-solved clearance) and retry, bounded by
+`SCRAPER_ITF_DOB_MAX_ROTATIONS`. After the budget is spent, DOB is **best-effort
+blank** so a match row is never lost / a run never stalls over a stubborn DOB.
+**Why not relaunch-per-DOB:** a relaunch is ~3-4s + a fresh challenge solve;
+per-call rotation would make a tournament take hours and throw away the clearance the
+very next call needs.
+
+**`BrowserClient.relaunch()` env-var ownership (the trap):** `relaunch()` =
+`_teardown_browser()` + `_launch()`, and must **NOT** touch
+`DJANGO_ALLOW_ASYNC_UNSAFE`. That var is owned once by `__enter__`/`close()`; if a
+relaunch in one worker released it, sibling threads' live browsers would start raising
+`SynchronousOnlyOperation`. So the lifecycle is split: `_launch` (build context, no
+env-var, exceptions propagate) / `relaunch` (teardown+launch, no env-var) / `close`
+(teardown + env-var restore) / `_teardown_browser` (context/pw close + drop ephemeral
+profile, no env-var). A failed `relaunch` leaves the client **browser-less** — it then
+returns honest `None`s (→ blank DOB) until `close()`, which is fine.
+
+**Shared DOB cache write race (architect catch):** the per-run cache is checked under
+a lock, the lookup runs *outside* the lock, then the result is written — so two threads
+can miss the same player and a best-effort **blank** from one can clobber a **good**
+DOB the other just cached, poisoning every later row for that player. Fix: re-check
+under the lock before writing and **never overwrite a non-empty cached DOB with an
+empty result**. (General rule for any "check cache → slow fetch → write cache" with a
+best-effort/blank failure value.)

@@ -248,3 +248,17 @@ SCRAPER_BROWSER_PROFILE_DIR = os.environ.get(
 SCRAPER_BROWSER_ROTATE_PER_REQUEST = (
     os.environ.get("SCRAPER_BROWSER_ROTATE_PER_REQUEST", "True").lower() != "false"
 )
+
+# itftennis player-DOB pacing/rotation. ``GetHeadToHeadPlayerDetails`` is gated by
+# Incapsula's JS challenge AND a *rate* re-challenge: the tournament browser holds
+# clearance (the drawsheet API calls work), but a burst of DOB fetches from one IP
+# trips a fresh challenge. So pace each DOB lookup by this many milliseconds to
+# stay under the rate threshold; when one is still blocked, the engine relaunches
+# the browser (fresh IP + re-solved clearance) and retries, up to MAX_ROTATIONS
+# times, then leaves that DOB blank (best-effort) so a run never stalls on a
+# stubborn lookup. Set DELAY to 0 to disable pacing; ROTATIONS to 0 to never
+# relaunch (blocked DOBs just blank out).
+SCRAPER_ITF_DOB_DELAY_MS = int(os.environ.get("SCRAPER_ITF_DOB_DELAY_MS", "250"))
+SCRAPER_ITF_DOB_MAX_ROTATIONS = int(
+    os.environ.get("SCRAPER_ITF_DOB_MAX_ROTATIONS", "2")
+)
