@@ -77,6 +77,7 @@ urlpatterns = [
     path("qa/t/<uuid:uuid>/", qa_views.ticket_detail, name="qa_ticket"),
     path("qa/t/<uuid:uuid>/update/", qa_views.ticket_update, name="qa_ticket_update"),
     path("qa/t/<uuid:uuid>/edit/", qa_views.ticket_edit, name="qa_ticket_edit"),
+    path("qa/t/<uuid:uuid>/delete/", qa_views.ticket_delete, name="qa_ticket_delete"),
     path("qa/t/<uuid:uuid>/comment/", qa_views.comment_add, name="qa_comment_add"),
     path("qa/attachments/", qa_views.attachment_upload, name="qa_attachment_upload"),
     path(

@@ -254,6 +254,27 @@ def ticket_edit(request, uuid):
 
 @login_required
 @require_POST
+def ticket_delete(request, uuid):
+    """Delete a ticket — **admins (superusers) only**.
+
+    Mirrors the superuser gate the Users admin uses: a non-superuser is bounced
+    back to the ticket with an error and nothing is removed (defence in depth —
+    the button is also hidden for them in the template). The cascade drops the
+    ticket's comments and notifications; attachments survive (their ticket FK is
+    ``SET_NULL``) and stay reachable by their own URL.
+    """
+    ticket = get_object_or_404(Ticket, uuid=uuid)
+    if not request.user.is_superuser:
+        messages.error(request, "Only an admin can delete tickets.")
+        return redirect("qa_ticket", uuid=ticket.uuid)
+    title = ticket.title[:80]
+    ticket.delete()
+    messages.success(request, f"Ticket “{title}” was deleted.")
+    return redirect("qa_board")
+
+
+@login_required
+@require_POST
 def ticket_update(request, uuid):
     ticket = get_object_or_404(Ticket, uuid=uuid)
     new_status = request.POST.get("status")

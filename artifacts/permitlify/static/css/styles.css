@@ -2702,6 +2702,11 @@ body.mm-modal-open { overflow: hidden; }
 .qa-ticket-titlebar .qa-ticket-title { flex: 1 1 auto; }
 .qa-edit-btn { flex: none; gap: 6px; }
 .qa-edit-btn svg { width: 15px; height: 15px; }
+.qa-ticket-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.qa-delete-form { display: inline-flex; margin: 0; }
+.qa-delete-btn { gap: 6px; color: var(--app-maint); }
+.qa-delete-btn svg { width: 15px; height: 15px; }
+.qa-delete-btn:hover { background: var(--app-maint); border-color: var(--app-maint); color: #fff; }
 @media (max-width: 760px) {
   .qa-ticket-titlebar { flex-direction: column; align-items: stretch; gap: 10px; }
   .qa-edit-btn { align-self: flex-start; }
