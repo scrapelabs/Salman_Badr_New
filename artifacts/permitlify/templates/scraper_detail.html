@@ -633,6 +633,36 @@
     </div>
   </div>
 
+  {% if match_total %}
+  <div class="panel data-export">
+    <div class="panel-pad">
+      <div class="data-export-info">
+        <h3 class="data-export-title">Download by date</h3>
+        <p class="data-sub">Export only matches played within a date range — for example today, or the last week. Leave a field blank for an open-ended range.</p>
+      </div>
+      <div class="data-export-presets">
+        <a class="btn btn-ghost btn-sm" href="{% url 'college_matches_export' s.slug %}?from={{ dl_today }}&amp;to={{ dl_today }}">Today</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'college_matches_export' s.slug %}?from={{ dl_last7_from }}&amp;to={{ dl_today }}">Last 7 days</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'college_matches_export' s.slug %}?from={{ dl_last30_from }}&amp;to={{ dl_today }}">Last 30 days</a>
+      </div>
+      <form class="data-export-form" method="get" action="{% url 'college_matches_export' s.slug %}">
+        <div class="data-export-field">
+          <label class="field-label" for="dlFrom">From</label>
+          <input class="rt-input" id="dlFrom" name="from" type="date" value="{{ dl_from }}">
+        </div>
+        <div class="data-export-field">
+          <label class="field-label" for="dlTo">To</label>
+          <input class="rt-input" id="dlTo" name="to" type="date" value="{{ dl_to }}">
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+          Download selected
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="tablewrap">
     <table class="tbl">
       <thead>

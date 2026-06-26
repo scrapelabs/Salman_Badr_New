@@ -580,6 +580,15 @@ def scraper_detail_view(request, slug):
         ctx["match_last_new"] = last_run.row_count if last_run else None
         ctx["match_last_run"] = last_run
         ctx["match_last_added"] = last_match.created_at if last_match else None
+        # Defaults + presets for the "Download by date" panel (match date, not
+        # scrape date): the form prefills the last 7 days; quick links cover
+        # today / last 7 / last 30 days.
+        today = timezone.localdate()
+        ctx["dl_today"] = today.isoformat()
+        ctx["dl_last7_from"] = (today - timedelta(days=6)).isoformat()
+        ctx["dl_last30_from"] = (today - timedelta(days=29)).isoformat()
+        ctx["dl_from"] = ctx["dl_last7_from"]
+        ctx["dl_to"] = ctx["dl_today"]
     elif tab == "schedule":
         spec = registry.spec_for(slug)
         trigger_url = request.build_absolute_uri(
@@ -1576,22 +1585,50 @@ def run_errors_download_view(request, slug, run_uuid):
 
 @login_required
 def college_matches_export_view(request, slug):
-    """Download the FULL match database (all stored rows, 65-col canonical CSV).
+    """Download the match database as CSV — all rows, or only those whose match
+    date falls within an optional ``from``/``to`` window (both inclusive).
 
     Only available for scrapers whose runner persists matches (the
-    ``has_match_store`` flag). Streams every :class:`CollegeMatch.data` record in
-    insertion order through :func:`college_store.to_csv`.
+    ``has_match_store`` flag). Streams matching :class:`CollegeMatch.data` records
+    in insertion order through :func:`college_store.to_csv`. ``date_norm`` holds
+    the normalized ISO (``YYYY-MM-DD``) match date, so a lexicographic range
+    filter on it is also chronological; a blank/invalid bound is simply ignored
+    (open-ended on that side).
     """
     get_object_or_404(Scraper, slug=slug)
     if not registry.spec_for(slug).has_match_store:
         raise Http404("This scraper has no match database.")
-    rows = list(
-        CollegeMatch.objects.order_by("created_at").values_list("data", flat=True)
-    )
+
+    def _bound(key):
+        raw = (request.GET.get(key) or "").strip()
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    date_from = _bound("from")
+    date_to = _bound("to")
+
+    qs = CollegeMatch.objects.all()
+    if date_from:
+        qs = qs.filter(date_norm__gte=date_from.isoformat())
+    if date_to:
+        qs = qs.filter(date_norm__lte=date_to.isoformat())
+    rows = list(qs.order_by("created_at").values_list("data", flat=True))
+
+    if date_from or date_to:
+        lo = date_from.isoformat() if date_from else "start"
+        hi = date_to.isoformat() if date_to else "end"
+        filename = f"{slug}_matches_{lo}_to_{hi}.csv"
+    else:
+        filename = f"{slug}_all_matches.csv"
+
     resp = HttpResponse(
         college_store.to_csv(rows), content_type="text/csv; charset=utf-8"
     )
-    resp["Content-Disposition"] = f'attachment; filename="{slug}_all_matches.csv"'
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
 

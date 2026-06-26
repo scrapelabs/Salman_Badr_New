@@ -36,3 +36,13 @@ whole feature — the nav tab, the `?tab=data` view branch (redirects otherwise)
 and the `matches.csv` export (404 otherwise). Only `college_dual_match` sets it.
 To give another scraper a match database, set the flag + have its runner ingest
 through `college_store` (the table/columns are currently college-shaped).
+
+**Download-by-date export keys off `date_norm`.** The Match-database tab's
+"Download by date" panel filters the export by `CollegeMatch.date_norm` (the
+indexed normalized ISO `YYYY-MM-DD` *match* date — not `created_at`/scrape time)
+via inclusive `date_norm__gte`/`__lte`. This is correct **only** because ISO
+date strings sort lexicographically == chronologically — so if `date_norm`'s
+format ever changes (or stores non-ISO fallback spellings from dirty imports),
+bounded ranges silently mis-include/exclude those rows. Keep `date_norm` ISO, or
+switch to a real nullable `DateField` before relaxing that. Blank/invalid `from`
+or `to` is leniently ignored (open-ended), and no params = full DB.

@@ -2194,6 +2194,18 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
   line-height: 1.5;
   color: var(--app-text-3);
 }
+.data-export { margin: 0 0 16px; }
+.data-export .panel-pad { display: flex; flex-direction: column; gap: 14px; }
+.data-export-title {
+  margin: 0;
+  font-size: 14.4px;
+  font-weight: 650;
+  color: var(--app-text);
+}
+.data-export-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.data-export-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.data-export-field { display: flex; flex-direction: column; gap: 6px; }
+.data-export-form .rt-input { min-width: 168px; }
 .src-tag {
   display: inline-block;
   padding: 3px 10px;
