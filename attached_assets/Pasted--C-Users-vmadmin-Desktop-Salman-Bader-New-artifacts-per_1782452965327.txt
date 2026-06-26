@@ -1,0 +1,46 @@
+
+C:\Users\vmadmin\Desktop\Salman_Bader_New\artifacts\permitlify>python manage.py migrate
+Traceback (most recent call last):
+  File "C:\Users\vmadmin\Desktop\Salman_Bader_New\artifacts\permitlify\manage.py", line 22, in <module>
+    main()
+  File "C:\Users\vmadmin\Desktop\Salman_Bader_New\artifacts\permitlify\manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+  File "C:\Python310\lib\site-packages\django\core\management\__init__.py", line 442, in execute_from_command_line
+    utility.execute()
+  File "C:\Python310\lib\site-packages\django\core\management\__init__.py", line 436, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+  File "C:\Python310\lib\site-packages\django\core\management\base.py", line 405, in run_from_argv
+    parser = self.create_parser(argv[0], argv[1])
+  File "C:\Python310\lib\site-packages\django\core\management\base.py", line 368, in create_parser
+    self.add_arguments(parser)
+  File "C:\Python310\lib\site-packages\django\core\management\commands\migrate.py", line 50, in add_arguments
+    choices=tuple(connections),
+  File "C:\Python310\lib\site-packages\django\utils\connection.py", line 73, in __iter__
+    return iter(self.settings)
+  File "C:\Python310\lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "C:\Python310\lib\site-packages\django\utils\connection.py", line 45, in settings
+    self._settings = self.configure_settings(self._settings)
+  File "C:\Python310\lib\site-packages\django\db\utils.py", line 148, in configure_settings
+    databases = super().configure_settings(databases)
+  File "C:\Python310\lib\site-packages\django\utils\connection.py", line 50, in configure_settings
+    settings = getattr(django_settings, self.settings_name)
+  File "C:\Python310\lib\site-packages\django\conf\__init__.py", line 81, in __getattr__
+    self._setup(name)
+  File "C:\Python310\lib\site-packages\django\conf\__init__.py", line 68, in _setup
+    self._wrapped = Settings(settings_module)
+  File "C:\Python310\lib\site-packages\django\conf\__init__.py", line 166, in __init__
+    mod = importlib.import_module(self.SETTINGS_MODULE)
+  File "C:\Python310\lib\importlib\__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "C:\Users\vmadmin\Desktop\Salman_Bader_New\artifacts\permitlify\matchminer\settings.py", line 11, in <module>
+    import dj_database_url
+ModuleNotFoundError: No module named 'dj_database_url'
+
+C:\Users\vmadmin\Desktop\Salman_Bader_New\artifacts\permitlify>
