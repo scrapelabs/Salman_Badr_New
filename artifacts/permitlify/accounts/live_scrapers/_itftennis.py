@@ -51,6 +51,7 @@ import math
 import os
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urljoin
@@ -62,7 +63,7 @@ from lxml import etree
 
 from accounts.models import Run
 
-from ._browser import BrowserClient
+from ._browser import BrowserClient, allow_async_unsafe
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
@@ -765,14 +766,20 @@ def run(cfg, run_obj, log):
                 progress_done=F("progress_done") + 1
             )
 
-    # ---- phase 2 · scraping (patchright browser, sequential) ----------
+    # ---- phase 2 · scraping (patchright browser) ----------------------
     # itftennis sits behind Imperva/Incapsula, so the per-tournament work runs
     # inside a real patchright Chromium: ``page.goto`` solves the JS challenge
     # that 0-rows a curl_cffi run behind a challenged proxy, and the API calls
     # reuse the solved cookies. A single-tournament URL is also *discovered*
     # here (its page is the challenged resource). The Playwright sync API is
-    # single-thread bound, so the crawl is sequential \u2014 ``Scraper.threads``
-    # does not parallelise it here.
+    # single-thread bound, but in per-request rotation mode each tournament
+    # already gets its *own* fresh browser, so the per-tournament loop fans out
+    # across ``Scraper.threads`` worker threads \u2014 one independent browser
+    # (own fingerprint + IP) per thread, up to ``workers`` Chromium instances
+    # launched concurrently. The whole concurrent phase opts out of Django's
+    # async-safety guard once (allow_async_unsafe), because that env var is
+    # process-global and a per-browser set/restore would race across threads.
+    # The non-rotate path reuses one shared browser and stays sequential.
     if tournament_url or tournaments:
         profile_root = getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "")
         user_data_dir = (
@@ -785,6 +792,9 @@ def run(cfg, run_obj, log):
             # a throwaway ephemeral profile (a persistent dir would carry the very
             # cookie/fingerprint we are deliberately shedding) and rotate the
             # proxy IP. Off => one persistent session reused for the whole run.
+            # manage_async_unsafe=False: the whole phase-2 block owns the
+            # process-global DJANGO_ALLOW_ASYNC_UNSAFE via allow_async_unsafe(),
+            # so each (possibly concurrent) client must not touch it itself.
             return BrowserClient(
                 log=log,
                 tele=tele,
@@ -794,6 +804,7 @@ def run(cfg, run_obj, log):
                 channel=getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or None,
                 user_data_dir=None if rotate else user_data_dir,
                 rotate_proxy_session=rotate,
+                manage_async_unsafe=False,
             )
 
         def announce_phase2():
@@ -805,77 +816,110 @@ def run(cfg, run_obj, log):
                 "\u2500\u2500\u2500\u2500 phase 2 \u00b7 scraping tournaments "
                 "(patchright) \u2500\u2500\u2500\u2500",
             )
-            if workers > 1:
+
+        def crawl_isolated(tournament):
+            # One tournament in its *own* fresh browser. Used both serially and as
+            # the ThreadPoolExecutor task, so a bad browser launch must never kill
+            # the run (or take the pool down with it): record it, advance progress
+            # once, and move on. ``crawl_one`` owns the per-tournament scrape error
+            # plus the normal progress increment; this only covers the case where
+            # the browser never opened (so progress is bumped here exactly once).
+            try:
+                with make_browser() as browser:
+                    crawl_one(browser, tournament)
+            except Exception as exc:  # noqa: BLE001 - one bad launch != dead run
+                tele.record_error(
+                    redact_secrets(
+                        f"Browser launch failed for "
+                        f"{tournament.get('tournament_url', '')}: {exc}"
+                    ),
+                    exc=exc,
+                )
                 log(
-                    "INFO",
-                    "\u2139\ufe0f browser phase 2 is sequential \u2014 worker "
-                    "threads are not used",
+                    "WARN",
+                    redact_secrets(
+                        f"\u26a0\ufe0f browser launch failed: "
+                        f"{exc.__class__.__name__}: {exc}"
+                    ),
+                )
+                Run.objects.filter(pk=run_obj.pk).update(
+                    progress_done=F("progress_done") + 1
                 )
 
         try:
-            if rotate:
-                # Each tournament = a fresh browser (new fingerprint + IP). The
-                # Incapsula challenge is re-solved per tournament, so no single
-                # identity accumulates the signal that re-triggers the captcha
-                # "after a few records".
-                if tournament_url:
-                    log(
-                        "INFO",
-                        "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving tournament "
-                        "(patchright) \u2500\u2500\u2500\u2500",
-                    )
-                    with make_browser() as browser:
-                        tournaments = _discover_one(browser, tournament_url, log)
-                    log(
-                        "INFO",
-                        f"\U0001f4cb {len(tournaments)} tournament(s) discovered",
-                    )
-                if tournaments:
-                    announce_phase2()
-                    log(
-                        "INFO",
-                        "\U0001f504 per-request rotation: a fresh browser + IP per "
-                        "tournament",
-                    )
-                    for tournament in tournaments:
-                        try:
-                            with make_browser() as browser:
-                                crawl_one(browser, tournament)
-                        except Exception as exc:  # noqa: BLE001 - one bad launch != dead run
-                            tele.record_error(
-                                redact_secrets(
-                                    f"Browser launch failed for "
-                                    f"{tournament.get('tournament_url', '')}: {exc}"
-                                ),
-                                exc=exc,
-                            )
-                            log(
-                                "WARN",
-                                redact_secrets(
-                                    f"\u26a0\ufe0f browser launch failed: "
-                                    f"{exc.__class__.__name__}: {exc}"
-                                ),
-                            )
-                            Run.objects.filter(pk=run_obj.pk).update(
-                                progress_done=F("progress_done") + 1
-                            )
-            else:
-                with make_browser() as browser:
+            # The browser phase makes ORM writes (log / telemetry / progress) while
+            # a Playwright loop is live in each thread, so the whole block opts out
+            # of Django's async-safety guard exactly once — the only safe scope when
+            # the rotate path drives several browsers concurrently (that env var is
+            # process-global; see allow_async_unsafe).
+            with allow_async_unsafe():
+                if rotate:
+                    # Each tournament = a fresh browser (new fingerprint + IP), so
+                    # the Incapsula challenge is re-solved per tournament and no
+                    # single identity accumulates the signal that re-triggers the
+                    # captcha "after a few records". Because every tournament is
+                    # fully isolated, the loop parallelises cleanly across workers.
                     if tournament_url:
                         log(
                             "INFO",
-                            "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving "
-                            "tournament (patchright) \u2500\u2500\u2500\u2500",
+                            "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving tournament "
+                            "(patchright) \u2500\u2500\u2500\u2500",
                         )
-                        tournaments = _discover_one(browser, tournament_url, log)
+                        with make_browser() as browser:
+                            tournaments = _discover_one(browser, tournament_url, log)
                         log(
                             "INFO",
                             f"\U0001f4cb {len(tournaments)} tournament(s) discovered",
                         )
                     if tournaments:
                         announce_phase2()
-                        for tournament in tournaments:
-                            crawl_one(browser, tournament)
+                        # One tournament can't be sped up by a pool; >1 fans out
+                        # across up to ``workers`` concurrent browsers.
+                        parallel = workers > 1 and len(tournaments) > 1
+                        if parallel:
+                            log(
+                                "INFO",
+                                f"\U0001f9f5 per-request rotation: up to {workers} "
+                                f"browsers in parallel \u2014 a fresh browser + IP "
+                                f"per tournament",
+                            )
+                            with ThreadPoolExecutor(max_workers=workers) as pool:
+                                list(pool.map(crawl_isolated, tournaments))
+                        else:
+                            log(
+                                "INFO",
+                                "\U0001f504 per-request rotation: a fresh browser + "
+                                "IP per tournament",
+                            )
+                            for tournament in tournaments:
+                                crawl_isolated(tournament)
+                else:
+                    # Off => one persistent browser reused for the whole run. A
+                    # single shared Playwright page can't be driven from many
+                    # threads, so this path is inherently sequential whatever
+                    # ``workers`` is set to.
+                    with make_browser() as browser:
+                        if tournament_url:
+                            log(
+                                "INFO",
+                                "\u2500\u2500\u2500\u2500 phase 1 \u00b7 resolving "
+                                "tournament (patchright) \u2500\u2500\u2500\u2500",
+                            )
+                            tournaments = _discover_one(browser, tournament_url, log)
+                            log(
+                                "INFO",
+                                f"\U0001f4cb {len(tournaments)} tournament(s) discovered",
+                            )
+                        if tournaments:
+                            announce_phase2()
+                            if workers > 1:
+                                log(
+                                    "INFO",
+                                    "\u2139\ufe0f rotation off \u2014 one shared "
+                                    "browser, so this run is sequential",
+                                )
+                            for tournament in tournaments:
+                                crawl_one(browser, tournament)
         except Exception as exc:  # noqa: BLE001 - launch/teardown failure
             tele.record_error(
                 redact_secrets(f"Browser session failed: {exc}"), exc=exc

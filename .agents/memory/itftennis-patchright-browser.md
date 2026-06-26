@@ -82,6 +82,17 @@ reverts to the one-persistent-session path above).
 - Per-tournament launch failures are caught + recorded + increment progress once
   and continue (one bad launch ≠ dead run); `progress_done` stays exactly-once
   per tournament (crawl_one's `finally` on success XOR the launch `except`).
+- **Rotation parallelises (added 2026-06-26).** Because each tournament is a fully
+  isolated browser, rotate-mode phase-2 fans out across `Scraper.threads` worker
+  threads — a `ThreadPoolExecutor(max_workers=workers)` running one
+  `crawl_isolated(tournament)` (own `make_browser()`) per task, gated by
+  `workers > 1 and len(tournaments) > 1` (one tournament → serial; no pool). Each
+  thread drives its **own** browser (sync Playwright is one-instance-per-thread).
+  The **non-rotate** path keeps one shared persistent browser and is **inherently
+  sequential** whatever `threads` is (a single Playwright page can't be driven from
+  many threads). **OOM caveat:** `threads` clamps 1–16; N concurrent headless
+  Chromium is RAM-heavy on Replit — default 5 is fine, 16 is a real OOM/kill risk.
+  First operational mitigation is lowering `Scraper.threads`, not a code change.
 
 # Playwright SSRF blind-spots (the parity gotchas)
 
@@ -119,16 +130,28 @@ and raises **`SynchronousOnlyOperation`** on *every* ORM call made while the bro
 is open — i.e. the worker's own `log()`/telemetry `RunLogLine` writes that stream the
 live console. So the browser block dies the moment it logs its first line.
 
-**Fix:** set `DJANGO_ALLOW_ASYNC_UNSAFE=1` for the browser's lifetime (set in
-`BrowserClient.__enter__` right before `start()`, restore in `close()`). It's the
-official Django escape hatch and is *safe here* because the browser phase is
-genuinely single-threaded and sequential (no ThreadPoolExecutor — `Scraper.threads`
-does not parallelise phase 2), so there's no concurrent-coroutine ORM hazard.
+**Fix:** set `DJANGO_ALLOW_ASYNC_UNSAFE=1` for the browser phase. The env var is
+**process-global**, so the scope matters once phase-2 is concurrent (see rotation
+section): a per-`BrowserClient` set-in-`__enter__`/restore-in-`close()` **races**
+across threads (one thread's `close()` clears the var while another's browser is
+still live → `SynchronousOnlyOperation`). So lift it to **one phase-level
+contextmanager** `allow_async_unsafe()` (set/restore exactly once for the whole
+block) and have each client pass `manage_async_unsafe=False` so it never touches
+the var itself (`BrowserClient` still self-manages when `True` for any
+single-shot/non-`run_scrape` caller). It's the official Django escape hatch and is
+safe here: the var is scoped to a one-shot worker phase, **never** a long-lived
+multithreaded web-server process — keep it that way.
 
-**Validation gap that hid this (the expensive lesson):** an in-process smoke test
-whose `log` is a no-op / list-append stub **never touches the ORM**, so it passes
-even though the real worker (whose `log` writes a `RunLogLine`) blows up. Any
-browser-backed scraper MUST be validated with a `log` callback that actually issues
-an ORM query (e.g. `Scraper.objects.count()` per line) — or via a real runserver
-run — never a stub. Real-worker confirmation: single-URL M25 Deauville run via the
-runserver → success, 31 rows, 86 ORM-streamed log lines, 0 async errors.
+**Validation gap that hid the ORM trap (the expensive lesson):** an in-process
+smoke test whose `log` is a no-op / list-append stub **never touches the ORM**, so
+it passes even though the real worker (whose `log` writes a `RunLogLine`) blows up.
+Any browser-backed scraper MUST be validated with a `log` that actually issues an
+ORM query — never a stub. For the **concurrent** path the bar is higher: launch N
+*real* headless Chromium at once (prove overlap with a `threading.Barrier`) and do
+a real ORM write (RunLogLine + `Run` `F()+1`) inside each thread while its browser
+is live; include a **negative control** (a `manage_async_unsafe=False` client with
+NO wrapper must raise `SynchronousOnlyOperation`) so you know the guard is real,
+not a no-op. Confirmed 2026-06-26: 3 concurrent browsers, all ORM writes OK, no
+race, env restored to unset after every scope; negative control raised as expected.
+Earlier single-thread confirmation: single-URL M25 Deauville via runserver →
+success, 31 rows, 86 ORM-streamed log lines, 0 async errors.

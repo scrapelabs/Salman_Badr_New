@@ -21,8 +21,11 @@ as :class:`accounts.live_scrapers._http.ScraperClient`:
 
 One browser + one context + one page back the whole session, so the Incapsula
 clearance is kept across calls. The Playwright **sync** API is single-thread
-bound, so a ``BrowserClient`` must be driven from one thread (the itftennis
-engine runs its browser phase sequentially).
+bound, so a single ``BrowserClient`` must be driven from one thread; the
+itftennis engine parallelises its per-tournament browser phase by running
+several independent ``BrowserClient`` instances (one per worker thread), each
+with its own Playwright loop, and opts the whole pool out of Django's
+async-safety guard once via :func:`allow_async_unsafe`.
 
 Parity with the curl client is preserved: every fetch is recorded in telemetry,
 every final URL is SSRF-validated with :func:`assert_safe_url`, the proxy address
@@ -38,6 +41,7 @@ import secrets
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from urllib.parse import unquote, urljoin, urlsplit
 
 from parsel import Selector
@@ -119,10 +123,37 @@ class _ApiResponse:
         return json.loads(self.content)
 
 
+@contextmanager
+def allow_async_unsafe():
+    """Opt a whole block out of Django's async-safety guard (process-global).
+
+    Playwright's sync API runs an asyncio loop in the calling thread, so Django
+    rejects every ORM call (the log/telemetry RunLogLine writes) made while a
+    browser is open with SynchronousOnlyOperation. ``DJANGO_ALLOW_ASYNC_UNSAFE``
+    is the official escape hatch, but it is a *process-global* env var: when the
+    browser phase fans out across threads (one :class:`BrowserClient` per
+    thread) it must be set ONCE around the entire pool, not per browser. A
+    per-instance set/restore races — one thread's teardown would unset it while
+    another thread's ORM write is still in flight. Wrap the concurrent phase in
+    this and construct each client with ``manage_async_unsafe=False``.
+    """
+    prev = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop("DJANGO_ALLOW_ASYNC_UNSAFE", None)
+        else:
+            os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = prev
+
+
 class BrowserClient:
     """A single patchright Chromium session exposing the engine's read surface.
 
-    Use as a context manager. Not thread-safe — drive from one thread.
+    Use as a context manager. A single instance is not thread-safe — drive it
+    from one thread. Concurrency is achieved with several instances (one per
+    thread); see :func:`allow_async_unsafe` for the shared-env-var caveat.
     """
 
     def __init__(
@@ -139,6 +170,7 @@ class BrowserClient:
         channel=None,
         user_data_dir=None,
         rotate_proxy_session=False,
+        manage_async_unsafe=True,
     ):
         self.log = log
         self.tele = tele
@@ -151,6 +183,10 @@ class BrowserClient:
         self.channel = (channel or "").strip() or None
         self.user_data_dir = (user_data_dir or "").strip() or None
         self.rotate_proxy_session = bool(rotate_proxy_session)
+        # When False the caller owns DJANGO_ALLOW_ASYNC_UNSAFE for the whole
+        # (possibly concurrent) browser phase via allow_async_unsafe(); when True
+        # (the default, for a lone sequential client) this instance manages it.
+        self.manage_async_unsafe = bool(manage_async_unsafe)
         self._session_token = None
         self._pw = None
         self._browser = None
@@ -226,11 +262,16 @@ class BrowserClient:
         # Playwright's sync API drives an asyncio event loop in this thread, so
         # Django's async-safety guard rejects every ORM call the scrape makes
         # while the browser is open (the log/telemetry RunLogLine writes) with
-        # SynchronousOnlyOperation. Our browser phase is genuinely
-        # single-threaded and sequential, so opt the worker out for the
-        # browser's lifetime and restore the prior value on teardown.
-        self._prev_async_unsafe = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
-        os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
+        # SynchronousOnlyOperation. DJANGO_ALLOW_ASYNC_UNSAFE is the official
+        # opt-out. It is *process-global*, so when several BrowserClients run
+        # concurrently (one per thread) the caller must set it ONCE around the
+        # whole pool via allow_async_unsafe() and construct each client with
+        # manage_async_unsafe=False — a per-instance set/restore would race (one
+        # thread's teardown unsets it under another still-running thread). A lone
+        # sequential client manages it itself and restores it on teardown.
+        if self.manage_async_unsafe:
+            self._prev_async_unsafe = os.environ.get("DJANGO_ALLOW_ASYNC_UNSAFE")
+            os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "1"
         try:
             # Resolve the profile directory (inside the try so a rare makedirs /
             # mkdtemp failure still runs close() and restores the env var above).
