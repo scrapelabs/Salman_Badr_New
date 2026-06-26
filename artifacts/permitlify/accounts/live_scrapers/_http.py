@@ -93,6 +93,28 @@ DEFAULT_HEADERS = {
 # 403/503 that CDNs return when they (temporarily) block a request.
 RETRY_STATUSES = frozenset({403, 408, 425, 429, 500, 502, 503, 504})
 
+# Default per-request try budget (total attempts incl. the initial one). The
+# scrape worker overrides this once per run from the scraper's ``max_tries``
+# setting via :func:`set_default_tries`, so every ``ScraperClient`` (and the
+# Stadion ``_get_json`` helper) built afterwards inherits it. Each run is a fresh
+# worker process, so this module-global is process-isolated (no cross-run leak).
+_DEFAULT_TRIES = 4
+
+
+def set_default_tries(value):
+    """Set the process-wide default per-request try budget (clamped to >= 1)."""
+    global _DEFAULT_TRIES
+    try:
+        _DEFAULT_TRIES = max(1, int(value))
+    except (TypeError, ValueError):
+        pass
+
+
+def get_default_tries():
+    """Return the current process-wide default per-request try budget."""
+    return _DEFAULT_TRIES
+
+
 # Substrings that betray an anti-bot interstitial rather than real content.
 _CHALLENGE_MARKERS = (
     "just a moment",
@@ -161,7 +183,7 @@ class ScraperClient:
         proxies=None,
         impersonate=DEFAULT_IMPERSONATE,
         headers=None,
-        tries=4,
+        tries=None,
         timeout=30,
         backoff_base=1.0,
         backoff_cap=12.0,
@@ -178,7 +200,7 @@ class ScraperClient:
             self.default_headers.update(headers)
         self.allowed_hosts = tuple(allowed_hosts) if allowed_hosts else None
         self.max_redirects = max_redirects
-        self.tries = tries
+        self.tries = max(1, int(tries)) if tries else get_default_tries()
         self.timeout = timeout
         self.backoff_base = backoff_base
         self.backoff_cap = backoff_cap
@@ -321,7 +343,7 @@ class ScraperClient:
         internal/private addresses (SSRF). 301/302/303 downgrade to ``GET`` and
         drop the body the way browsers do; 307/308 preserve method + body.
         """
-        tries = tries or self.tries
+        tries = max(1, tries or self.tries)
         timeout = timeout or self.timeout
         merged = dict(self.default_headers)
         if headers:

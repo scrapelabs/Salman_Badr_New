@@ -139,7 +139,6 @@ def _discover(client, gender, gender_code, snap, log, seen):
             LOAD_MORE_URL,
             params=_load_more_params(gender, page, snap),
             headers=_JSON_ACCEPT,
-            tries=3,
         )
         results = _results_list(payload)
         if not results:
@@ -172,7 +171,7 @@ def _enrich_one(client, player):
     Mirrors the source: a row is only emitted when the profile page is fetched
     successfully (it is the only source of the birthdate).
     """
-    sel = client.get_selector(player["url"], tries=3)
+    sel = client.get_selector(player["url"])
     if sel is None:
         return None
 

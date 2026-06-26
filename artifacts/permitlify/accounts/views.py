@@ -412,7 +412,15 @@ def scraper_detail_view(request, slug):
                 Scraper.THREADS_MIN, min(threads, Scraper.THREADS_MAX)
             )
 
-            update_fields = ["proxy", "threads", "updated_at"]
+            try:
+                max_tries = int((request.POST.get("max_tries") or "").strip())
+            except (TypeError, ValueError):
+                max_tries = s.max_tries or Scraper.TRIES_DEFAULT
+            s.max_tries = max(
+                Scraper.TRIES_MIN, min(max_tries, Scraper.TRIES_MAX)
+            )
+
+            update_fields = ["proxy", "threads", "max_tries", "updated_at"]
             # Display labels: rename the scraper's name and badge (cosmetic only —
             # the slug, registry key and behaviour are unchanged). Empty submissions
             # keep the existing value so a blank field never wipes a label.
@@ -575,6 +583,8 @@ def scraper_detail_view(request, slug):
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
         ctx["thread_min"] = Scraper.THREADS_MIN
         ctx["thread_max"] = Scraper.THREADS_MAX
+        ctx["tries_min"] = Scraper.TRIES_MIN
+        ctx["tries_max"] = Scraper.TRIES_MAX
         ctx["needs_claude"] = registry.spec_for(slug).needs_claude
         ctx["needs_login"] = registry.spec_for(slug).needs_login
         ctx["login_label"] = registry.spec_for(slug).login_label

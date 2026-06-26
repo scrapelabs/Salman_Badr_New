@@ -692,7 +692,7 @@
       </p>
 
       <div class="rt-grid">
-        <div class="rt-field">
+        <div class="rt-field rt-field--full">
           <label class="field-label" for="proxySel">Proxy for {{ s.code }}</label>
           <select class="rt-input" id="proxySel" name="proxy">
             <option value="">Direct connection (no proxy)</option>
@@ -707,11 +707,19 @@
                  min="{{ thread_min }}" max="{{ thread_max }}" step="1"
                  value="{{ s.threads }}" inputmode="numeric" />
         </div>
+        <div class="rt-field">
+          <label class="field-label" for="triesInput">Total tries per request</label>
+          <input class="rt-input" id="triesInput" name="max_tries" type="number"
+                 min="{{ tries_min }}" max="{{ tries_max }}" step="1"
+                 value="{{ s.max_tries }}" inputmode="numeric" />
+        </div>
       </div>
 
       <p class="status-note settings-empty">
         Threads control how many ties are scraped in parallel ({{ thread_min }}–{{ thread_max }}).
         Higher is faster but puts more load on the proxy and upstream API.
+        Total tries is how many times each request is attempted before it's given
+        up on ({{ tries_min }}–{{ tries_max }}); raise it for flaky upstreams.
       </p>
 
       {% if needs_claude %}

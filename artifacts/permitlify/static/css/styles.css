@@ -1779,6 +1779,7 @@ code {
   gap: 14px;
 }
 .rt-field { display: flex; flex-direction: column; gap: 6px; }
+.rt-field--full { grid-column: 1 / -1; }
 .rt-input {
   width: 100%;
   height: 42px;

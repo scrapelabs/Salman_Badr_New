@@ -166,7 +166,7 @@ class BrowserClient:
         nav_timeout=45000,
         api_timeout=30000,
         settle_timeout=20000,
-        api_tries=3,
+        api_tries=None,
         headless=True,
         channel=None,
         user_data_dir=None,
@@ -181,7 +181,13 @@ class BrowserClient:
         self.nav_timeout = nav_timeout
         self.api_timeout = api_timeout
         self.settle_timeout = settle_timeout
-        self.api_tries = max(1, api_tries)
+        # Inherit the run's per-request try budget (Scraper.max_tries) set by the
+        # worker, so the browser API-fetch retries honour the same setting as the
+        # curl_cffi client; an explicit api_tries still wins.
+        if api_tries is None:
+            from ._http import get_default_tries
+            api_tries = get_default_tries()
+        self.api_tries = max(1, int(api_tries))
         self.headless = headless
         self.channel = (channel or "").strip() or None
         self.user_data_dir = (user_data_dir or "").strip() or None

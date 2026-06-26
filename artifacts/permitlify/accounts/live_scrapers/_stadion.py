@@ -139,8 +139,13 @@ def _build_proxies(scraper, log):
     return None
 
 
-def _get_json(url, log, tele, proxies, tries=3, timeout=25):
+def _get_json(url, log, tele, proxies, tries=None, timeout=25):
     """GET ``url`` as JSON via curl_cffi, recording each attempt into ``tele``."""
+    if tries is None:
+        # Inherit the run's per-request try budget (Scraper.max_tries) set by the
+        # worker; falls back to the module default for in-process/standalone use.
+        from ._http import get_default_tries
+        tries = get_default_tries()
     last_exc = None
     for attempt in range(1, tries + 1):
         start = time.time()

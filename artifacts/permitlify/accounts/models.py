@@ -82,6 +82,14 @@ class Scraper(models.Model):
     THREADS_MAX = 16
     THREADS_DEFAULT = 5
 
+    # Per-request retry budget (Scraper.max_tries): total attempts the HTTP
+    # client makes per request before giving up (the initial try plus retries),
+    # editable from the Lab's Settings tab and clamped to this range before a run
+    # launches. The worker applies it as the client-wide default for the run.
+    TRIES_MIN = 1
+    TRIES_MAX = 10
+    TRIES_DEFAULT = 4
+
     class Mode(models.TextChoices):
         PRODUCTION = "production", "Production"
         MAINTENANCE = "maintenance", "Maintenance"
@@ -107,6 +115,7 @@ class Scraper(models.Model):
         related_name="scrapers",
     )
     threads = models.PositiveSmallIntegerField(default=THREADS_DEFAULT)
+    max_tries = models.PositiveSmallIntegerField(default=TRIES_DEFAULT)
     # API key(s) for AI-backed scrapers (e.g. college_dual_match Claude extraction).
     # Comma-separate to provide several keys the worker rotates across. Treat as a
     # secret: rendered in a password input with a reveal toggle, never logged. When
@@ -144,6 +153,12 @@ class Scraper(models.Model):
         """Thread count used to launch the scrape pool, clamped to a safe range."""
         value = self.threads or self.THREADS_DEFAULT
         return max(self.THREADS_MIN, min(value, self.THREADS_MAX))
+
+    @property
+    def effective_tries(self):
+        """Per-request try budget for the scrape client, clamped to a safe range."""
+        value = self.max_tries or self.TRIES_DEFAULT
+        return max(self.TRIES_MIN, min(value, self.TRIES_MAX))
 
     @staticmethod
     def generate_trigger_token():

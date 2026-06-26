@@ -20,6 +20,7 @@ import traceback
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from accounts.live_scrapers import _http
 from accounts.live_scrapers.registry import spec_for
 from accounts.live_scrapers.telemetry import Telemetry, redact_secrets
 from accounts.models import Run, RunLogLine
@@ -84,10 +85,16 @@ class Command(BaseCommand):
         t0 = time.time()
         try:
             scraper = run.scraper
+            _http.set_default_tries(scraper.effective_tries)
             log(
                 "INFO",
                 f"\U0001f680 Worker online \u2014 Run #{run.short_id} "
                 f"\u00b7 {scraper.code}",
+            )
+            log(
+                "INFO",
+                f"\U0001f501 Retry budget: {scraper.effective_tries} "
+                f"tries per request",
             )
             runner = spec_for(scraper.slug).load_runner()
             if runner is None:

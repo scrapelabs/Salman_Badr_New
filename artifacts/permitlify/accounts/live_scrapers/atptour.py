@@ -81,7 +81,7 @@ def _discover(client, rank_type, date_week, date_iso, log):
     seen = set()
     for idx, (lo, hi) in enumerate(RANK_RANGES):
         url = _rankings_url(rank_type, date_week, lo, hi)
-        sel = client.get_selector(url, tries=2, timeout=20)
+        sel = client.get_selector(url, timeout=20)
         title = ""
         if sel is not None:
             title = (sel.xpath("string(//title)").get() or "").strip().lower()
@@ -121,7 +121,7 @@ def _discover(client, rank_type, date_week, date_iso, log):
 def _enrich_one(client, player):
     """Fetch a player's hero JSON and return a finished row dict, or ``None``."""
     player_id = player["player_id"]
-    hero = client.get_json(HERO_URL.format(player_id=player_id), tries=2, timeout=30)
+    hero = client.get_json(HERO_URL.format(player_id=player_id), timeout=30)
     if not hero:
         return None
     last_name = hero.get("LastName", "") or ""
