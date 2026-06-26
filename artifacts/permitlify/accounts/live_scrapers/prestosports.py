@@ -47,6 +47,7 @@ from parsel import Selector
 from accounts.models import Run
 
 from ._http import ScraperClient, build_proxies
+from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 LOGIN_URL = "https://gameday-api.prestosports.com/api/auth/token"
@@ -205,7 +206,7 @@ def _build_row(event, event_url, date_str, tournament_name, match_no,
                 f"{prefix}_country": "", f"{prefix}_college": "",
             }
         return {
-            f"{prefix}_name": p.get("name", ""),
+            f"{prefix}_name": last_first(p.get("name", "")),
             f"{prefix}_gender": eg_short,
             f"{prefix}_dob": "",
             f"{prefix}_third_party_id": p.get("playerId", ""),

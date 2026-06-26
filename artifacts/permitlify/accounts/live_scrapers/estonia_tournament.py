@@ -32,7 +32,9 @@ scrapes that one tournament. The flow mirrors the source's three stages:
 
 **Deterministic / AI-free port.** The source fed every player name through a
 Claude "format name + guess gender" call (``helper.format_name_gender_claude``);
-that LLM call is **dropped**. The scraped name is kept verbatim and player gender
+that LLM call is **dropped**. The scraped name is reordered to
+``"Lastname, Firstname"`` via :func:`accounts.live_scrapers._names.last_first`
+(matching the format the Claude call produced) and player gender
 (its only source was the model) is left ``""`` — so ``draw_gender`` (derived from
 the winner's gender) is likewise blank. The deterministic ``sha256_id`` fallback
 is **kept** (reproduced locally with :mod:`hashlib`). One source inconsistency is
@@ -60,6 +62,7 @@ from parsel import Selector
 from accounts.models import Run
 
 from ._http import ScraperClient, build_proxies
+from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 BASE = "https://etl.tournamentsoftware.com/"
@@ -767,16 +770,16 @@ def _build_row(client, tournament, match, players_db, url_to_id, page_cache):
         "date": match_date,
         "round": match.get("match_round", ""),
         "score": match.get("score", ""),
-        "winner_1_name": w1["name"], "winner_1_gender": w1["gender"],
+        "winner_1_name": last_first(w1["name"]), "winner_1_gender": w1["gender"],
         "winner_1_dob": w1["dob"], "winner_1_third_party_id": _export_id(w1),
         "winner_1_country": COUNTRY,
-        "winner_2_name": w2["name"], "winner_2_gender": w2["gender"],
+        "winner_2_name": last_first(w2["name"]), "winner_2_gender": w2["gender"],
         "winner_2_dob": w2["dob"], "winner_2_third_party_id": _export_id(w2),
         "winner_2_country": COUNTRY,
-        "loser_1_name": l1["name"], "loser_1_gender": l1["gender"],
+        "loser_1_name": last_first(l1["name"]), "loser_1_gender": l1["gender"],
         "loser_1_dob": l1["dob"], "loser_1_third_party_id": _export_id(l1),
         "loser_1_country": COUNTRY,
-        "loser_2_name": l2["name"], "loser_2_gender": l2["gender"],
+        "loser_2_name": last_first(l2["name"]), "loser_2_gender": l2["gender"],
         "loser_2_dob": l2["dob"], "loser_2_third_party_id": _export_id(l2),
         "loser_2_country": COUNTRY,
         "outcome": match.get("outcome", ""),

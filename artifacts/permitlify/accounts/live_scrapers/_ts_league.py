@@ -26,7 +26,9 @@ de-duplicated by a content key.
 
 Unlike the production spider this port is **deterministic and AI-free**: the
 original used Claude to pretty-format new player names and infer gender. That is
-dropped — names are emitted as scraped (cleaned of seedings) and gender is left
+dropped — names are emitted in deterministic ``"Lastname, Firstname"`` order
+(cleaned of seedings, then reordered via :func:`accounts.live_scrapers._names.last_first`
+to match the Claude formatter the source applied) and gender is left
 empty (the markup carries no reliable gender signal), exactly mirroring the
 Brazil port's choice. ``run(config, run_obj, log)`` returns ``(items_csv,
 requests_csv, errors_csv, row_count, status)``.
@@ -49,6 +51,7 @@ from parsel import Selector
 from accounts.models import Run
 
 from ._http import ScraperClient, build_proxies
+from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 EVENT_TYPE = "League"
@@ -356,8 +359,10 @@ def _parse_player(client, cfg, name, url):
     """Resolve a player's ``(name, third_party_id, dob, gender)``.
 
     Gender is always empty (the production pipeline derived it via Claude, which
-    this deterministic port drops); the name is returned cleaned, as scraped.
+    this deterministic port drops); the name is cleaned of seedings then
+    reordered to ``"Lastname, Firstname"`` via :func:`._names.last_first`.
     """
+    name = last_first(name)
     if not (name and url):
         return name, "", "", ""
     sel = client.get_selector(url)
