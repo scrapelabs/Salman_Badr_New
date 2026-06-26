@@ -13,7 +13,13 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth import (
+    authenticate,
+    get_user_model,
+    login,
+    logout,
+    update_session_auth_hash,
+)
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -1528,15 +1534,57 @@ companies_view = _placeholder(
     "No companies yet",
     "Connected companies will appear here.",
 )
-settings_view = _placeholder(
-    "settings",
-    "System",
-    "Settings",
-    "Workspace configuration, API keys and preferences.",
-    "Settings coming soon",
-    "Workspace settings will live here.",
-    superuser_only=True,
-)
+@login_required
+@require_http_methods(["GET", "POST"])
+def settings_view(request):
+    User = get_user_model()
+    if not request.user.is_superuser:
+        messages.error(request, "Only administrators can access that page.")
+        return redirect("overview")
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "change_password":
+            user_id = (request.POST.get("user_id") or "").strip()
+            password = request.POST.get("password") or ""
+            confirm = request.POST.get("password_confirm") or ""
+            if not user_id.isdigit():
+                messages.error(request, "Invalid user.")
+                return redirect("settings")
+            target = User.objects.filter(pk=int(user_id)).first()
+            if target is None:
+                messages.error(request, "That user no longer exists.")
+                return redirect("settings")
+            if not password:
+                messages.error(request, "Enter a new password.")
+                return redirect("settings")
+            if password != confirm:
+                messages.error(request, "The passwords don't match.")
+                return redirect("settings")
+            try:
+                validate_password(password, target)
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+                return redirect("settings")
+            target.set_password(password)
+            target.save()
+            if target.pk == request.user.pk:
+                update_session_auth_hash(request, target)
+            messages.success(request, f"Password updated for “{target.username}”.")
+            return redirect("settings")
+
+        messages.error(request, "Unknown action.")
+        return redirect("settings")
+
+    users = User.objects.order_by("-is_active", "-is_superuser", "username")
+    ctx = _app_ctx(
+        "settings",
+        users_list=users,
+        total_users=users.count(),
+    )
+    return render(request, "settings.html", ctx)
+
+
 def _active_superuser_count(exclude_pk=None):
     User = get_user_model()
     qs = User.objects.filter(is_active=True, is_superuser=True)

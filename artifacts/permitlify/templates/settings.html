@@ -1,0 +1,128 @@
+{% extends "app_base.html" %}
+{% block title %}Settings · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">Settings</span>
+{% endblock %}
+{% block content %}
+<div class="content-narrow users-page">
+  <div class="page-head">
+    <div class="kicker">System</div>
+    <h1 class="h-title">Settings</h1>
+    <p class="h-sub">Workspace configuration and account security. Reset the password for any team member below.</p>
+  </div>
+
+  {% if messages %}
+  <div class="msg-stack">
+    {% for m in messages %}
+    <div class="msg msg-{{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="calls-head">
+    <h2 class="section-title">Passwords</h2>
+    <span class="calls-count">{{ total_users }} user{{ total_users|pluralize }}</span>
+  </div>
+  <div class="tablewrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th class="th-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users_list %}
+        <tr>
+          <td>
+            <span class="u-cell">
+              <span class="qa-avatar qa-avatar--sm">{{ u.username|first|upper }}</span>
+              <span class="u-name">{{ u.username }}{% if u.pk == user.pk %} <span class="u-you">you</span>{% endif %}</span>
+            </span>
+          </td>
+          <td>{% if u.is_superuser %}<span class="u-role admin">Admin</span>{% else %}<span class="u-role member">Member</span>{% endif %}</td>
+          <td>{% if u.is_active %}<span class="run-status success">Active</span>{% else %}<span class="run-status failed">Off</span>{% endif %}</td>
+          <td class="td-actions">
+            <div class="u-actions">
+              <button type="button" class="run-act u-pass"
+                      data-id="{{ u.pk }}"
+                      data-username="{{ u.username }}">Change password</button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="runs-empty">No users yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="qa-modal" id="passUserModal" hidden>
+  <div class="qa-modal-backdrop" data-close></div>
+  <div class="qa-modal-card" role="dialog" aria-modal="true" aria-labelledby="puTitle">
+    <form method="post" action="{% url 'settings' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_password" />
+      <input type="hidden" name="user_id" id="puId" />
+      <div class="qa-modal-head">
+        <span class="qa-modal-title" id="puTitle">Change password</span>
+        <button type="button" class="qa-modal-x" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="qa-modal-body">
+        <div class="rt-field">
+          <label class="field-label">Username</label>
+          <input class="rt-input" id="puUsername" disabled />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="puPass">New password</label>
+          <input class="rt-input" id="puPass" name="password" type="password" placeholder="At least 8 characters" autocomplete="new-password" required />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="puPass2">Confirm new password</label>
+          <input class="rt-input" id="puPass2" name="password_confirm" type="password" placeholder="Re-enter the password" autocomplete="new-password" required />
+        </div>
+      </div>
+      <div class="qa-modal-foot">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Update password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal = document.getElementById("passUserModal");
+  if (!modal) return;
+  function open(d) {
+    document.getElementById("puId").value = d.id;
+    document.getElementById("puUsername").value = d.username;
+    document.getElementById("puPass").value = "";
+    document.getElementById("puPass2").value = "";
+    document.getElementById("puTitle").textContent = "Change password · " + d.username;
+    modal.hidden = false;
+    document.body.classList.add("qa-modal-open");
+    document.getElementById("puPass").focus();
+  }
+  function close() { modal.hidden = true; document.body.classList.remove("qa-modal-open"); }
+  document.querySelectorAll(".u-pass").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      open({ id: btn.dataset.id, username: btn.dataset.username });
+    });
+  });
+  modal.querySelectorAll("[data-close]").forEach(function (el) {
+    el.addEventListener("click", close);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !modal.hidden) close();
+  });
+})();
+</script>
+{% endblock %}
