@@ -1,23 +1,30 @@
 @echo off
 REM ===========================================================================
 REM  MatchMiner - 0. setup / update (Windows)   [merges old 0, 1, 2, 5]
-REM  One double-click does everything you normally do to get going or update:
+REM  One double-click does everything to get going or update:
 REM    * pulls the latest code from GitHub (origin/main)
 REM    * creates the .venv (first run) and installs / updates dependencies
 REM    * creates .env from .env.example on the very first run
 REM    * applies database migrations
 REM    * collects static files
 REM  Run it whenever you want to install OR update, then run 3_run_server.bat.
+REM
+REM  Every Python command uses the venv interpreter BY FULL PATH
+REM  (.venv\Scripts\python.exe) instead of relying on "activate" + "python".
+REM  In a plain terminal "python" often resolves to the SYSTEM Python
+REM  (e.g. C:\Python310), which lacks this project's packages and fails with
+REM  "No module named 'dj_database_url'" - so we never depend on it here.
 REM ===========================================================================
 setlocal
 cd /d "%~dp0.."
+set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
 
 echo ===========================================================
 echo  MatchMiner - setup / update (step 0)
 echo ===========================================================
 echo.
 
-REM --- 1. Python check -------------------------------------------------------
+REM --- 1. Python check (only needed to CREATE the venv) ----------------------
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python was not found on your PATH.
@@ -58,7 +65,7 @@ if errorlevel 1 (
 )
 
 REM --- 3. Virtual environment ------------------------------------------------
-if not exist ".venv\Scripts\activate.bat" (
+if not exist "%VENV_PY%" (
     echo Creating virtual environment .venv ...
     python -m venv .venv
     if errorlevel 1 (
@@ -68,12 +75,18 @@ if not exist ".venv\Scripts\activate.bat" (
         exit /b 1
     )
 )
-call ".venv\Scripts\activate.bat"
+if not exist "%VENV_PY%" (
+    echo [ERROR] .venv exists but has no python.exe inside. Delete the .venv
+    echo         folder and re-run this script to recreate it.
+    echo.
+    pause
+    exit /b 1
+)
 
 REM --- 4. Dependencies -------------------------------------------------------
 echo Installing / updating Python packages ...
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+"%VENV_PY%" -m pip install --upgrade pip
+"%VENV_PY%" -m pip install -r requirements.txt
 if errorlevel 1 (
     echo [ERROR] Dependency installation failed. See the messages above.
     echo.
@@ -111,7 +124,7 @@ cd /d "%~dp0..\artifacts\permitlify"
 
 echo.
 echo Applying database migrations ...
-python manage.py migrate
+"%VENV_PY%" manage.py migrate
 if errorlevel 1 (
     echo.
     echo [ERROR] Migrations failed. Check DATABASE_URL in .env - is PostgreSQL
@@ -124,7 +137,7 @@ if errorlevel 1 (
 REM --- 7. Static files ------------------------------------------------------
 echo.
 echo Collecting static files ...
-python manage.py collectstatic --noinput
+"%VENV_PY%" manage.py collectstatic --noinput
 if errorlevel 1 (
     echo.
     echo [ERROR] collectstatic failed. See the messages above.

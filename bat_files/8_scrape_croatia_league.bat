@@ -3,15 +3,16 @@ REM ===========================================================================
 REM  MatchMiner - 8. run the Croatia League (HTS) scraper (Windows)
 REM  Runs a real scrape against your .env DATABASE_URL and populates the DB.
 REM  Input: EITHER a single tournament URL, OR a date range.
+REM  Uses the venv interpreter by full path (no reliance on "activate").
 REM ===========================================================================
 setlocal
-if not exist "%~dp0..\.venv\Scripts\activate.bat" (
+set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
+if not exist "%VENV_PY%" (
     echo [ERROR] Virtual environment not found. Run 0_setup.bat first.
     echo.
     pause
     exit /b 1
 )
-call "%~dp0..\.venv\Scripts\activate.bat"
 cd /d "%~dp0..\artifacts\permitlify"
 
 echo ===========================================================
@@ -27,11 +28,11 @@ set "DF="
 set "DT="
 set /p DF="Start date YYYY-MM-DD (press Enter for the default window): "
 set /p DT="End date YYYY-MM-DD (press Enter for the default window): "
-python manage.py scrape_now croatia_league --date-from "%DF%" --date-to "%DT%" --out "%~dp0..\scrape_output"
+"%VENV_PY%" manage.py scrape_now croatia_league --date-from "%DF%" --date-to "%DT%" --out "%~dp0..\scrape_output"
 goto done
 
 :runurl
-python manage.py scrape_now croatia_league --url "%URL%" --out "%~dp0..\scrape_output"
+"%VENV_PY%" manage.py scrape_now croatia_league --url "%URL%" --out "%~dp0..\scrape_output"
 
 :done
 echo.

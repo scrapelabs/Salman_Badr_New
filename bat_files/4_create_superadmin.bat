@@ -3,15 +3,16 @@ REM ===========================================================================
 REM  MatchMiner - 4. create a superadmin user (Windows)
 REM  Interactively creates a Django superuser (full admin account).
 REM  Requires the database to exist first (run 0_setup.bat once).
+REM  Uses the venv interpreter by full path (no reliance on "activate").
 REM ===========================================================================
 setlocal
-if not exist "%~dp0..\.venv\Scripts\activate.bat" (
+set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
+if not exist "%VENV_PY%" (
     echo [ERROR] Virtual environment not found. Run 0_setup.bat first.
     echo.
     pause
     exit /b 1
 )
-call "%~dp0..\.venv\Scripts\activate.bat"
 cd /d "%~dp0..\artifacts\permitlify"
 
 echo ===========================================================
@@ -21,7 +22,7 @@ echo  and a password.
 echo ===========================================================
 echo.
 
-python manage.py createsuperuser
+"%VENV_PY%" manage.py createsuperuser
 
 echo.
 pause

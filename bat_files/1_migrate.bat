@@ -1,40 +1,41 @@
 @echo off
 REM ===========================================================================
-REM  MatchMiner - 1. migrate only (Windows)
-REM  Applies any new database migrations using the project's .venv, WITHOUT
-REM  pulling code, reinstalling packages, or collecting static files.
-REM  Use this after a `git pull` that only added a new migration (e.g. a new
-REM  model field). For a full first-time install / update, run 0_setup.bat.
+REM  MatchMiner - 1. migrate + refresh static (Windows)
+REM  Quick post-pull update: applies new database migrations AND collects
+REM  static files, using the project's .venv - WITHOUT pulling code or
+REM  reinstalling packages. Use this after a `git pull` that added a migration
+REM  (e.g. a new model field) and/or changed static assets. For a full
+REM  first-time install / update (pull + deps + migrate + static), run
+REM  0_setup.bat instead.
 REM
-REM  Why this exists: running `python manage.py migrate` in a plain terminal
-REM  often picks up your SYSTEM Python (e.g. C:\Python310) instead of the
-REM  project's .venv, which fails with "No module named 'dj_database_url'".
-REM  This script activates the .venv first so the right packages are used.
+REM  Uses the venv interpreter BY FULL PATH (.venv\Scripts\python.exe) instead
+REM  of "activate" + "python", because "python" in a plain terminal often
+REM  resolves to the SYSTEM Python (e.g. C:\Python310), which lacks this
+REM  project's packages and fails with "No module named 'dj_database_url'".
 REM ===========================================================================
 setlocal
-cd /d "%~dp0.."
+set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
 
 echo ===========================================================
-echo  MatchMiner - migrate only (step 1)
+echo  MatchMiner - migrate + refresh static (step 1)
 echo ===========================================================
 echo.
 
 REM --- Virtual environment must already exist (created by 0_setup.bat) -------
-if not exist ".venv\Scripts\activate.bat" (
+if not exist "%VENV_PY%" (
     echo [ERROR] No virtual environment (.venv) was found.
     echo         Run 0_setup.bat first - it creates the .venv and installs the
-    echo         dependencies. Then you can use this script for migrate-only.
+    echo         dependencies. Then you can use this script for quick updates.
     echo.
     pause
     exit /b 1
 )
-call ".venv\Scripts\activate.bat"
 
-REM --- Apply migrations -----------------------------------------------------
 cd /d "%~dp0..\artifacts\permitlify"
 
+REM --- Migrations -----------------------------------------------------------
 echo Applying database migrations ...
-python manage.py migrate
+"%VENV_PY%" manage.py migrate
 if errorlevel 1 (
     echo.
     echo [ERROR] Migrations failed. Common causes:
@@ -45,9 +46,21 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM --- Static files ---------------------------------------------------------
+echo.
+echo Collecting static files ...
+"%VENV_PY%" manage.py collectstatic --noinput
+if errorlevel 1 (
+    echo.
+    echo [ERROR] collectstatic failed. See the messages above.
+    echo.
+    pause
+    exit /b 1
+)
+
 echo.
 echo ===========================================================
-echo  Migrations applied. Next: run 3_run_server.bat
+echo  Done (migrate + static). Next: run 3_run_server.bat
 echo  (http://localhost:8000/)
 echo ===========================================================
 echo.
