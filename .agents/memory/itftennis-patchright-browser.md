@@ -13,9 +13,40 @@ two-phase design:
 - **Phase 2 (per-tournament scrape)** — the tournament page + its `TournamentApi`
   calls — gets the Incapsula JS challenge and must be fetched with **patchright**
   (a stealth fork of Playwright) driving a real Chromium/Chrome, which executes the
-  challenge JS and earns the cookies. `context.request` then reuses those solved
-  cookies for the API calls. This lives in `_browser.py` (`BrowserClient`); see the
-  "stealth config" section for the persistent-profile / headed / real-Chrome setup.
+  challenge JS and earns the cookies. The API calls then run as **in-page
+  `fetch()`** (see next section). This lives in `_browser.py` (`BrowserClient`);
+  see the "stealth config" section for the persistent-profile / headed setup.
+
+## The API calls MUST be in-page `fetch()`, not `context.request` (the 2026-06-26 regression)
+
+When ITF added Incapsula on the **API** (not just the pages), the scraper went
+"all requests succeed, 0 rows". Root cause: phase-2 API calls used
+`context.request.get()` — Playwright's out-of-page `APIRequestContext`. It shares
+the context's **cookies** but runs **outside the page JS**, so Incapsula still
+challenges it: HTTP **200** with a tiny interstitial body (~212–659 bytes) that
+isn't JSON → `get_json` returns `None` → 0 matches. `page.goto` works (it runs the
+challenge JS) so the pages looked fine — masking the real failure.
+
+**Fix:** issue each API GET as an **in-page `fetch()`** via `page.evaluate`
+(`fetch(url,{credentials:'include'})` → `{status, body}`), from a page already
+navigated to the same origin (`www.itftennis.com`). It inherits the solved
+clearance cookie/token **and** the real browser fingerprint (UA, Referer,
+`sec-fetch-*`) that the bare client can't reproduce → real JSON.
+
+**A/B proof (2026-06-26, Replit direct IP, page challenge solved):** same browser
+session, same `GetEventFilters` URL — `context.request` → HTTP 200 / 659-byte
+challenge; in-page `fetch()` → real JSON (`tourType`, filters). One central fix in
+`_browser.py::_fetch` covers all 4 circuits (they share `_itftennis.py`).
+
+**How to apply:** any patchright-backed scraper hitting a JS-challenged JSON/XML
+API must fetch from inside the page, never via `context.request`. The page must be
+on the API's origin first (get_selector the tournament page), else the fetch is
+cross-origin (CORS) and/or unchallenged-but-wrong-origin.
+
+**Caveat (still IP-gated):** if the *page* challenge itself doesn't clear (raw
+datacenter IP, intermittent — seen the same day: get_selector → "anti-bot
+challenge HTTP 200" → 0 tournaments), nothing downstream works. That's the
+residential-proxy issue below, orthogonal to in-page-vs-out-of-page.
 
 **Counterintuitive operational fact (NOT derivable from code):** itftennis works
 **DIRECT from Replit with no proxy**. It is the *residential proxy IP* that gets
@@ -113,8 +144,12 @@ A browser HTTP client needs the same SSRF protection as the curl client
 (`assert_safe_url` + host allowlist), but Playwright's interception has holes you
 must plug explicitly — `context.route("**/*", guard)` alone is **not** enough:
 
-1. **`context.request` bypasses page routes entirely.** Validate its redirects by
-   hand: `max_redirects=0` + `assert_safe_url(..., allowed_hosts=)` on every hop.
+1. **In-page `fetch()` (the API path) DOES flow through `context.route`** — unlike
+   the old `context.request`, every hop (incl. redirects) hits `_route_guard`
+   (public-IP check). Still `assert_safe_url(full_url, allowed_hosts=)` the
+   resolved target up front in `_fetch` before `page.evaluate`. (If you ever
+   reintroduce `context.request`: it bypasses page routes — then you must follow
+   redirects by hand with `max_redirects=0` + per-hop `assert_safe_url`.)
 2. **WebSocket handshakes are NOT intercepted by `context.route`.** Register a
    separate `context.route_web_socket("**/*", …)` (available in modern
    patchright/Playwright) and `close()` any ws whose host fails the public-IP

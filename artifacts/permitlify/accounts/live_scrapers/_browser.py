@@ -12,9 +12,9 @@ as :class:`accounts.live_scrapers._http.ScraperClient`:
 
 * ``get_selector(url)`` — ``page.goto`` (which solves the Incapsula challenge)
   then a :class:`parsel.Selector` of the rendered HTML, or ``None``;
-* ``get_json(url, params=, headers=)`` — a JSON API call via
-  ``context.request`` (which reuses the page's solved cookies), parsed, or
-  ``None``;
+* ``get_json(url, params=, headers=)`` — a JSON API call issued as an in-page
+  ``fetch()`` (so it inherits the page's solved Incapsula clearance and real
+  browser fingerprint, not just its cookies), parsed, or ``None``;
 * ``get(url)`` — the same API path returning a small response adapter exposing
   ``.status_code`` / ``.content`` / ``.text`` / ``.json()`` (used for the player
   DOB XML).
@@ -42,7 +42,7 @@ import shutil
 import tempfile
 import time
 from contextlib import contextmanager
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import unquote, urlencode, urlsplit
 
 from parsel import Selector
 
@@ -388,9 +388,9 @@ class BrowserClient:
     def _route_guard(self, route):
         """SSRF guard for browser-issued requests (``page.goto`` & subresources).
 
-        ``context.request`` calls bypass page routes — their redirects are
-        validated in :meth:`_fetch` instead. This covers navigations, the
-        redirect hops the browser follows on its own, and subresources:
+        This covers every request the page issues — top-level navigations, the
+        in-page ``fetch()`` API calls (see :meth:`_fetch`), the redirect hops
+        the browser follows on its own, and subresources:
 
         * the top-level document (and any redirect of it) must stay on the host
           allowlist — parity with ``ScraperClient``'s per-hop check;
@@ -585,47 +585,70 @@ class BrowserClient:
             return None
 
     def _fetch(self, url, *, params, headers):
-        """One API GET with manual, SSRF-validated redirect following.
+        """One API GET issued **from inside the page's JS context**.
 
-        ``context.request`` bypasses the page route guard, so redirects are
-        followed by hand here and every hop is re-validated with
-        :func:`assert_safe_url` (parity with ``ScraperClient``).
+        The bare ``context.request`` client shares the context's cookies but runs
+        *outside* the page, so Imperva/Incapsula still anti-bot-challenges it (a
+        tiny interstitial body returned with HTTP 200) even after ``page.goto``
+        cleared the page's own challenge. Issuing the request as an in-page
+        ``fetch()`` runs it in the already-cleared browser JS context — same
+        origin as the just-loaded tournament page, carrying the solved clearance
+        cookies/token **and** the real browser fingerprint (UA, Referer,
+        ``sec-fetch-*`` headers the bare client can't reproduce) — so the API
+        returns real JSON/XML instead of a challenge.
+
+        SSRF parity: the fully-resolved target is validated here up front, and
+        every network hop the in-page fetch then makes (including redirects) is
+        re-checked by :meth:`_route_guard` via ``context.route`` — which fails
+        closed on any non-public address.
+
+        Returns ``(status, body_bytes, text)``.
         """
-        current, cur_params = url, params
-        for _hop in range(6):
-            resp = self._context.request.get(
-                current,
-                params=cur_params or None,
-                headers=headers or None,
-                max_redirects=0,
-                timeout=self.api_timeout,
+        full_url = url
+        if params:
+            qs = urlencode(
+                {k: ("" if v is None else str(v)) for k, v in dict(params).items()}
             )
-            if resp.status in (301, 302, 303, 307, 308):
-                loc = resp.headers.get("location")
-                if not loc:
-                    return resp
-                nxt = urljoin(current, loc)
-                assert_safe_url(nxt, allowed_hosts=self.allowed_hosts)
-                current, cur_params = nxt, None
-                continue
-            return resp
-        raise RuntimeError(f"too many redirects for {url}")
+            if qs:
+                full_url = f"{url}{'&' if '?' in url else '?'}{qs}"
+        # Validate the resolved target before handing it to the page; the route
+        # guard re-validates each redirect hop the browser then follows.
+        assert_safe_url(full_url, allowed_hosts=self.allowed_hosts)
+        result = self._page.evaluate(
+            """async ({ url, headers }) => {
+                try {
+                    const r = await fetch(url, {
+                        method: 'GET',
+                        headers: headers || {},
+                        credentials: 'include',
+                        redirect: 'follow',
+                    });
+                    return { ok: true, status: r.status, body: await r.text() };
+                } catch (e) {
+                    return { ok: false, status: 0, body: '', error: String(e) };
+                }
+            }""",
+            {"url": full_url, "headers": headers or {}},
+        )
+        if not result.get("ok"):
+            # A network-level failure (DNS, abort by the route guard, CORS) —
+            # surface it so _api records/retries, never a silent empty body.
+            raise RuntimeError(
+                f"in-page fetch failed: {result.get('error') or 'unknown error'}"
+            )
+        text = result.get("body") or ""
+        status = int(result.get("status") or 0)
+        return status, text.encode("utf-8", "ignore"), text
 
     def _api(self, url, *, params=None, headers=None):
-        """Fetch a JSON/XML API endpoint via the browser context (shares cookies)."""
+        """Fetch a JSON/XML API endpoint via an in-page fetch (inherits clearance)."""
         if not self._safe(url):
             return None
         last_exc = None
         for attempt in range(1, self.api_tries + 1):
             start = time.time()
             try:
-                resp = self._fetch(url, params=params, headers=headers)
-                body = resp.body()
-                status = resp.status
-                try:
-                    text = resp.text()
-                except Exception:  # noqa: BLE001 - body may be binary
-                    text = ""
+                status, body, text = self._fetch(url, params=params, headers=headers)
                 self.tele.record_request(
                     url=url, method="GET", status=status, size=len(body),
                     duration_ms=(time.time() - start) * 1000,

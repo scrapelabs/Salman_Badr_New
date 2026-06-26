@@ -35,8 +35,10 @@ configured proxy. Because ``www.itftennis.com`` sits behind Imperva/Incapsula,
 **phase 2 fetches through a patchright (stealth Chromium) browser**
 (:mod:`accounts.live_scrapers._browser`): ``page.goto`` solves the Incapsula JS
 challenge and the ``GetEventFilters`` / ``GetDrawsheet`` / player-DOB API calls
-reuse the solved cookies via ``context.request`` — so a proxy whose IP would
-otherwise be challenged (a block page and zero rows) still collects data. Phase
+run as **in-page ``fetch()`` calls** that inherit the page's solved clearance and
+real browser fingerprint (a bare ``context.request`` shares only cookies and is
+still challenged) — so an egress whose IP would otherwise be challenged at the
+API (a tiny block body with HTTP 200, and zero rows) still collects data. Phase
 1 discovery stays on curl_cffi. If the browser can't launch the run **fails
 honestly** (no fabricated rows), like the Stadion scrapers behind CloudFront.
 
