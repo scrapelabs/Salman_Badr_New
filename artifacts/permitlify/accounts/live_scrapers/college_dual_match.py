@@ -218,6 +218,120 @@ def _as_list_of_dicts(value):
 
 
 # ---------------------------------------------------------------------------
+# Page fetch with a patchright (persistent-profile) anti-bot fallback
+# ---------------------------------------------------------------------------
+class _HtmlResponse:
+    """Adapt browser-rendered HTML to the curl client's read surface.
+
+    A page fetched through the browser fallback then slots transparently into
+    the same callers that consume a ``curl_cffi`` ``Response`` (they read
+    ``.status_code`` / ``.text`` / ``.content`` / ``.headers``).
+    """
+
+    __slots__ = ("status_code", "text", "content", "headers")
+
+    def __init__(self, html):
+        self.status_code = 200
+        self.text = html or ""
+        self.content = (html or "").encode("utf-8", "ignore")
+        self.headers = {"Content-Type": "text/html; charset=utf-8"}
+
+
+class _BrowserFallback:
+    """Patchright + persistent-profile fallback for anti-bot-challenged pages.
+
+    The curl_cffi client handles the vast majority of college schedule / box-
+    score pages. A few athletics hosts sit behind a JavaScript anti-bot
+    interstitial (Cloudflare / Imperva) that answers a plain HTTP client with a
+    403 no matter how many times it retries (e.g. the ``sammieetc.com`` block
+    seen in the wild). For those a real patchright Chromium executes the
+    challenge JS, earns the clearance cookie and returns the rendered HTML.
+
+    One **persistent** profile dir (``user_data_dir``) is reused for every
+    fallback fetch, so the clearance cookie survives across pages *and* across
+    runs — once a host is cleared, later pages on it skip the challenge. A
+    persistent Chrome profile can be opened by only one process at a time, and
+    one Chromium is about all the container's memory can spare, so every
+    fallback fetch is serialized behind a lock: phase-2 worker threads queue
+    for it. The primary curl path stays fully concurrent; only the genuinely
+    blocked pages pay the browser cost. Any error is an honest ``None`` (the
+    caller records the original failure) — never fabricated content.
+    """
+
+    def __init__(self, *, scraper, log, tele, allowed_hosts, profile_dir):
+        self._scraper = scraper
+        self._log = log
+        self._tele = tele
+        self._allowed_hosts = allowed_hosts or None
+        self._profile_dir = profile_dir
+        self._lock = threading.Lock()
+
+    def fetch_html(self, url):
+        """Return cleared page HTML via patchright, or ``None`` (honest fail)."""
+        with self._lock:
+            try:
+                from ._browser import BrowserClient
+            except Exception as exc:  # noqa: BLE001 - patchright not importable
+                self._tele.record_error(
+                    redact_secrets(f"Browser fallback unavailable for {url}: {exc}")
+                )
+                return None
+            self._log(
+                "INFO",
+                f"\U0001f310 anti-bot challenge \u2014 retrying {url} via "
+                "patchright (persistent profile)",
+            )
+            try:
+                with BrowserClient(
+                    log=self._log,
+                    tele=self._tele,
+                    proxy=getattr(self._scraper, "proxy", None),
+                    allowed_hosts=self._allowed_hosts,
+                    headless=getattr(settings, "SCRAPER_BROWSER_HEADLESS", True),
+                    channel=getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or None,
+                    user_data_dir=self._profile_dir,
+                ) as browser:
+                    sel = browser.get_selector(url)
+                if sel is None:
+                    return None
+                return sel.get() or None
+            except Exception as exc:  # noqa: BLE001 - honest fail, never fabricate
+                self._tele.record_error(
+                    redact_secrets(f"Browser fallback failed for {url}: {exc}"),
+                    exc=exc,
+                )
+                self._log(
+                    "WARN",
+                    redact_secrets(
+                        f"\u26a0\ufe0f browser fallback failed for {url}: "
+                        f"{exc.__class__.__name__}: {exc}"
+                    ),
+                )
+                return None
+
+
+def _get_page(client, url, log, tele, *, browser=None, headers=BROWSER_HEADERS):
+    """GET a page via curl_cffi; on an anti-bot challenge, fall back to a real
+    patchright browser (persistent profile).
+
+    Returns a response-like object exposing ``.status_code`` / ``.text`` /
+    ``.content`` / ``.headers`` — the curl ``Response`` on success, or an
+    :class:`_HtmlResponse` wrapping the browser-rendered HTML — else the failing
+    curl response (or ``None``). The browser is launched **only** when curl
+    exhausts its retries on an anti-bot *challenge* (``client.last_challenge``),
+    so a 404 / timeout / transport failure never spins up Chromium.
+    """
+    resp = client.get(url, headers=headers)
+    if resp is not None and 200 <= resp.status_code < 300:
+        return resp
+    if browser is not None and getattr(client, "last_challenge", False):
+        html = browser.fetch_html(url)
+        if html:
+            return _HtmlResponse(html)
+    return resp
+
+
+# ---------------------------------------------------------------------------
 # Anthropic Claude (the AI core)
 # ---------------------------------------------------------------------------
 def _claude_request(client, key, system, log, tele, *, content=None, text=None):
@@ -509,10 +623,10 @@ def _read_google_sheet(client, url, log, tele):
     return rows
 
 
-def _crawl_schedule(client, url, log, tele):
+def _crawl_schedule(client, url, log, tele, *, browser=None):
     """Crawl a schedule page for box-score links (HTML or PDF variants)."""
     url = _normalize_url(url)
-    resp = client.get(url, headers=BROWSER_HEADERS)
+    resp = _get_page(client, url, log, tele, browser=browser)
     if resp is None or not (200 <= resp.status_code < 300):
         tele.record_error(
             f"Schedule page fetch failed for {url} "
@@ -539,7 +653,7 @@ def _crawl_schedule(client, url, log, tele):
     return ordered
 
 
-def _discover(client, url, log, tele):
+def _discover(client, url, log, tele, *, browser=None):
     """Classify one input URL and return the box-score URLs it expands to."""
     url = (url or "").strip()
     if not url:
@@ -549,12 +663,12 @@ def _discover(client, url, log, tele):
         box_scores = []
         for _team, link in _read_google_sheet(client, url, log, tele):
             if "/schedule" in link:
-                box_scores.extend(_crawl_schedule(client, link, log, tele))
+                box_scores.extend(_crawl_schedule(client, link, log, tele, browser=browser))
             else:
                 box_scores.append(_normalize_url(link))
         return box_scores
     if "/schedule" in url:
-        return _crawl_schedule(client, url, log, tele)
+        return _crawl_schedule(client, url, log, tele, browser=browser)
     return [_normalize_url(url)]
 
 
@@ -900,9 +1014,9 @@ def _auburn_extract(client, openai_key, url, content, log, tele):
     return rows
 
 
-def _extract_box_score(client, claude_key, openai_key, system, url, log, tele):
+def _extract_box_score(client, claude_key, openai_key, system, url, log, tele, *, browser=None):
     """Fetch one box score and extract rows (Claude first, auburn fallback)."""
-    resp = client.get(url, headers=BROWSER_HEADERS)
+    resp = _get_page(client, url, log, tele, browser=browser)
     if resp is None or not (200 <= resp.status_code < 300):
         tele.record_error(
             f"Box score fetch failed for {url} "
@@ -986,6 +1100,19 @@ def run(run_obj, log):
 
     proxies = build_proxies(scraper, log)
 
+    # Anti-bot fallback: a few athletics hosts answer the curl_cffi client with a
+    # 403 JS challenge it can't solve. For those a patchright Chromium with a
+    # PERSISTENT profile (clearance cookies survive across pages/runs) re-fetches
+    # the page. Serialized internally to one browser at a time; see
+    # _BrowserFallback. allowed_hosts=None mirrors the curl client (college
+    # crawls arbitrary discovered athletics hosts); the SSRF public-IP guard
+    # still applies inside BrowserClient.
+    profile_root = getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "")
+    profile_dir = os.path.join(profile_root, scraper.slug) if profile_root else None
+    browser_fb = _BrowserFallback(
+        scraper=scraper, log=log, tele=tele, allowed_hosts=None, profile_dir=profile_dir,
+    )
+
     # ---- phase 1 · discover box-score URLs -------------------------------
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering box scores \u2500\u2500\u2500\u2500")
     box_scores = []
@@ -993,7 +1120,7 @@ def run(run_obj, log):
         for url in urls:
             log("INFO", f"\U0001f50e Classifying {url}")
             try:
-                box_scores.extend(_discover(discovery, url, log, tele))
+                box_scores.extend(_discover(discovery, url, log, tele, browser=browser_fb))
             except Exception as exc:  # noqa: BLE001 - one bad input can't kill the run
                 tele.record_error(redact_secrets(f"Discovery failed for {url}: {exc}"), exc=exc)
                 log("WARN", redact_secrets(f"\u26a0\ufe0f discovery failed: {exc.__class__.__name__}: {exc}"))
@@ -1032,7 +1159,10 @@ def run(run_obj, log):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
         claude_key = random.choice(claude_keys)
         try:
-            rows = _extract_box_score(client, claude_key, openai_key, system, box_url, log, tele)
+            rows = _extract_box_score(
+                client, claude_key, openai_key, system, box_url, log, tele,
+                browser=browser_fb,
+            )
             for row in rows:
                 ident = college_store.match_hash(college_store.map_extracted(row))
                 with lock:

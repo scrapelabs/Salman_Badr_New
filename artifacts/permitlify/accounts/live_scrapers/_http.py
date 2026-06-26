@@ -206,6 +206,11 @@ class ScraperClient:
         self.backoff_cap = backoff_cap
         self.jitter = jitter
         self._session = None
+        # Set by _fetch_one when an anti-bot interstitial is detected and reset
+        # at the start of each request(); lets a caller pick a heavier fallback
+        # (e.g. a real browser) only when the give-up was a challenge, not a
+        # plain 404 / timeout / transport error.
+        self.last_challenge = False
 
     # -- lifecycle -------------------------------------------------------
     @property
@@ -276,6 +281,7 @@ class ScraperClient:
                     duration_ms=(time.time() - start) * 1000,
                 )
                 if self._is_challenge(resp):
+                    self.last_challenge = True
                     self.log(
                         "WARN",
                         f"\U0001f6e1\ufe0f {method} {url} \u2192 anti-bot "
@@ -345,6 +351,7 @@ class ScraperClient:
         """
         tries = max(1, tries or self.tries)
         timeout = timeout or self.timeout
+        self.last_challenge = False
         merged = dict(self.default_headers)
         if headers:
             merged.update(headers)
