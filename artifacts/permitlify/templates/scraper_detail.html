@@ -929,11 +929,130 @@
   </script>
 
   {% elif tab == 'schedule' %}
-  <div class="panel">
+  <div class="panel sched-auto">
     <div class="panel-pad">
       <div class="status-head">
         <div>
           <div class="status-eyebrow">Automation</div>
+          <div class="status-name">Run automatically</div>
+        </div>
+        <span class="ptype direct">Built-in</span>
+      </div>
+
+      <p class="rt-intro">
+        Let MatchMiner run <strong>{{ s.code }}</strong> on a repeating schedule — no GitHub or
+        external service needed. Pick a cadence below and the app starts a run for you at the
+        chosen time. Each scheduled run is identical to pressing “Start” on the Real-time tab and
+        respects maintenance mode and the one-run-at-a-time rule. The schedule runs while the app
+        is online — if the app is offline at the scheduled time that run is skipped (missed runs
+        aren’t backfilled) and the schedule resumes on its next slot.
+      </p>
+
+      <form method="post" action="{% url 'scraper_detail' s.slug %}?tab=schedule" id="schedForm">
+        {% csrf_token %}
+        <input type="hidden" name="form" value="schedule-config" />
+
+        <label class="sched-toggle">
+          <input type="checkbox" name="enabled" {% if schedule.enabled %}checked{% endif %} />
+          <span>Enable automatic runs</span>
+        </label>
+
+        <div class="sched-grid">
+          <div class="rt-field">
+            <label class="field-label" for="schedFreq">Frequency</label>
+            <select class="rt-input" id="schedFreq" name="frequency">
+              {% for value, label in freq_choices %}
+              <option value="{{ value }}" {% if schedule.frequency == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="rt-field">
+            <label class="field-label" for="schedTime">Time of day</label>
+            <input class="rt-input" id="schedTime" type="time" name="time_of_day" value="{{ schedule_time_value }}" required />
+          </div>
+
+          <div class="rt-field sched-weekday" {% if schedule.frequency != 'weekly' and schedule.frequency != 'biweekly' %}hidden{% endif %}>
+            <label class="field-label" for="schedWeekday">Day of week</label>
+            <select class="rt-input" id="schedWeekday" name="weekday">
+              {% for value, label in weekday_choices %}
+              <option value="{{ value }}" {% if schedule.weekday == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="rt-field sched-dom" {% if schedule.frequency != 'monthly' %}hidden{% endif %}>
+            <label class="field-label" for="schedDom">Day of month</label>
+            <select class="rt-input" id="schedDom" name="day_of_month">
+              {% for d in dom_choices %}
+              <option value="{{ d }}" {% if schedule.day_of_month == d %}selected{% endif %}>{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="rt-field">
+            <label class="field-label" for="schedTz">Timezone</label>
+            <select class="rt-input" id="schedTz" name="timezone">
+              {% for tz in tz_choices %}
+              <option value="{{ tz }}" {% if schedule.timezone == tz %}selected{% endif %}>{{ tz }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <p class="status-note sched-dom-note" {% if schedule.frequency != 'monthly' %}hidden{% endif %}>
+          Months without your chosen day (e.g. the 31st) fire on that month's last day instead.
+        </p>
+
+        <div class="sched-actions">
+          <button class="btn btn-primary" type="submit">Save schedule</button>
+          {% if schedule.enabled and next_run_local %}
+          <span class="sched-status is-on">
+            <span class="sched-dot"></span>
+            Next run <strong>{{ next_run_local|date:"D, M j Y" }}</strong> at
+            <strong>{{ next_run_local|date:"H:i" }}</strong> ({{ schedule.timezone }})
+          </span>
+          {% else %}
+          <span class="sched-status is-off"><span class="sched-dot"></span> Automatic runs are off</span>
+          {% endif %}
+        </div>
+
+        {% if schedule.last_run %}
+        <p class="status-note sched-last">
+          Last automatic run:
+          <a href="{% url 'run_log' s.slug schedule.last_run.uuid %}">#{{ schedule.last_run.short_id }}</a>
+          {% if schedule.last_fired_at %}· {{ schedule.last_fired_at|timesince }} ago{% endif %}
+        </p>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var freq = document.getElementById('schedFreq');
+      if (!freq) return;
+      var wk = document.querySelector('.sched-weekday');
+      var dom = document.querySelector('.sched-dom');
+      var domNote = document.querySelector('.sched-dom-note');
+      function sync() {
+        var v = freq.value;
+        var showWk = (v === 'weekly' || v === 'biweekly');
+        var showDom = (v === 'monthly');
+        if (wk) wk.hidden = !showWk;
+        if (dom) dom.hidden = !showDom;
+        if (domNote) domNote.hidden = !showDom;
+      }
+      freq.addEventListener('change', sync);
+      sync();
+    })();
+  </script>
+
+  <div class="panel">
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Automation · alternative</div>
           <div class="status-name">Schedule with GitHub Actions</div>
         </div>
         <span class="ptype direct">Webhook</span>

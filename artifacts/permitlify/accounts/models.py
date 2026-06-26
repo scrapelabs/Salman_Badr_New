@@ -11,6 +11,7 @@ re-opened and downloaded later. Runs perform live network scrapes via
 import re
 import secrets
 import uuid
+from datetime import time as dtime
 
 from django.conf import settings
 from django.db import models
@@ -589,3 +590,75 @@ class CollegeMatch(models.Model):
 
     def __str__(self):
         return f"{self.winner_team} def. {self.loser_team} ({self.date_norm})"
+
+
+class ScraperSchedule(models.Model):
+    """Per-scraper recurring-run configuration for the in-app scheduler.
+
+    One row per scraper, created on demand from the Lab's Schedule tab. When
+    ``enabled`` the background scheduler thread (:mod:`accounts.scheduler`)
+    launches the scraper on the chosen cadence via the *same* run-start path as
+    the Real-time button and the trigger webhook, so every guard (maintenance,
+    single-in-flight, browser-exclusivity) still applies.
+
+    ``next_run_at`` is the authoritative UTC instant the next run is due; it is
+    recomputed whenever the schedule is saved and after every fire. There is no
+    backfill — a schedule missed while the app was offline fires once on
+    recovery, then resumes its cadence. ``anchor_date`` pins the fortnight parity
+    for the ``biweekly`` cadence and is unused by the other frequencies.
+    """
+
+    class Frequency(models.TextChoices):
+        DAILY = "daily", "Daily"
+        WEEKLY = "weekly", "Weekly"
+        BIWEEKLY = "biweekly", "Every 2 weeks"
+        MONTHLY = "monthly", "Monthly"
+
+    # 0=Mon … 6=Sun, matching Python's ``date.weekday()``.
+    WEEKDAYS = [
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
+    ]
+
+    scraper = models.OneToOneField(
+        Scraper, on_delete=models.CASCADE, related_name="schedule"
+    )
+    enabled = models.BooleanField(default=False)
+    frequency = models.CharField(
+        max_length=12, choices=Frequency.choices, default=Frequency.DAILY
+    )
+    time_of_day = models.TimeField(default=dtime(6, 0))
+    # Used by weekly + biweekly cadences (ignored otherwise).
+    weekday = models.PositiveSmallIntegerField(default=0)
+    # Used by the monthly cadence (clamped to the month's length at compute time).
+    day_of_month = models.PositiveSmallIntegerField(default=1)
+    timezone = models.CharField(max_length=64, default="UTC")
+    # Fortnight parity anchor for the biweekly cadence (the first scheduled local
+    # date); recomputed on every save of a biweekly schedule, else NULL.
+    anchor_date = models.DateField(null=True, blank=True)
+    # Authoritative next-due instant, stored UTC. NULL when disabled.
+    next_run_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_fired_at = models.DateTimeField(null=True, blank=True)
+    last_run = models.ForeignKey(
+        "Run",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["enabled", "next_run_at"])]
+
+    def __str__(self):
+        return (
+            f"Schedule({self.scraper_id}, {self.frequency}, "
+            f"enabled={self.enabled})"
+        )

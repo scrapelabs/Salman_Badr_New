@@ -2857,3 +2857,49 @@ body.mm-modal-open { overflow: hidden; }
 @media (max-width: 720px) {
   .users-add-grid { grid-template-columns: 1fr; }
 }
+
+/* In-app scheduler "Run automatically" card (Scraper Lab → Schedule tab). */
+.sched-auto .rt-intro { margin: 4px 0 18px; }
+.sched-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: var(--app-text-1);
+  cursor: pointer;
+  margin-bottom: 18px;
+}
+.sched-toggle input { width: 16px; height: 16px; cursor: pointer; }
+.sched-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.sched-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 18px;
+}
+.sched-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--app-text-2);
+}
+.sched-status strong { color: var(--app-text-1); }
+.sched-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--app-border-2);
+  flex: 0 0 auto;
+}
+.sched-status.is-on .sched-dot { background: #1f9d55; box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.18); }
+.sched-last { margin-top: 14px; }
+@media (max-width: 720px) {
+  .sched-grid { grid-template-columns: 1fr; }
+}

@@ -34,9 +34,9 @@ from django.utils.timesince import timesince
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from . import college_store
+from . import college_store, scheduling
 from .live_scrapers import _ssrf, registry
-from .models import CollegeMatch, Proxy, Run, Scraper, Ticket
+from .models import CollegeMatch, Proxy, Run, Scraper, ScraperSchedule, Ticket
 from .system_stats import collect_system_stats, gauge_card
 from .runs import ALL_TOURNAMENTS
 
@@ -52,6 +52,40 @@ RUN_START_LOCK_KEY = 0x6D6D7273  # "mmrs" — MatchMiner run-start
 YEAR_MIN = 2000
 YEAR_MAX = 2030
 IS_WINDOWS = os.name == "nt"
+
+# Curated IANA timezones offered in the in-app scheduler's dropdown. The chosen
+# value is validated against this set on save (anything else falls back to UTC),
+# which also keeps an attacker from stuffing an arbitrary string into the field.
+SCHEDULE_TIMEZONES = [
+    "UTC",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Phoenix",
+    "America/Toronto",
+    "America/Mexico_City",
+    "America/Sao_Paulo",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Europe/Madrid",
+    "Europe/Rome",
+    "Europe/Athens",
+    "Europe/Moscow",
+    "Europe/Istanbul",
+    "Africa/Johannesburg",
+    "Asia/Dubai",
+    "Asia/Kolkata",
+    "Asia/Bangkok",
+    "Asia/Singapore",
+    "Asia/Hong_Kong",
+    "Asia/Shanghai",
+    "Asia/Tokyo",
+    "Asia/Seoul",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+]
 
 # Date-range run inputs (date_range / date_range_or_url scrapers).
 DEFAULT_RANGE_DAYS = 30   # webhook window when a scheduled call omits dates
@@ -464,6 +498,83 @@ def scraper_detail_view(request, slug):
             messages.success(request, "Scraper settings saved.")
             return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
 
+        # Schedule tab: save the in-app recurring-run configuration. Available to
+        # any logged-in user (parity with pressing "Start" / the rotate-token
+        # control). Every field is validated server-side and next_run_at is
+        # recomputed so the background scheduler picks it up on its next tick.
+        if request.POST.get("form") == "schedule-config":
+            sched, _ = ScraperSchedule.objects.get_or_create(scraper=s)
+            enabled = request.POST.get("enabled") == "on"
+
+            frequency = request.POST.get("frequency", sched.frequency)
+            if frequency not in ScraperSchedule.Frequency.values:
+                frequency = ScraperSchedule.Frequency.DAILY
+
+            time_of_day = _parse_time_of_day(
+                request.POST.get("time_of_day"), sched.time_of_day
+            )
+
+            try:
+                weekday = int(request.POST.get("weekday", sched.weekday))
+            except (TypeError, ValueError):
+                weekday = sched.weekday
+            weekday = weekday if 0 <= weekday <= 6 else 0
+
+            try:
+                day_of_month = int(
+                    request.POST.get("day_of_month", sched.day_of_month)
+                )
+            except (TypeError, ValueError):
+                day_of_month = sched.day_of_month
+            day_of_month = max(1, min(day_of_month, 31))
+
+            tz_name = (
+                request.POST.get("timezone") or sched.timezone or "UTC"
+            ).strip()
+            if tz_name not in SCHEDULE_TIMEZONES:
+                tz_name = "UTC"
+
+            sched.enabled = enabled
+            sched.frequency = frequency
+            sched.time_of_day = time_of_day
+            sched.weekday = weekday
+            sched.day_of_month = day_of_month
+            sched.timezone = tz_name
+
+            if enabled:
+                now = timezone.now()
+                # Biweekly pins its fortnight parity to the first scheduled local
+                # date; the other cadences don't use an anchor.
+                if frequency == ScraperSchedule.Frequency.BIWEEKLY:
+                    sched.anchor_date = scheduling.first_anchor_date(
+                        time_of_day=time_of_day,
+                        weekday=weekday,
+                        tz_name=tz_name,
+                        after_utc=now,
+                    )
+                else:
+                    sched.anchor_date = None
+                sched.next_run_at = scheduling.compute_next_run(
+                    frequency=frequency,
+                    time_of_day=time_of_day,
+                    weekday=weekday,
+                    day_of_month=day_of_month,
+                    tz_name=tz_name,
+                    anchor_date=sched.anchor_date,
+                    after_utc=now,
+                )
+            else:
+                sched.next_run_at = None
+
+            sched.save()
+            messages.success(
+                request,
+                "Automatic schedule saved — the next run is queued."
+                if enabled
+                else "Automatic schedule turned off.",
+            )
+            return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=schedule")
+
         # Status tab: save Production/Maintenance status.
         mode = request.POST.get("mode", s.mode)
         if mode in (Scraper.Mode.PRODUCTION, Scraper.Mode.MAINTENANCE):
@@ -632,6 +743,20 @@ def scraper_detail_view(request, slug):
             url_required=spec.url_required,
             feed_api_key=spec.feed_api_key,
             feed_gender=spec.feed_gender,
+        )
+        # In-app scheduler config + dropdown choices for the "Run automatically"
+        # card. The schedule row is created lazily so every scraper has one.
+        sched, _ = ScraperSchedule.objects.get_or_create(scraper=s)
+        ctx["schedule"] = sched
+        ctx["freq_choices"] = ScraperSchedule.Frequency.choices
+        ctx["weekday_choices"] = ScraperSchedule.WEEKDAYS
+        ctx["dom_choices"] = list(range(1, 32))
+        ctx["tz_choices"] = SCHEDULE_TIMEZONES
+        ctx["schedule_time_value"] = sched.time_of_day.strftime("%H:%M")
+        ctx["next_run_local"] = (
+            sched.next_run_at.astimezone(scheduling.get_zone(sched.timezone))
+            if (sched.enabled and sched.next_run_at)
+            else None
         )
     elif tab == "settings":
         ctx["proxies"] = Proxy.objects.filter(is_active=True).order_by("name")
@@ -859,6 +984,21 @@ def _normalize_feed_gender(raw, *, default="both"):
             "invalid_gender", "Gender must be boys, girls, or both.", 400
         )
     return gender
+
+
+def _parse_time_of_day(raw, fallback):
+    """Parse an ``HH:MM`` (or ``HH:MM:SS``) string into a ``time``.
+
+    Returns ``fallback`` on anything unparseable so a malformed submission never
+    wipes the schedule's saved time-of-day.
+    """
+    raw = (raw or "").strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw, fmt).time()
+        except ValueError:
+            continue
+    return fallback
 
 
 def validate_run_params(spec, data, *, webhook=False):
