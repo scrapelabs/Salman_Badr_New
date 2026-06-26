@@ -109,9 +109,9 @@ if "%FRESH_ENV%"=="1" (
     echo ===========================================================
     echo  First-time setup almost done!
     echo    1. Open .env and set your PostgreSQL connection in
-    echo       DATABASE_URL (postgres://USER:PASSWORD@HOST:PORT/DBNAME).
-    echo    2. Re-run this script to finish (migrate + collectstatic).
-    echo    3. Then run 3_run_server.bat   (http://localhost:8000/)
+    echo       DATABASE_URL ^(postgres://USER:PASSWORD@HOST:PORT/DBNAME^).
+    echo    2. Re-run this script to finish ^(migrate + collectstatic^).
+    echo    3. Then run 3_run_server.bat   ^(http://localhost:8000/^)
     echo ===========================================================
     echo.
     pause

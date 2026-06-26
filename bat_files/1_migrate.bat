@@ -23,7 +23,7 @@ echo.
 
 REM --- Virtual environment must already exist (created by 0_setup.bat) -------
 if not exist "%VENV_PY%" (
-    echo [ERROR] No virtual environment (.venv) was found.
+    echo [ERROR] No virtual environment ^(.venv^) was found.
     echo         Run 0_setup.bat first - it creates the .venv and installs the
     echo         dependencies. Then you can use this script for quick updates.
     echo.
