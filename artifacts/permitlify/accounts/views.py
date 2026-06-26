@@ -26,7 +26,7 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Count, Exists, Max, OuterRef, Subquery
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -34,8 +34,9 @@ from django.utils.timesince import timesince
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from . import college_store
 from .live_scrapers import _ssrf, registry
-from .models import Proxy, Run, Scraper, Ticket
+from .models import CollegeMatch, Proxy, Run, Scraper, Ticket
 from .system_stats import collect_system_stats, gauge_card
 from .runs import ALL_TOURNAMENTS
 
@@ -67,12 +68,14 @@ MONTHS = [
 TAB_LABELS = {
     "real-time": "Real-time test",
     "calls": "Calls history",
+    "data": "Match database",
     "schedule": "Schedule",
     "settings": "Settings",
     "status": "Status",
 }
 
 CALLS_PER_PAGE = 12
+MATCHES_PER_PAGE = 50     # rows per page in the "Match database" tab
 LOG_LINES_PER_PAGE = 150
 # Live console keeps only the most recent N streamed lines in the DOM (and only
 # fetches that many on initial load) so an in-flight run with a huge log stays light.
@@ -478,8 +481,14 @@ def scraper_detail_view(request, slug):
     # The Settings (routing & performance) tab is admin-only.
     if tab == "settings" and not request.user.is_superuser:
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
+    # The Match database tab only exists for scrapers that persist matches.
+    if tab == "data" and not registry.spec_for(slug).has_match_store:
+        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
 
     ctx = _app_ctx("scrapers", s=s, tab=tab, tab_label=TAB_LABELS[tab])
+    # Drives the nav: the "Match database" tab link only renders for scrapers
+    # whose runner persists to CollegeMatch (currently college_dual_match).
+    ctx["has_match_store"] = registry.spec_for(slug).has_match_store
 
     if tab == "real-time":
         # Reap dead runs across ALL scrapers so the browser-exclusivity check
@@ -549,6 +558,28 @@ def scraper_detail_view(request, slug):
         paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
         ctx["run_total"] = paginator.count
+    elif tab == "data":
+        # The match database: all stored CollegeMatch rows for this scraper's
+        # store, with headline stats + a paginated listing. Newest first.
+        qs = CollegeMatch.objects.all()
+        total = qs.count()
+        last_run = (
+            s.runs.filter(status=Run.Status.SUCCESS).order_by("-started_at").first()
+        )
+        last_match = qs.first()  # qs is ordered -created_at
+        paginator = Paginator(qs, MATCHES_PER_PAGE)
+        ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
+        ctx["match_total"] = total
+        ctx["match_imported"] = qs.filter(
+            source=CollegeMatch.SOURCE_IMPORT
+        ).count()
+        ctx["match_scraped"] = qs.filter(
+            source=CollegeMatch.SOURCE_SCRAPE
+        ).count()
+        # Most recent successful run's row_count == matches it newly inserted.
+        ctx["match_last_new"] = last_run.row_count if last_run else None
+        ctx["match_last_run"] = last_run
+        ctx["match_last_added"] = last_match.created_at if last_match else None
     elif tab == "schedule":
         spec = registry.spec_for(slug)
         trigger_url = request.build_absolute_uri(
@@ -1540,6 +1571,27 @@ def run_errors_download_view(request, slug, run_uuid):
     resp["Content-Disposition"] = (
         f'attachment; filename="{_download_filename(slug, run, "error")}"'
     )
+    return resp
+
+
+@login_required
+def college_matches_export_view(request, slug):
+    """Download the FULL match database (all stored rows, 65-col canonical CSV).
+
+    Only available for scrapers whose runner persists matches (the
+    ``has_match_store`` flag). Streams every :class:`CollegeMatch.data` record in
+    insertion order through :func:`college_store.to_csv`.
+    """
+    get_object_or_404(Scraper, slug=slug)
+    if not registry.spec_for(slug).has_match_store:
+        raise Http404("This scraper has no match database.")
+    rows = list(
+        CollegeMatch.objects.order_by("created_at").values_list("data", flat=True)
+    )
+    resp = HttpResponse(
+        college_store.to_csv(rows), content_type="text/csv; charset=utf-8"
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{slug}_all_matches.csv"'
     return resp
 
 

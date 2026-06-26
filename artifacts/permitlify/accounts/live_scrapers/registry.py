@@ -58,6 +58,7 @@ class ScraperSpec:
     feed_api_key: bool = False         # surface a run-time feed API-key field
     feed_api_key_default: str = ""     # prefilled / fallback feed API key
     feed_gender: bool = False          # surface a boys/girls/both gender selector
+    has_match_store: bool = False      # persists matches to CollegeMatch + a "Match database" tab
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -348,6 +349,7 @@ SPECS = {
         needs_claude=True,
         url_required=True,
         accepts_sheet=True,
+        has_match_store=True,
     ),
 }
 

@@ -35,6 +35,11 @@
     <a class="tab {% if tab == 'calls' %}active{% endif %}" href="?tab=calls" {% if tab == 'calls' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg><span>Calls history</span>
     </a>
+    {% if has_match_store %}
+    <a class="tab {% if tab == 'data' %}active{% endif %}" href="?tab=data" {% if tab == 'data' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6a9 3 0 0 0 18 0V5M3 11v6a9 3 0 0 0 18 0v-6"/></svg><span>Match database</span>
+    </a>
+    {% endif %}
     <a class="tab {% if tab == 'schedule' %}active{% endif %}" href="?tab=schedule" {% if tab == 'schedule' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>Schedule</span>
     </a>
@@ -590,6 +595,77 @@
     update();
   })();
   </script>
+
+  {% elif tab == 'data' %}
+  <div class="data-head">
+    <div>
+      <h2 class="section-title">Match database</h2>
+      <p class="data-sub">Every match this scraper has stored — deduplicated across runs and imports. New scrapes add only matches not already here.</p>
+    </div>
+    {% if match_total %}
+    <a class="btn btn-primary btn-sm" href="{% url 'college_matches_export' s.slug %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+      Download all ({{ match_total }} matches)
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="stat-label">Total matches</div>
+      <div class="stat-value">{{ match_total }}</div>
+      <div class="stat-foot">Unique matches in the database</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">From scrapes</div>
+      <div class="stat-value">{{ match_scraped }}</div>
+      <div class="stat-foot">Mined by real-time / scheduled runs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Imported</div>
+      <div class="stat-value">{{ match_imported }}</div>
+      <div class="stat-foot">Loaded from historical CSV files</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last run added</div>
+      <div class="stat-value">{% if match_last_new is not None %}+{{ match_last_new }}{% else %}—{% endif %}</div>
+      <div class="stat-foot">{% if match_last_added %}Newest entry {{ match_last_added|date:"M j, Y · H:i" }}{% else %}No matches stored yet{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Tournament</th>
+          <th>Draw</th>
+          <th>Gender</th>
+          <th>Winner</th>
+          <th>Loser</th>
+          <th>Score</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in page_obj %}
+        <tr>
+          <td class="nowrap">{{ m.date_norm|default:"—" }}</td>
+          <td>{{ m.tournament_name|default:"—" }}</td>
+          <td>{{ m.draw_name|default:"—" }}</td>
+          <td class="nowrap">{{ m.draw_gender|default:"—" }}</td>
+          <td>{{ m.winner_team|default:"—" }}</td>
+          <td>{{ m.loser_team|default:"—" }}</td>
+          <td class="nowrap">{{ m.data.score|default:"—" }}</td>
+          <td><span class="src-tag src-{{ m.source }}">{{ m.get_source_display }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="runs-empty">No matches stored yet — run a scrape from the <a href="?tab=real-time">Real-time test</a> tab, or import historical CSVs.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with page_obj=page_obj base_query="tab=data&" %}
 
   {% elif tab == 'status' %}
   <form class="panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=status">

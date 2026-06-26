@@ -54,6 +54,7 @@ from django.conf import settings
 from django.db.models import F
 from parsel import Selector
 
+from accounts import college_store
 from accounts.models import Run
 
 from ._http import RETRY_STATUSES, ScraperClient, build_proxies
@@ -1017,12 +1018,15 @@ def run(run_obj, log):
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
     # ---- phase 2 · Claude extraction (threaded) --------------------------
-    buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(HEADER)
+    # Collect every extracted match (raw scraper-key dicts) under a lock; the
+    # canonical 23->65 mapping + DB dedup happens once, after the pool, via
+    # accounts.college_store.ingest(). A light in-run guard drops the obvious
+    # case of one box score emitting the same match twice (keyed by normalized
+    # identity); genuine cross-source/cross-run duplicates are left for the store
+    # to collapse against what's already persisted.
     lock = threading.Lock()
-    seen_rows = set()
-    counter = {"rows": 0}
+    collected = []
+    seen_ids = set()
 
     def process(box_url):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
@@ -1030,19 +1034,12 @@ def run(run_obj, log):
         try:
             rows = _extract_box_score(client, claude_key, openai_key, system, box_url, log, tele)
             for row in rows:
-                key = (
-                    box_url,
-                    row.get("draw_name", ""),
-                    row.get("winner_1_name", ""),
-                    row.get("loser_1_name", ""),
-                    row.get("score", ""),
-                )
+                ident = college_store.match_hash(college_store.map_extracted(row))
                 with lock:
-                    if key in seen_rows:
+                    if ident in seen_ids:
                         continue
-                    seen_rows.add(key)
-                    writer.writerow([sanitize_cell(row.get(c, "")) for c in COLUMNS])
-                    counter["rows"] += 1
+                    seen_ids.add(ident)
+                    collected.append(row)
                 log(
                     "INFO",
                     f"   \U0001f3c6 {row.get('draw_team_type', '') or 'Match'}: "
@@ -1061,15 +1058,31 @@ def run(run_obj, log):
     with ThreadPoolExecutor(max_workers=workers) as executor:
         list(executor.map(process, box_scores))
 
-    row_count = counter["rows"]
+    extracted = len(collected)
+
+    # ---- phase 3 · persist new matches (dedup vs the match database) -----
+    log("INFO", "\u2500\u2500\u2500\u2500 phase 3 \u00b7 saving new matches \u2500\u2500\u2500\u2500")
+    mapped = [college_store.map_extracted(row) for row in collected]
+    new_rows, skipped = college_store.ingest(
+        mapped, run=run_obj, source=college_store.SOURCE_SCRAPE
+    )
+    row_count = len(new_rows)
+
     log("INFO", "\u2500\u2500\u2500\u2500 summary \u2500\u2500\u2500\u2500")
-    log("INFO", f"\U0001f4be Writing {row_count} row(s) to CSV")
+    log(
+        "INFO",
+        f"\U0001f9ee {extracted} match(es) extracted \u2014 {row_count} new, "
+        f"{skipped} already in the database",
+    )
     log(
         "INFO",
         f"\U0001f4ca Telemetry: {tele.request_count} request(s), {tele.error_count} error(s)",
     )
-    status = Run.Status.SUCCESS if row_count else Run.Status.FAILED
+    # A run that extracted matches SUCCEEDS even when every one was already stored
+    # (0 new is a valid, healthy outcome). It only FAILS when nothing at all was
+    # extracted from the discovered box scores.
+    status = Run.Status.SUCCESS if extracted else Run.Status.FAILED
     icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
-    log("INFO", f"{icon} Run finished \u2014 status={status}, rows={row_count}")
-    items_csv = buf.getvalue() if row_count else ""
+    log("INFO", f"{icon} Run finished \u2014 status={status}, new_rows={row_count}")
+    items_csv = college_store.to_csv(new_rows) if new_rows else ""
     return items_csv, tele.requests_csv(), tele.errors_csv(), row_count, status

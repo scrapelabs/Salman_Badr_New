@@ -60,6 +60,11 @@ urlpatterns = [
         name="run_stop",
     ),
     path(
+        "scrapers/<slug:slug>/matches.csv",
+        views.college_matches_export_view,
+        name="college_matches_export",
+    ),
+    path(
         "scrapers/<slug:slug>/trigger/",
         views.scraper_trigger_view,
         name="scraper_trigger",

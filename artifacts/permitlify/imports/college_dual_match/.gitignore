@@ -1,0 +1,6 @@
+# Historical CSV exports dropped here are data, not source — don't commit them.
+*.csv
+
+# ...but keep the folder (and its README) in the repo.
+!.gitignore
+!README.md

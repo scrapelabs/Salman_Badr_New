@@ -542,3 +542,50 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()} → {self.recipient_id}"
+
+
+class CollegeMatch(models.Model):
+    """A persisted College Dual Match result (canonical 65-column schema).
+
+    Every ``college_dual_match`` scrape and every historical-CSV import upserts
+    here, deduped by :attr:`match_hash` (a normalized identity digest computed in
+    :mod:`accounts.college_store`) so re-runs only insert genuinely new matches.
+    The full 65-column record is kept verbatim in :attr:`data` (JSON); a handful
+    of identity columns are promoted out for the Lab "Match database" tab's
+    listing + stats and for indexing. ``first_seen_run`` points at the run that
+    first inserted the row (null for imported rows).
+    """
+
+    SOURCE_SCRAPE = "scrape"
+    SOURCE_IMPORT = "import"
+    SOURCE_CHOICES = [
+        (SOURCE_SCRAPE, "Scrape"),
+        (SOURCE_IMPORT, "Import"),
+    ]
+
+    match_hash = models.CharField(max_length=64, unique=True)
+    data = models.JSONField(default=dict)
+    date_norm = models.CharField(max_length=32, blank=True, db_index=True)
+    tournament_name = models.CharField(max_length=300, blank=True)
+    draw_name = models.CharField(max_length=120, blank=True)
+    draw_gender = models.CharField(max_length=20, blank=True)
+    winner_team = models.CharField(max_length=200, blank=True)
+    loser_team = models.CharField(max_length=200, blank=True)
+    source = models.CharField(
+        max_length=10, choices=SOURCE_CHOICES, default=SOURCE_SCRAPE
+    )
+    first_seen_run = models.ForeignKey(
+        Run,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inserted_matches",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["-created_at"])]
+
+    def __str__(self):
+        return f"{self.winner_team} def. {self.loser_team} ({self.date_norm})"
