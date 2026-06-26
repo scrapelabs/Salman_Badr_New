@@ -87,7 +87,7 @@ class Scraper(models.Model):
         MAINTENANCE = "maintenance", "Maintenance"
 
     slug = models.SlugField(unique=True, max_length=64)
-    code = models.CharField(max_length=8)
+    code = models.CharField(max_length=16)
     name = models.CharField(max_length=120)
     tour = models.CharField(max_length=60)
     domain = models.CharField(max_length=120)

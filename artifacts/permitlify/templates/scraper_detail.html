@@ -641,6 +641,40 @@
       <div class="status-head">
         <div>
           <div class="status-eyebrow">Scraper settings</div>
+          <div class="status-name">Display &amp; labels</div>
+        </div>
+        <div class="detail-badge" id="badgePreview">{{ s.code }}</div>
+      </div>
+
+      <p class="rt-intro">
+        Rename how this scraper shows up across MatchMiner so it's clear which one you're
+        working with. The <strong>name</strong> appears in lists, headers and logs; the
+        <strong>badge</strong> is the short tag on cards and tables. These are labels only —
+        the scraper's behaviour, slug and address don't change.
+      </p>
+
+      <div class="rt-grid">
+        <div class="rt-field">
+          <label class="field-label" for="nameInput">Scraper name</label>
+          <input class="rt-input" id="nameInput" name="name" type="text"
+                 value="{{ s.name }}" maxlength="120" autocomplete="off"
+                 placeholder="e.g. ITF Juniors" />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="codeInput">Badge label</label>
+          <input class="rt-input" id="codeInput" name="code" type="text"
+                 value="{{ s.code }}" maxlength="16" autocomplete="off"
+                 spellcheck="false" placeholder="e.g. ITFJ" />
+        </div>
+      </div>
+
+      <p class="status-note settings-empty">
+        Keep the badge short (up to 16 characters) so it fits the pills on cards and tables.
+      </p>
+
+      <div class="status-head settings-section-gap">
+        <div>
+          <div class="status-eyebrow">Scraper settings</div>
           <div class="status-name">Routing &amp; performance</div>
         </div>
         {% if s.proxy %}

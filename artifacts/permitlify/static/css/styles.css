@@ -1344,8 +1344,9 @@ a.tbl-domain:hover svg {
   margin-bottom: 22px;
 }
 .detail-badge {
-  width: 46px;
+  min-width: 46px;
   height: 46px;
+  padding: 0 10px;
   border-radius: 12px;
   background: var(--app-accent-bg);
   color: var(--app-accent);
@@ -1353,6 +1354,7 @@ a.tbl-domain:hover svg {
   align-items: center;
   justify-content: center;
   font: 800 11.2px "JetBrains Mono", monospace;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 .detail-titlewrap {
@@ -2358,6 +2360,7 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
   background: var(--app-maint-bg);
 }
 .settings-empty { margin-top: 12px; }
+.settings-section-gap { margin-top: 26px; }
 
 /* ============================================================
    Schedule tab — GitHub Actions setup docs + trigger webhook

@@ -413,6 +413,21 @@ def scraper_detail_view(request, slug):
             )
 
             update_fields = ["proxy", "threads", "updated_at"]
+            # Display labels: rename the scraper's name and badge (cosmetic only —
+            # the slug, registry key and behaviour are unchanged). Empty submissions
+            # keep the existing value so a blank field never wipes a label.
+            # Collapse any whitespace/newlines to single spaces so a label stays a
+            # single printable line (it's interpolated into the Schedule-tab YAML).
+            if "name" in request.POST:
+                new_name = " ".join((request.POST.get("name") or "").split())
+                if new_name:
+                    s.name = new_name[:120]
+                    update_fields.append("name")
+            if "code" in request.POST:
+                new_code = " ".join((request.POST.get("code") or "").split())
+                if new_code:
+                    s.code = new_code[:16]
+                    update_fields.append("code")
             # AI scrapers (e.g. college_dual_match) carry a Claude API key field.
             # Only persist it for scrapers that surface it, and only when the field
             # is present in the POST (so other settings saves never clobber it).
