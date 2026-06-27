@@ -913,6 +913,69 @@
     </div>
   </form>
 
+  {% if model_upload_label %}
+  <form class="panel settings-section-gap" method="post" enctype="multipart/form-data"
+        action="{% url 'scraper_detail' s.slug %}?tab=settings">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="model-upload" />
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Scraper settings</div>
+          <div class="status-name">{{ model_upload_label }}</div>
+        </div>
+        {% if model_file %}
+        <span class="ptype residential">Uploaded</span>
+        {% else %}
+        <span class="ptype direct">Not set</span>
+        {% endif %}
+      </div>
+
+      <p class="rt-intro">
+        Upload the model file this scraper needs to clear the captcha and run live. It’s
+        stored on the server (in the database, not the code), so real-time and scheduled
+        runs use it automatically. Without it, challenged pages can’t be cleared and the
+        run fails honestly.
+      </p>
+
+      {% if model_file %}
+      <div class="model-current">
+        <div class="model-current-name">📦 {{ model_file.filename }}</div>
+        <div class="status-note">
+          {{ model_file.size|filesizeformat }} · uploaded {{ model_file.uploaded_at }}{% if model_file.uploaded_by %} by {{ model_file.uploaded_by.username }}{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="rt-field rt-field--full">
+        <label class="field-label" for="modelFile">{% if model_file %}Replace model file{% else %}Model file{% endif %}</label>
+        <input class="rt-input" id="modelFile" name="model_file" type="file"
+               accept=".keras,.h5,.hdf5" required />
+        <p class="status-note settings-empty">
+          Accepts <code>{{ model_filename }}</code> (Keras) or <code>.h5</code> / <code>.hdf5</code>, up to 100&nbsp;MB.
+        </p>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <span class="status-note">Stored per scraper. Real-time and scheduled runs use it.</span>
+      <div class="model-foot-actions">
+        {% if model_file %}
+        <button class="btn btn-danger btn-sm" type="submit" form="removeModelForm">Remove model</button>
+        {% endif %}
+        <button class="btn btn-primary" type="submit">Upload model</button>
+      </div>
+    </div>
+  </form>
+  {% if model_file %}
+  <form id="removeModelForm" method="post" action="{% url 'scraper_detail' s.slug %}?tab=settings"
+        class="model-remove-form" data-confirm="Remove the uploaded model? Live runs will fail honestly until you upload it again."
+        data-confirm-title="Remove uploaded model" data-confirm-ok="Remove model">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="remove-model" />
+  </form>
+  {% endif %}
+  {% endif %}
+
   <script>
     (function () {
       document.querySelectorAll('.settings-reveal').forEach(function (btn) {

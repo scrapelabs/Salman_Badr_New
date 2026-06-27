@@ -53,6 +53,53 @@ class CaptchaSolverUnavailable(RuntimeError):
     """Raised when TensorFlow or the captcha model is not present."""
 
 
+def _file_sha256(path):
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def materialize_uploaded_model(scraper, log=None):
+    """Write a Settings-tab–uploaded captcha model to ``MODEL_PATH``.
+
+    Hosted runs can't rely on a committed binary (we don't ship the ~43 MB model),
+    so an admin uploads it and it lives in the DB (:class:`accounts.models.ScraperModelFile`).
+    Before building the solver the worker calls this to drop those bytes onto disk
+    where :meth:`CaptchaSolver._ensure_model` already looks. No-op when no upload
+    exists or the on-disk file already matches the uploaded bytes (so a locally
+    committed/dropped model is left untouched).
+    """
+    try:
+        from accounts.models import ScraperModelFile
+
+        rec = (
+            ScraperModelFile.objects.filter(scraper=scraper)
+            .defer("data")
+            .first()
+        )
+    except Exception:  # noqa: BLE001 - DB unavailable / unmigrated: fall back to disk
+        return
+    if rec is None:
+        return
+    if (
+        os.path.exists(MODEL_PATH)
+        and os.path.getsize(MODEL_PATH) == rec.size
+        and _file_sha256(MODEL_PATH) == rec.sha256
+    ):
+        return  # disk already has exactly these bytes
+    os.makedirs(_ASSETS_DIR, exist_ok=True)
+    tmp = MODEL_PATH + ".tmp"
+    with open(tmp, "wb") as fh:
+        fh.write(bytes(rec.data))  # touches the blob column only now
+    os.replace(tmp, MODEL_PATH)
+    if log:
+        log("INFO", f"\U0001f4e6 captcha model loaded from upload ({rec.size} bytes)")
+
+
 def page_title(html_text):
     """Lower-cased ``<title>`` of an HTML string (``""`` if none)."""
     if not html_text:

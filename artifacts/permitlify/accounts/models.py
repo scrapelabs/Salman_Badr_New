@@ -183,6 +183,44 @@ class Scraper(models.Model):
         super().save(*args, **kwargs)
 
 
+class ScraperModelFile(models.Model):
+    """A large binary model asset uploaded for a scraper via the Settings tab.
+
+    Some scrapers need a sizeable ML model to run (e.g. ``belgium_results`` uses a
+    ~43 MB Keras CNN to solve the Zenedge captcha). Rather than committing that
+    binary to the repo, an admin uploads it here; the bytes live in Postgres, so
+    they survive redeploys and are visible to the run worker (which shares the same
+    ``DATABASE_URL``). One file per scraper.
+
+    The ``data`` blob is deliberately on its own table (one-to-one) so ordinary
+    ``Scraper`` queries never drag the megabytes along — fetch it explicitly, and
+    ``defer("data")`` when you only need the metadata.
+    """
+
+    scraper = models.OneToOneField(
+        Scraper, on_delete=models.CASCADE, related_name="model_file"
+    )
+    filename = models.CharField(max_length=255, blank=True, default="")
+    content_type = models.CharField(max_length=80, blank=True, default="")
+    size = models.PositiveIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True, default="")
+    data = models.BinaryField()
+    uploaded_at = models.DateTimeField(auto_now=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "scraper model file"
+
+    def __str__(self):
+        return f"{self.scraper.slug} · {self.filename or 'model'} ({self.size} bytes)"
+
+
 class Run(models.Model):
     class Status(models.TextChoices):
         SUCCESS = "success", "Success"

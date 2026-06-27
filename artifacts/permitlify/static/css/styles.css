@@ -2400,6 +2400,16 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 }
 .settings-empty { margin-top: 12px; }
 .settings-section-gap { margin-top: 26px; }
+.model-current {
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface-2, var(--app-surface));
+}
+.model-current-name { font-weight: 600; }
+.model-foot-actions { display: flex; gap: 10px; align-items: center; }
+.model-remove-form { display: none; }
 
 /* ============================================================
    Schedule tab — GitHub Actions setup docs + trigger webhook

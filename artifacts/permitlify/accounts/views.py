@@ -36,7 +36,15 @@ from django.views.decorators.http import require_http_methods
 
 from . import college_store, scheduling
 from .live_scrapers import _ssrf, registry
-from .models import CollegeMatch, Proxy, Run, Scraper, ScraperSchedule, Ticket
+from .models import (
+    CollegeMatch,
+    Proxy,
+    Run,
+    Scraper,
+    ScraperModelFile,
+    ScraperSchedule,
+    Ticket,
+)
 from .system_stats import collect_system_stats, gauge_card
 from .runs import ALL_TOURNAMENTS
 
@@ -410,6 +418,48 @@ def live_stats_view(request):
     )
 
 
+MODEL_UPLOAD_MAX_BYTES = 100 * 1024 * 1024  # 100 MB ceiling for an uploaded model
+# Accepted model containers, sniffed by magic bytes: Keras v3 / zip (``PK``) and
+# legacy HDF5 (``.h5`` / ``.hdf5``).
+_MODEL_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08", b"\x89HDF\r\n\x1a\n")
+_MODEL_EXTS = (".keras", ".h5", ".hdf5")
+
+
+def _save_model_upload(scraper, upload, user):
+    """Validate an uploaded model file and store it (DB blob). Returns an error
+    string on rejection, or ``""`` on success."""
+    import hashlib
+
+    name = (upload.name or "").strip()
+    if not name.lower().endswith(_MODEL_EXTS):
+        return f"Unsupported file type — upload a {', '.join(_MODEL_EXTS)} model."
+    if upload.size and upload.size > MODEL_UPLOAD_MAX_BYTES:
+        mb = MODEL_UPLOAD_MAX_BYTES // (1024 * 1024)
+        return f"File is too large (max {mb} MB)."
+
+    data = upload.read()
+    if len(data) > MODEL_UPLOAD_MAX_BYTES:
+        mb = MODEL_UPLOAD_MAX_BYTES // (1024 * 1024)
+        return f"File is too large (max {mb} MB)."
+    if not data:
+        return "The uploaded file is empty."
+    if not data.startswith(_MODEL_MAGIC):
+        return "That doesn't look like a Keras/HDF5 model file."
+
+    ScraperModelFile.objects.update_or_create(
+        scraper=scraper,
+        defaults={
+            "filename": name[:255],
+            "content_type": (upload.content_type or "")[:80],
+            "size": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "data": data,
+            "uploaded_by": user,
+        },
+    )
+    return ""
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def scraper_detail_view(request, slug):
@@ -496,6 +546,44 @@ def scraper_detail_view(request, slug):
 
             s.save(update_fields=update_fields)
             messages.success(request, "Scraper settings saved.")
+            return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
+
+        # Settings tab: upload / replace a large model file (e.g. the Belgium
+        # captcha CNN). Admins only; stored in the DB so hosted runs can use it
+        # without committing a multi-MB binary to the repo.
+        if request.POST.get("form") == "model-upload":
+            if not request.user.is_superuser:
+                messages.error(
+                    request, "Only administrators can upload scraper models."
+                )
+                return redirect(
+                    f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+                )
+            if not registry.spec_for(s.slug).model_upload_label:
+                messages.error(request, "This scraper doesn't take a model upload.")
+                return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
+            upload = request.FILES.get("model_file")
+            if not upload:
+                messages.error(request, "Choose a model file to upload.")
+                return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
+            err = _save_model_upload(s, upload, request.user)
+            if err:
+                messages.error(request, err)
+            else:
+                messages.success(request, f"Model “{upload.name}” uploaded.")
+            return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
+
+        # Settings tab: remove the uploaded model file.
+        if request.POST.get("form") == "remove-model":
+            if not request.user.is_superuser:
+                messages.error(
+                    request, "Only administrators can remove scraper models."
+                )
+                return redirect(
+                    f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+                )
+            ScraperModelFile.objects.filter(scraper=s).delete()
+            messages.success(request, "Uploaded model removed.")
             return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=settings")
 
         # Schedule tab: save the in-app recurring-run configuration. Available to
@@ -775,6 +863,13 @@ def scraper_detail_view(request, slug):
         ctx["login_user_label"] = registry.spec_for(slug).login_user_label
         ctx["secret_label"] = registry.spec_for(slug).secret_label
         ctx["secret_env_var"] = registry.spec_for(slug).secret_env_var
+        ctx["model_upload_label"] = registry.spec_for(slug).model_upload_label
+        ctx["model_filename"] = registry.spec_for(slug).model_filename
+        ctx["model_file"] = (
+            ScraperModelFile.objects.filter(scraper=s).defer("data").first()
+            if registry.spec_for(slug).model_upload_label
+            else None
+        )
 
     return render(request, "scraper_detail.html", ctx)
 

@@ -59,6 +59,8 @@ class ScraperSpec:
     feed_api_key_default: str = ""     # prefilled / fallback feed API key
     feed_gender: bool = False          # surface a boys/girls/both gender selector
     has_match_store: bool = False      # persists matches to CollegeMatch + a "Match database" tab
+    model_upload_label: str = ""       # surface a model-file upload field on the Settings tab
+    model_filename: str = ""           # canonical on-disk filename the uploaded model is saved as
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -262,6 +264,8 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.belgium_results:run",
         allowed_hosts=("www.tennisenpadelvlaanderen.be", "tennisenpadelvlaanderen.be"),
+        model_upload_label="Captcha solver model (.keras)",
+        model_filename="captcha_model.keras",
     ),
     # --- US high-school feed APIs (date-range; own hard-coded hosts) -------
     # Vendor feed APIs keyed by a feed api_key (overridable via settings).

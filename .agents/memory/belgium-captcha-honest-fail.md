@@ -31,14 +31,39 @@ captcha to `/__zenedge/c`) instead of the real content.
   0 rows → honest `FAILED`. Exactly like the Stadion family without a proxy: a
   missing-infra honest-fail, **not** a wiring bug.
 
-## To run it live (two options, ask the user)
-1. **Hosted/prod:** install TensorFlow (add to pyproject + requirements.txt) and
-   drop `captcha_model.keras` into `belgium_assets/`, then run. Note Zenedge may
-   *also* block datacenter IPs (like CloudFront does to Stadion), so a
-   residential proxy may still be required even with a working solver.
-2. **Local Windows:** `git pull`, place the model in `belgium_assets/`, add TF to
-   the local venv, run via `bat_files/11_scrape_belgium_results.bat` (URL or
-   date-range prompt).
+## The model can be UPLOADED (no committed binary)
+- A superuser uploads `captcha_model.keras` from the Lab's **Settings** tab. The
+  panel only renders for scrapers whose registry spec sets `model_upload_label`
+  (`ScraperSpec.model_upload_label` / `model_filename`) — belgium is the only one
+  so far.
+- Bytes live in Postgres: `ScraperModelFile` (one-to-one with `Scraper`, blob in
+  `data=BinaryField`). **Always `.defer("data")`** when you don't need the blob,
+  so listing/lookup never drags ~43 MB into memory.
+- The worker calls `_belgium_captcha.materialize_uploaded_model(scraper, log)`
+  *before* constructing `CaptchaSolver`; it writes the DB blob to `MODEL_PATH`
+  only when the on-disk file is missing or differs by size+sha256 (so a locally
+  committed/dropped model is left untouched, and re-runs are no-ops). The
+  filesystem loader is unchanged — it still reads `MODEL_PATH`.
+- **Why DB not filesystem-only:** the hosted filesystem is ephemeral/per-deploy
+  and web+worker are separate processes; the DB is the shared durable source of
+  truth (same reason runs stream cross-process via `DATABASE_URL`).
+- Upload guard: admin-only (mirrors the settings-tab `is_superuser` check),
+  ext allow-list `.keras/.h5/.hdf5`, magic-byte sniff (zip `PK\x03\x04` /
+  HDF5 `\x89HDF`), 100 MB cap, sha256 recorded. Remove = a separate hidden
+  `#removeModelForm` carrying the `#mmConfirm` `data-confirm*` attrs (the confirm
+  modal binds to `form[data-confirm]` submit, never to buttons).
+- **TF is still required** to actually load the model; uploading the binary does
+  not install TensorFlow. Without TF the solver still honest-fails.
+
+## To run it live (two options)
+1. **Hosted/prod:** install TensorFlow (add to pyproject + requirements.txt),
+   then upload `captcha_model.keras` via the Settings tab (or drop it into
+   `belgium_assets/`). Note Zenedge may *also* block datacenter IPs (like
+   CloudFront does to Stadion), so a residential proxy may still be required even
+   with a working solver.
+2. **Local Windows:** `git pull`, place the model in `belgium_assets/` (or upload
+   via Settings), add TF to the local venv, run via
+   `bat_files/11_scrape_belgium_results.bat` (URL or date-range prompt).
 
 **Why honest-fail instead of stubbing:** never fabricate rows. A source whose
 infra (proxy / creds / model) isn't present must emit a correct empty 5-tuple +

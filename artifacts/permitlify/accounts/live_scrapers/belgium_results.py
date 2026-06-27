@@ -50,7 +50,12 @@ from parsel import Selector
 
 from accounts.models import Run
 
-from ._belgium_captcha import CaptchaSolver, CaptchaSolverUnavailable, is_challenge
+from ._belgium_captcha import (
+    CaptchaSolver,
+    CaptchaSolverUnavailable,
+    is_challenge,
+    materialize_uploaded_model,
+)
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
@@ -760,10 +765,13 @@ def run(run_obj, log):
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = build_proxies(scraper, log)
 
-    # Best-effort load the captcha solver. Without TensorFlow + the model,
-    # challenged pages can't be cleared and the run fails honestly.
+    # Best-effort load the captcha solver. An admin can upload the model via the
+    # Settings tab (stored in the DB) — drop it onto disk first so the loader finds
+    # it. Without TensorFlow + the model, challenged pages can't be cleared and the
+    # run fails honestly.
     solver = None
     try:
+        materialize_uploaded_model(scraper, log)
         solver = CaptchaSolver(log)
         log("INFO", "\U0001f9e0 captcha solver ready")
     except CaptchaSolverUnavailable as exc:
