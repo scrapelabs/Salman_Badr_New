@@ -234,32 +234,60 @@ def _row_for(result, key):
 
 
 def _resolve_keys(run_obj, scraper, log):
-    """Return the ordered list of keys to process this run (capped).
+    """Return the ordered list of keys to actually process this run.
 
-    ``run_all`` walks the pending SAKey queue; otherwise the pasted keys are
-    upserted into the queue and used directly. Either way the cap keeps a single
-    run bounded.
+    ``run_all`` walks the ENTIRE queue and processes every key that isn't
+    already done — in a single run, with no per-run key cap. Otherwise the
+    pasted keys are upserted into the queue and processed. In both modes a key
+    that's already marked ``done`` is skipped (and logged) so it isn't
+    re-scraped.
     """
     params = run_obj.params or {}
-    if params.get("run_all"):
-        keys = list(
-            SAKey.objects.filter(
-                scraper=scraper, status=SAKey.Status.PENDING
-            )
-            .order_by("tournament_key")
-            .values_list("tournament_key", flat=True)[:KEY_BATCH_MAX_KEYS]
-        )
-        log("INFO", f"\U0001f5c2\ufe0f Pending queue: processing {len(keys)} key(s)")
-        return keys
 
-    keys = list(dict.fromkeys(params.get("keys") or []))[:KEY_BATCH_MAX_KEYS]
-    # Upsert pasted keys so they're tracked in the queue / Key-queue tab.
-    for k in keys:
-        SAKey.objects.get_or_create(
+    if params.get("run_all"):
+        rows = list(
+            SAKey.objects.filter(scraper=scraper)
+            .order_by("tournament_key")
+            .values_list("tournament_key", "status")
+        )
+        todo = [k for k, st in rows if st != SAKey.Status.DONE]
+        done = len(rows) - len(todo)
+        if done:
+            log(
+                "INFO",
+                f"\u23ed\ufe0f {done} key(s) already processed \u2014 skipping "
+                f"(no need to run them again).",
+            )
+        log(
+            "INFO",
+            f"\U0001f5c2\ufe0f Running the entire queue in one run: "
+            f"{len(todo)} key(s) to process.",
+        )
+        return todo
+
+    # Explicit paste: upsert each key, skip any that are already done.
+    pasted = list(dict.fromkeys(params.get("keys") or []))[:KEY_BATCH_MAX_KEYS]
+    todo = []
+    skipped = 0
+    for k in pasted:
+        obj, _ = SAKey.objects.get_or_create(
             tournament_key=k, defaults={"scraper": scraper}
         )
-    log("INFO", f"\U0001f4cb Pasted keys: processing {len(keys)} key(s)")
-    return keys
+        if obj.status == SAKey.Status.DONE:
+            skipped += 1
+            log(
+                "INFO",
+                f"\u23ed\ufe0f {k} already processed "
+                f"({obj.num_results or 0} result(s)) \u2014 skipping.",
+            )
+            continue
+        todo.append(k)
+    log(
+        "INFO",
+        f"\U0001f4cb Pasted keys: {len(todo)} to process"
+        + (f", {skipped} already done (skipped)." if skipped else "."),
+    )
+    return todo
 
 
 def run(run_obj, log):
@@ -273,8 +301,14 @@ def run(run_obj, log):
     total = len(keys)
     Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
     if not keys:
-        log("WARN", "\u26a0\ufe0f No keys to process — the pending queue is empty.")
-        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+        # Nothing left to do — every requested key is already processed (or the
+        # queue is empty). A no-op, not a failure.
+        log(
+            "INFO",
+            "\u2705 Nothing to run \u2014 all requested keys are already "
+            "processed. No re-scrape needed.",
+        )
+        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.SUCCESS
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -290,8 +324,8 @@ def run(run_obj, log):
             if row_count >= KEY_BATCH_MAX_ROWS:
                 log(
                     "WARN",
-                    f"\u26a0\ufe0f Row ceiling ({KEY_BATCH_MAX_ROWS}) reached — "
-                    f"stopping after {idx - 1} key(s).",
+                    f"\u26a0\ufe0f Safety row ceiling ({KEY_BATCH_MAX_ROWS}) "
+                    f"reached \u2014 stopping after {idx - 1} key(s).",
                 )
                 capped = True
                 break

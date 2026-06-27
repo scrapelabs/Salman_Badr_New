@@ -40,8 +40,8 @@ INPUT_KINDS = frozenset(
 )
 
 # --- key-batch (queue-driven) limits, shared by the view + runner ----------
-KEY_BATCH_MAX_KEYS = 100      # most tournament keys processed in one run
-KEY_BATCH_MAX_ROWS = 50000    # row ceiling per run (checked between keys)
+KEY_BATCH_MAX_KEYS = 2000        # cap on a single pasted batch (run-all drains the whole queue)
+KEY_BATCH_MAX_ROWS = 2_000_000   # high safety net only; run-all processes the entire queue in one run
 
 
 @dataclass(frozen=True)

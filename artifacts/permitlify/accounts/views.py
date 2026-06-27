@@ -1174,10 +1174,11 @@ def validate_run_params(spec, data, *, webhook=False):
         )
 
     if kind == registry.INPUT_KEY_BATCH:
-        # Queue-driven scrapers (south_africa). Either run the pending SAKey
-        # queue (the webhook / scheduler always does this) or process an
-        # explicit paste of 32-hex tournament keys. Keys are extracted, lower-
-        # cased and de-duplicated; the runner caps how many it processes.
+        # Queue-driven scrapers (south_africa). Either run the WHOLE pending
+        # SAKey queue in one run (the webhook / scheduler always does this) or
+        # process an explicit paste of 32-hex tournament keys. Keys are
+        # extracted, lower-cased and de-duplicated; the runner skips (and logs)
+        # any key already marked done so it isn't re-scraped.
         run_all = webhook or (get("run_all") in ("on", "true", "1", True))
         if run_all:
             return RunInputs(

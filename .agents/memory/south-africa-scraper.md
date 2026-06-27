@@ -15,9 +15,16 @@ A queue-driven scraper is wired by:
 - A queue model (`SAKey`): one row per key, `status` pending/done/failed,
   `num_results`, `last_run`, `scraped_at`.
 - The runner reads `run_obj.params`: `{"run_all": bool, "keys": [...]}`. `run_all`
-  (always set by webhook/scheduler) drains the **pending** queue capped at
-  `KEY_BATCH_MAX_KEYS`; otherwise the pasted keys are upserted into the queue and
-  processed. Each key marks its row done/failed.
+  (always set by webhook/scheduler) drains the **entire** queue in ONE run — every
+  key whose status != DONE (so it also retries FAILED), **no per-run key cap**;
+  otherwise the pasted keys are upserted into the queue and processed. In BOTH
+  modes a key already marked `done` is **skipped and logged** ("already processed —
+  skipping") so it isn't re-scraped. `KEY_BATCH_MAX_KEYS` is now only a *paste*
+  cap. Each processed key marks its row done/failed.
+- **Empty work == SUCCESS no-op, not FAILED.** When nothing is left to process
+  (queue drained / all pasted keys already done) the runner returns SUCCESS with 0
+  rows. So post-drain scheduler/webhook fires create zero-row SUCCESS runs (by
+  design, not a bug).
 - UI: a **Key queue** tab gated on `has_key_store`, mirroring the
   Match-database (`data`) tab's plumbing (tab gate, paginated listing, nav-link
   `{% if %}`). Start form gets a textarea + "run the pending queue" checkbox.

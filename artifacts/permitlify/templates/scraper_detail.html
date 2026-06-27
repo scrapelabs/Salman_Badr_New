@@ -43,6 +43,11 @@
     <a class="tab {% if tab == 'schedule' %}active{% endif %}" href="?tab=schedule" {% if tab == 'schedule' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>Schedule</span>
     </a>
+    {% if has_key_store %}
+    <a class="tab {% if tab == 'keys' %}active{% endif %}" href="?tab=keys" {% if tab == 'keys' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M11.4 11.6 21 2"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg><span>Key queue</span>
+    </a>
+    {% endif %}
     {% if user.is_superuser %}
     <a class="tab {% if tab == 'settings' %}active{% endif %}" href="?tab=settings" {% if tab == 'settings' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Settings</span>
@@ -174,10 +179,10 @@
           <textarea class="rt-input rt-textarea" id="rtKeys" name="keys" rows="4" autocomplete="off" spellcheck="false" placeholder="Paste 32-character SportyHQ tournament keys (one per line, or separated by spaces / commas)…" {% if start_disabled %}disabled{% endif %}></textarea>
           <label class="rt-check">
             <input type="checkbox" name="run_all" value="on" {% if start_disabled %}disabled{% endif %}>
-            <span>Ignore the box above and run the pending queue ({{ pending_key_count }} key{{ pending_key_count|pluralize }})</span>
+            <span>Ignore the box above and run the entire pending queue in one run ({{ pending_key_count }} key{{ pending_key_count|pluralize }})</span>
           </label>
           <div class="rt-help">
-            <p class="rt-help-note">Each key unlocks one tournament's full result set. Up to {{ KEY_BATCH_MAX_KEYS }} keys are processed per run; manage the full queue in the <a href="?tab=keys">Key queue</a> tab.</p>
+            <p class="rt-help-note">Each key unlocks one tournament's full result set. Tick the box to process the whole pending queue in a single run; keys already marked done are skipped (and logged) so they aren't re-scraped. Manage the full queue in the <a href="?tab=keys">Key queue</a> tab.</p>
           </div>
         </div>
         {% else %}
@@ -757,7 +762,7 @@
           <td class="mono nowrap">{{ k.tournament_key }}</td>
           <td class="nowrap"><span class="src-tag src-{{ k.status }}">{{ k.get_status_display }}</span></td>
           <td class="nowrap">{% if k.num_results is not None %}{{ k.num_results }}{% else %}—{% endif %}</td>
-          <td class="nowrap">{% if k.last_run %}<a href="{% url 'run_log' s.slug k.last_run.id %}">{{ k.last_run.id|stringformat:'s'|slice:':8' }}</a>{% else %}—{% endif %}</td>
+          <td class="nowrap">{% if k.last_run %}<a href="{% url 'run_log' s.slug k.last_run.uuid %}">{{ k.last_run.short_id }}</a>{% else %}—{% endif %}</td>
           <td class="nowrap">{% if k.scraped_at %}{{ k.scraped_at|date:"M j, Y · H:i" }}{% else %}—{% endif %}</td>
         </tr>
         {% empty %}
