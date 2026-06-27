@@ -1,7 +1,14 @@
 @echo off
 REM ===========================================================================
-REM  MatchMiner - 3. run the development server on port 8000 (Windows)
+REM  MatchMiner - 3. run the server with Waitress on port 80 (Windows)
 REM  Uses the venv interpreter by full path (no reliance on "activate").
+REM
+REM  NOTES:
+REM   * Port 80 is privileged: run this **as Administrator** and make sure no
+REM     other service (IIS, Skype, another web server) already holds port 80.
+REM   * Waitress serves the WSGI app directly, so static files come from
+REM     WhiteNoise. Run 0_setup.bat (or 1_migrate.bat) first so collectstatic
+REM     has generated them, or CSS/JS will 404.
 REM ===========================================================================
 setlocal
 set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
@@ -13,8 +20,8 @@ if not exist "%VENV_PY%" (
 )
 cd /d "%~dp0..\artifacts\permitlify"
 
-echo Starting MatchMiner at http://localhost:8000/   (press Ctrl+C to stop)
+echo Starting MatchMiner (Waitress) at http://localhost/   (press Ctrl+C to stop)
 echo.
-"%VENV_PY%" manage.py runserver 0.0.0.0:8000
+"%VENV_PY%" -m waitress --listen=0.0.0.0:80 matchminer.wsgi:application
 
 endlocal
