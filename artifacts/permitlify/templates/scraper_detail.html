@@ -168,6 +168,18 @@
           <label class="field-label" for="rtSnap">Ranking date</label>
           <input class="rt-input" id="rtSnap" name="snapshot_date" type="date" value="{{ default_snapshot_date }}" {% if start_disabled %}disabled{% endif %}>
         </div>
+        {% elif input_kind == 'key_batch' %}
+        <div class="rt-field rt-field-wide">
+          <label class="field-label" for="rtKeys">Tournament keys</label>
+          <textarea class="rt-input rt-textarea" id="rtKeys" name="keys" rows="4" autocomplete="off" spellcheck="false" placeholder="Paste 32-character SportyHQ tournament keys (one per line, or separated by spaces / commas)…" {% if start_disabled %}disabled{% endif %}></textarea>
+          <label class="rt-check">
+            <input type="checkbox" name="run_all" value="on" {% if start_disabled %}disabled{% endif %}>
+            <span>Ignore the box above and run the pending queue ({{ pending_key_count }} key{{ pending_key_count|pluralize }})</span>
+          </label>
+          <div class="rt-help">
+            <p class="rt-help-note">Each key unlocks one tournament's full result set. Up to {{ KEY_BATCH_MAX_KEYS }} keys are processed per run; manage the full queue in the <a href="?tab=keys">Key queue</a> tab.</p>
+          </div>
+        </div>
         {% else %}
         <div class="rt-field">
           <label class="field-label" for="rtYear">Season year</label>
@@ -696,6 +708,65 @@
     </table>
   </div>
   {% include "partials/pagination.html" with page_obj=page_obj base_query="tab=data&" %}
+
+  {% elif tab == 'keys' %}
+  <div class="data-head">
+    <div>
+      <h2 class="section-title">Key queue</h2>
+      <p class="data-sub">Every SportyHQ tournament key in this scraper's work list. Each key unlocks one tournament's full result set; runs work through the pending keys and mark each done or failed.</p>
+    </div>
+  </div>
+
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="stat-label">Total keys</div>
+      <div class="stat-value">{{ key_total }}</div>
+      <div class="stat-foot">Tournaments in the queue</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value">{{ key_pending }}</div>
+      <div class="stat-foot">Not scraped yet</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Done</div>
+      <div class="stat-value">{{ key_done }}</div>
+      <div class="stat-foot">Scraped successfully</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Failed</div>
+      <div class="stat-value">{{ key_failed }}</div>
+      <div class="stat-foot">No usable response</div>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Status</th>
+          <th>Results</th>
+          <th>Last run</th>
+          <th>Scraped</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in page_obj %}
+        <tr>
+          <td class="mono nowrap">{{ k.tournament_key }}</td>
+          <td class="nowrap"><span class="src-tag src-{{ k.status }}">{{ k.get_status_display }}</span></td>
+          <td class="nowrap">{% if k.num_results is not None %}{{ k.num_results }}{% else %}—{% endif %}</td>
+          <td class="nowrap">{% if k.last_run %}<a href="{% url 'run_log' s.slug k.last_run.id %}">{{ k.last_run.id|stringformat:'s'|slice:':8' }}</a>{% else %}—{% endif %}</td>
+          <td class="nowrap">{% if k.scraped_at %}{{ k.scraped_at|date:"M j, Y · H:i" }}{% else %}—{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="runs-empty">No keys in the queue yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with page_obj=page_obj base_query="tab=keys&" %}
 
   {% elif tab == 'status' %}
   <form class="panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=status">

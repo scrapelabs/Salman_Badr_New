@@ -2,6 +2,7 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -40,6 +41,7 @@ from .models import (
     CollegeMatch,
     Proxy,
     Run,
+    SAKey,
     Scraper,
     ScraperModelFile,
     ScraperSchedule,
@@ -111,6 +113,7 @@ TAB_LABELS = {
     "real-time": "Real-time test",
     "calls": "Calls history",
     "data": "Match database",
+    "keys": "Key queue",
     "schedule": "Schedule",
     "settings": "Settings",
     "status": "Status",
@@ -118,6 +121,8 @@ TAB_LABELS = {
 
 CALLS_PER_PAGE = 12
 MATCHES_PER_PAGE = 50     # rows per page in the "Match database" tab
+KEYS_PER_PAGE = 50        # rows per page in the "Key queue" tab
+MAX_KEY_BATCH_PASTE = 20000  # cap how many chars/keys we scan from a paste
 LOG_LINES_PER_PAGE = 150
 # Live console keeps only the most recent N streamed lines in the DOM (and only
 # fetches that many on initial load) so an in-flight run with a huge log stays light.
@@ -683,11 +688,17 @@ def scraper_detail_view(request, slug):
     # The Match database tab only exists for scrapers that persist matches.
     if tab == "data" and not registry.spec_for(slug).has_match_store:
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
+    # The Key queue tab only exists for queue-driven scrapers (south_africa).
+    if tab == "keys" and not registry.spec_for(slug).has_key_store:
+        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
 
     ctx = _app_ctx("scrapers", s=s, tab=tab, tab_label=TAB_LABELS[tab])
     # Drives the nav: the "Match database" tab link only renders for scrapers
     # whose runner persists to CollegeMatch (currently college_dual_match).
     ctx["has_match_store"] = registry.spec_for(slug).has_match_store
+    # Drives the nav: the "Key queue" tab link only renders for queue-driven
+    # scrapers (currently south_africa).
+    ctx["has_key_store"] = registry.spec_for(slug).has_key_store
 
     if tab == "real-time":
         # Reap dead runs across ALL scrapers so the browser-exclusivity check
@@ -733,6 +744,13 @@ def scraper_detail_view(request, slug):
         current_year = timezone.localdate().year
         today = timezone.localdate()
         ctx["input_kind"] = spec.input_kind
+        # Queue-driven start form (south_africa): show how many keys are still
+        # pending so the "run the pending queue" control has a live count.
+        if spec.has_key_store:
+            ctx["pending_key_count"] = SAKey.objects.filter(
+                scraper=s, status=SAKey.Status.PENDING
+            ).count()
+            ctx["KEY_BATCH_MAX_KEYS"] = registry.KEY_BATCH_MAX_KEYS
         ctx["allows_url"] = spec.input_kind == registry.INPUT_DATE_RANGE_OR_URL
         ctx["url_required"] = spec.url_required
         ctx["accepts_sheet"] = spec.accepts_sheet
@@ -788,6 +806,17 @@ def scraper_detail_view(request, slug):
         ctx["dl_last30_from"] = (today - timedelta(days=29)).isoformat()
         ctx["dl_from"] = ctx["dl_last7_from"]
         ctx["dl_to"] = ctx["dl_today"]
+    elif tab == "keys":
+        # The key queue: every SAKey for this scraper, with headline counts +
+        # a paginated listing. Ordered pending-first then by key (the model's
+        # default Meta ordering).
+        qs = s.sa_keys.select_related("last_run").all()
+        paginator = Paginator(qs, KEYS_PER_PAGE)
+        ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
+        ctx["key_total"] = qs.count()
+        ctx["key_pending"] = qs.filter(status=SAKey.Status.PENDING).count()
+        ctx["key_done"] = qs.filter(status=SAKey.Status.DONE).count()
+        ctx["key_failed"] = qs.filter(status=SAKey.Status.FAILED).count()
     elif tab == "schedule":
         spec = registry.spec_for(slug)
         trigger_url = request.build_absolute_uri(
@@ -1142,6 +1171,38 @@ def validate_run_params(spec, data, *, webhook=False):
             date_from=snap,
             date_to=snap,
             tournament=f"ranking @ {snap.isoformat()}",
+        )
+
+    if kind == registry.INPUT_KEY_BATCH:
+        # Queue-driven scrapers (south_africa). Either run the pending SAKey
+        # queue (the webhook / scheduler always does this) or process an
+        # explicit paste of 32-hex tournament keys. Keys are extracted, lower-
+        # cased and de-duplicated; the runner caps how many it processes.
+        run_all = webhook or (get("run_all") in ("on", "true", "1", True))
+        if run_all:
+            return RunInputs(
+                params={"run_all": True, "keys": []},
+                date_from=None,
+                date_to=None,
+                tournament="pending queue",
+            )
+        raw = (get("keys") or "")[:MAX_KEY_BATCH_PASTE]
+        keys = list(
+            dict.fromkeys(m.lower() for m in re.findall(r"[0-9a-fA-F]{32}", raw))
+        )
+        if not keys:
+            raise RunStartError(
+                "invalid_keys",
+                "Paste at least one 32-character tournament key, or tick "
+                "\u201crun the pending queue\u201d to process queued keys.",
+                400,
+            )
+        keys = keys[: registry.KEY_BATCH_MAX_KEYS]
+        return RunInputs(
+            params={"run_all": False, "keys": keys},
+            date_from=None,
+            date_to=None,
+            tournament=f"{len(keys)} key(s)",
         )
 
     if kind in (registry.INPUT_DATE_RANGE, registry.INPUT_DATE_RANGE_OR_URL):

@@ -2216,6 +2216,14 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 }
 .src-tag.src-scrape { color: var(--app-accent); background: var(--app-accent-bg); }
 .src-tag.src-import { color: #64748b; background: rgba(100, 116, 139, 0.14); }
+.src-tag.src-pending { color: #b45309; background: rgba(217, 119, 6, 0.14); }
+.src-tag.src-done { color: #047857; background: rgba(5, 150, 105, 0.14); }
+.src-tag.src-failed { color: #dc2626; background: rgba(220, 38, 38, 0.14); }
+
+.mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; }
+.rt-textarea { resize: vertical; min-height: 84px; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+.rt-check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--app-text-soft); cursor: pointer; }
+.rt-check input { width: 15px; height: 15px; accent-color: var(--app-accent); }
 
 .run-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
 .run-act {

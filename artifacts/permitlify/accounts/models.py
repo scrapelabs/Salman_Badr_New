@@ -630,6 +630,53 @@ class CollegeMatch(models.Model):
         return f"{self.winner_team} def. {self.loser_team} ({self.date_norm})"
 
 
+class SAKey(models.Model):
+    """One SportyHQ *tournament key* in a queue-driven scraper's work list.
+
+    The South Africa (Tennis South Africa / SportyHQ) scraper is queue-driven:
+    instead of a date range it works through a list of tournament keys, each of
+    which unlocks one tournament's full result set from the public SportyHQ
+    results API. The queue is seeded once from the vendored key list; every key
+    tracks whether it has been scraped, how many matches it yielded, and which
+    run last touched it. Pasting keys in the Lab's Real-time tab upserts rows
+    here too. The Lab's "Key queue" tab surfaces the queue + its progress.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        DONE = "done", "Done"
+        FAILED = "failed", "Failed"
+
+    scraper = models.ForeignKey(
+        "Scraper", related_name="sa_keys", on_delete=models.CASCADE
+    )
+    tournament_key = models.CharField(max_length=64, unique=True, db_index=True)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    name = models.CharField(max_length=300, blank=True)
+    num_results = models.IntegerField(null=True, blank=True)
+    last_run = models.ForeignKey(
+        "Run",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    scraped_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["status", "tournament_key"]
+        indexes = [models.Index(fields=["scraper", "status"])]
+
+    def __str__(self):
+        return f"{self.tournament_key} ({self.status})"
+
+
 class ScraperSchedule(models.Model):
     """Per-scraper recurring-run configuration for the in-app scheduler.
 

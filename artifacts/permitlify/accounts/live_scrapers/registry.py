@@ -26,6 +26,7 @@ INPUT_YEAR_MONTH = "year_month"                # season year + month (0 = all)
 INPUT_DATE_RANGE = "date_range"                # a from/to calendar window
 INPUT_DATE_RANGE_OR_URL = "date_range_or_url"  # a tournament URL OR a date window
 INPUT_RANK_SNAPSHOT = "rank_snapshot"          # a single ranking-snapshot date
+INPUT_KEY_BATCH = "key_batch"                  # a batch of SportyHQ tournament keys
 
 INPUT_KINDS = frozenset(
     {
@@ -34,8 +35,13 @@ INPUT_KINDS = frozenset(
         INPUT_DATE_RANGE,
         INPUT_DATE_RANGE_OR_URL,
         INPUT_RANK_SNAPSHOT,
+        INPUT_KEY_BATCH,
     }
 )
+
+# --- key-batch (queue-driven) limits, shared by the view + runner ----------
+KEY_BATCH_MAX_KEYS = 100      # most tournament keys processed in one run
+KEY_BATCH_MAX_ROWS = 50000    # row ceiling per run (checked between keys)
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,7 @@ class ScraperSpec:
     feed_api_key_default: str = ""     # prefilled / fallback feed API key
     feed_gender: bool = False          # surface a boys/girls/both gender selector
     has_match_store: bool = False      # persists matches to CollegeMatch + a "Match database" tab
+    has_key_store: bool = False        # queue-driven over SAKey rows + a "Key queue" tab
     model_upload_label: str = ""       # surface a model-file upload field on the Settings tab
     model_filename: str = ""           # canonical on-disk filename the uploaded model is saved as
 
@@ -360,6 +367,18 @@ SPECS = {
         url_required=True,
         accepts_sheet=True,
         has_match_store=True,
+    ),
+    # --- Tennis South Africa (SportyHQ) — queue-driven over keys ----------
+    # Queue-driven instead of date/year: works through a list of SportyHQ
+    # tournament keys (seeded once from the vendored key list, editable in the
+    # Lab). Each key unlocks one tournament's full result set from the public
+    # SportyHQ results API. The public API key rides in the request URL (not a
+    # secret); no proxy needed. Emits the 64-column Tennis South Africa schema.
+    "south_africa": ScraperSpec(
+        slug="south_africa",
+        input_kind=INPUT_KEY_BATCH,
+        runner_path="accounts.live_scrapers.south_africa:run",
+        has_key_store=True,
     ),
 }
 
