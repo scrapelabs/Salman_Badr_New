@@ -26,7 +26,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Count, Exists, Max, OuterRef, Subquery
+from django.db.models import Count, Exists, Max, OuterRef, Q, Subquery
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -813,10 +813,19 @@ def scraper_detail_view(request, slug):
         qs = s.sa_keys.select_related("last_run").all()
         paginator = Paginator(qs, KEYS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
-        ctx["key_total"] = qs.count()
-        ctx["key_pending"] = qs.filter(status=SAKey.Status.PENDING).count()
-        ctx["key_done"] = qs.filter(status=SAKey.Status.DONE).count()
-        ctx["key_failed"] = qs.filter(status=SAKey.Status.FAILED).count()
+        # One aggregate instead of four separate COUNT round-trips -- on a
+        # networked DB each query carries latency, so collapse the headline
+        # counts into a single query.
+        counts = s.sa_keys.aggregate(
+            total=Count("id"),
+            pending=Count("id", filter=Q(status=SAKey.Status.PENDING)),
+            done=Count("id", filter=Q(status=SAKey.Status.DONE)),
+            failed=Count("id", filter=Q(status=SAKey.Status.FAILED)),
+        )
+        ctx["key_total"] = counts["total"]
+        ctx["key_pending"] = counts["pending"]
+        ctx["key_done"] = counts["done"]
+        ctx["key_failed"] = counts["failed"]
     elif tab == "schedule":
         spec = registry.spec_for(slug)
         trigger_url = request.build_absolute_uri(

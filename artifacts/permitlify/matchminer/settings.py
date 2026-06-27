@@ -110,12 +110,39 @@ TEMPLATES = [
 WSGI_APPLICATION = "matchminer.wsgi.application"
 
 # --- Database (Postgres) --------------------------------------------------
+# How long (seconds) to keep a DB connection open across requests. Defaults to
+# 600 but is env-overridable: on a flaky remote DB you can set
+# DJANGO_DB_CONN_MAX_AGE=0 to force a fresh connection per request (no persistent
+# sockets to go stale) as a diagnostic / last resort.
+try:
+    _conn_max_age = int(os.environ.get("DJANGO_DB_CONN_MAX_AGE", "600"))
+except ValueError:
+    _conn_max_age = 600
+
 DATABASES = {
     "default": dj_database_url.config(
         default=os.environ.get("DATABASE_URL"),
-        conn_max_age=600,
+        conn_max_age=_conn_max_age,
     )
 }
+
+# Make persistent connections resilient on a networked/remote Postgres.
+# `conn_max_age` keeps a connection open across requests, but firewalls, NAT
+# gateways and DB proxies silently drop idle TCP connections. Without a health
+# check Django reuses the dead socket and the request blocks until the OS TCP
+# timeout (often minutes) -- this is what makes pages "take a while, then
+# finish, but most of the time don't". CONN_HEALTH_CHECKS pings the connection
+# before reuse and reconnects if it's dead; the libpq keepalives + short
+# connect timeout make a broken socket fail fast instead of hanging.
+_db = DATABASES["default"]
+if _db.get("ENGINE", "").endswith("postgresql"):
+    _db["CONN_HEALTH_CHECKS"] = True
+    _opts = _db.setdefault("OPTIONS", {})
+    _opts.setdefault("connect_timeout", 10)
+    _opts.setdefault("keepalives", 1)
+    _opts.setdefault("keepalives_idle", 30)
+    _opts.setdefault("keepalives_interval", 10)
+    _opts.setdefault("keepalives_count", 5)
 
 # --- Auth -----------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
