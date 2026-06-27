@@ -257,6 +257,12 @@ SPECS = {
         runner_path="accounts.live_scrapers.czech_scraper:run",
         allowed_hosts=("cesky-tenis.cz",),
     ),
+    "belgium_results": ScraperSpec(
+        slug="belgium_results",
+        input_kind=INPUT_DATE_RANGE_OR_URL,
+        runner_path="accounts.live_scrapers.belgium_results:run",
+        allowed_hosts=("www.tennisenpadelvlaanderen.be", "tennisenpadelvlaanderen.be"),
+    ),
     # --- US high-school feed APIs (date-range; own hard-coded hosts) -------
     # Vendor feed APIs keyed by a feed api_key (overridable via settings).
     # No URL input / host allowlist — each calls only its own host.
