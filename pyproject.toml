@@ -15,6 +15,13 @@ dependencies = [
     "psutil>=6.0.0",
     "psycopg2-binary>=2.9.12",
     "python-dotenv>=1.0.0",
-    "tensorflow-cpu==2.15.1",
+    "tensorflow-cpu==2.18.1 ; sys_platform == 'linux'",
     "whitenoise>=6.12.0",
 ]
+
+# The deploy/lock target is Linux (Replit). Local Windows/macOS dev installs deps
+# via requirements.txt + pip, not uv. Restricting uv's universal resolution to
+# Linux avoids it trying to satisfy tensorflow-cpu's win32-only tensorflow-intel
+# sub-dependency, which has no matching 2.18.1 release.
+[tool.uv]
+environments = ["sys_platform == 'linux'"]

@@ -25,11 +25,14 @@ captcha to `/__zenedge/c`) instead of the real content.
   `accounts/live_scrapers/belgium_assets/captcha_model.keras`.
 - Only `belgium_assets/char_map.json` (charset + geometry) is committed. The
   ~42MB model is **not** committed (it's uploaded — see below). TensorFlow IS
-  now a wired dep: `tensorflow-cpu==2.15.1` (Linux, pyproject+uv.lock) /
-  `tensorflow==2.15.1` (Windows/macOS, requirements.txt platform markers) +
-  `pillow`. **Pinned to 2.15** because the model is a tf.keras 2.x `.keras`
-  file (the `_patch_batchnorm` shim assumes Keras 2 layer init) — a Keras-3
-  (TF ≥2.16) build is a different loader and risks an incompatible load.
+  now a wired dep: `tensorflow-cpu==2.18.1` (Linux, pyproject+uv.lock) /
+  `tensorflow==2.18.1` (Windows/macOS, requirements.txt platform markers) +
+  `pillow`. **Pinned to 2.18 (Keras 3.15)** because the uploaded model is a
+  **Keras 3** `.keras` file — the earlier 2.15 (Keras 2) pin could NOT load it
+  (`Could not deserialize class 'Functional' … keras.src.models.functional
+  cannot be imported`). The `_patch_batchnorm` shim is now a harmless no-op
+  (Keras 3.15 already tolerates the model's legacy `renorm` BatchNorm kwargs),
+  kept only to match the source loader.
 - Without them the solver raises `CaptchaSolverUnavailable` → the runner records
   **one** diagnostic error, sets `solver=None`, challenged pages return `""` →
   0 rows → honest `FAILED`. Exactly like the Stadion family without a proxy: a
@@ -56,12 +59,13 @@ captcha to `/__zenedge/c`) instead of the real content.
   HDF5 `\x89HDF`), 100 MB cap, sha256 recorded. Remove = a separate hidden
   `#removeModelForm` carrying the `#mmConfirm` `data-confirm*` attrs (the confirm
   modal binds to `form[data-confirm]` submit, never to buttons).
-- TF (tensorflow-cpu 2.15.1) is now a wired dependency, so an uploaded model
-  loads and the solver runs. Verified on Replit with a synthetic load+infer test
-  (build a 6-head × 62-class `.keras`, load it via `CaptchaSolver._ensure_model`,
-  predict on a blank PNG). That proves the *plumbing*; the user's actual model
-  loading under 2.15 is still confirmed by a real run (a version mismatch would
-  surface as the honest-fail "captcha model/char-map could not be loaded: …").
+- TF (tensorflow-cpu 2.18.1 / Keras 3.15) is now a wired dependency, so an
+  uploaded **Keras 3** model loads and the solver runs. Verified on Replit:
+  (a) a synthetic 6-head × 62-class `.keras` matching the real architecture
+  loads via `CaptchaSolver` + infers 6 chars; (b) a `.keras` whose BatchNorm
+  configs have `renorm` kwargs injected (reproducing the real model's shape)
+  also loads + infers through our `CaptchaSolver`. A version mismatch would
+  surface as the honest-fail "captcha model/char-map could not be loaded: …".
 
 ## To run it live (two options)
 1. **Hosted/prod:** TF is already wired (deploy picks up `tensorflow-cpu` from
@@ -70,10 +74,21 @@ captcha to `/__zenedge/c`) instead of the real content.
    datacenter IPs (like CloudFront does to Stadion), so a residential proxy may
    still be required even with a working solver.
 2. **Local Windows:** `git pull`, re-run `bat_files/0_setup.bat` (now installs
-   `tensorflow==2.15.1` via `requirements.txt`), upload the model via Settings (or
+   `tensorflow==2.18.1` via `requirements.txt`), upload the model via Settings (or
    place it in `belgium_assets/`), then run
    `bat_files/11_scrape_belgium_results.bat` (URL or date-range prompt).
 
 **Why honest-fail instead of stubbing:** never fabricate rows. A source whose
 infra (proxy / creds / model) isn't present must emit a correct empty 5-tuple +
 errors CSV, consistent with the rest of the catalogue.
+
+## Build gotcha — uv lock + the Windows TF variant
+`tensorflow-cpu`'s win32 wheel is a tiny stub that depends on
+`tensorflow-intel==<ver>`, and **no `tensorflow-intel==2.18.1` exists**. uv
+resolves *universally* across OSes, so a bare `tensorflow-cpu==2.18.1` — or even
+one markered `; sys_platform == 'linux'` — still makes `uv lock` chase that
+missing win32 dep and fail ("no version of tensorflow-intel{win32}==2.18.1").
+Fix: pin `[tool.uv] environments = ["sys_platform == 'linux'"]` in
+`pyproject.toml` so uv only resolves the Linux deploy target. Windows/macOS local
+dev installs plain `tensorflow==2.18.1` via `requirements.txt` + pip (never uv),
+so it's unaffected. Re-check this whenever bumping the TF pin.

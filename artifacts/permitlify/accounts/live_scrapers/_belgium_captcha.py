@@ -164,7 +164,10 @@ class CaptchaSolver:
                 img_w = int(meta["img_w"])
                 img_h = int(meta["img_h"])
                 _patch_batchnorm(keras)  # must run before load_model
-                model = keras.models.load_model(MODEL_PATH)
+                # Inference-only: compile=False skips optimizer/loss/metric
+                # deserialization (which can fail across TF/Keras versions and
+                # is never needed for prediction).
+                model = keras.models.load_model(MODEL_PATH, compile=False)
             except Exception as exc:  # noqa: BLE001 - bad/incompatible captcha infra
                 raise CaptchaSolverUnavailable(
                     f"captcha model/char-map could not be loaded: {exc}"
