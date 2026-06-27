@@ -2,7 +2,7 @@
 name = "repl-nix-workspace"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "curl-cffi>=0.15.0",
     "dj-database-url>=3.1.2",
@@ -11,8 +11,10 @@ dependencies = [
     "nh3>=0.3.6",
     "parsel>=1.9.0",
     "patchright>=1.60.1",
+    "pillow",
     "psutil>=6.0.0",
     "psycopg2-binary>=2.9.12",
     "python-dotenv>=1.0.0",
+    "tensorflow-cpu==2.15.1",
     "whitenoise>=6.12.0",
 ]

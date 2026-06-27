@@ -24,8 +24,12 @@ captcha to `/__zenedge/c`) instead of the real content.
   `tensorflow.keras` / numpy / PIL and loads a Keras model from
   `accounts/live_scrapers/belgium_assets/captcha_model.keras`.
 - Only `belgium_assets/char_map.json` (charset + geometry) is committed. The
-  ~42MB model and TensorFlow are deliberately **not** installed/committed
-  (far-reaching: huge dep + large binary).
+  ~42MB model is **not** committed (it's uploaded — see below). TensorFlow IS
+  now a wired dep: `tensorflow-cpu==2.15.1` (Linux, pyproject+uv.lock) /
+  `tensorflow==2.15.1` (Windows/macOS, requirements.txt platform markers) +
+  `pillow`. **Pinned to 2.15** because the model is a tf.keras 2.x `.keras`
+  file (the `_patch_batchnorm` shim assumes Keras 2 layer init) — a Keras-3
+  (TF ≥2.16) build is a different loader and risks an incompatible load.
 - Without them the solver raises `CaptchaSolverUnavailable` → the runner records
   **one** diagnostic error, sets `solver=None`, challenged pages return `""` →
   0 rows → honest `FAILED`. Exactly like the Stadion family without a proxy: a
@@ -52,17 +56,22 @@ captcha to `/__zenedge/c`) instead of the real content.
   HDF5 `\x89HDF`), 100 MB cap, sha256 recorded. Remove = a separate hidden
   `#removeModelForm` carrying the `#mmConfirm` `data-confirm*` attrs (the confirm
   modal binds to `form[data-confirm]` submit, never to buttons).
-- **TF is still required** to actually load the model; uploading the binary does
-  not install TensorFlow. Without TF the solver still honest-fails.
+- TF (tensorflow-cpu 2.15.1) is now a wired dependency, so an uploaded model
+  loads and the solver runs. Verified on Replit with a synthetic load+infer test
+  (build a 6-head × 62-class `.keras`, load it via `CaptchaSolver._ensure_model`,
+  predict on a blank PNG). That proves the *plumbing*; the user's actual model
+  loading under 2.15 is still confirmed by a real run (a version mismatch would
+  surface as the honest-fail "captcha model/char-map could not be loaded: …").
 
 ## To run it live (two options)
-1. **Hosted/prod:** install TensorFlow (add to pyproject + requirements.txt),
-   then upload `captcha_model.keras` via the Settings tab (or drop it into
-   `belgium_assets/`). Note Zenedge may *also* block datacenter IPs (like
-   CloudFront does to Stadion), so a residential proxy may still be required even
-   with a working solver.
-2. **Local Windows:** `git pull`, place the model in `belgium_assets/` (or upload
-   via Settings), add TF to the local venv, run via
+1. **Hosted/prod:** TF is already wired (deploy picks up `tensorflow-cpu` from
+   `pyproject.toml`+`uv.lock`); just upload `captcha_model.keras` via the Settings
+   tab (or drop it into `belgium_assets/`). Note Zenedge may *also* block
+   datacenter IPs (like CloudFront does to Stadion), so a residential proxy may
+   still be required even with a working solver.
+2. **Local Windows:** `git pull`, re-run `bat_files/0_setup.bat` (now installs
+   `tensorflow==2.15.1` via `requirements.txt`), upload the model via Settings (or
+   place it in `belgium_assets/`), then run
    `bat_files/11_scrape_belgium_results.bat` (URL or date-range prompt).
 
 **Why honest-fail instead of stubbing:** never fabricate rows. A source whose
