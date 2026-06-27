@@ -79,6 +79,7 @@ INSTALLED_APPS = [
 # omitted. It would send X-Frame-Options: DENY/SAMEORIGIN and block the app from
 # rendering inside the Replit preview iframe (a cross-origin frame).
 MIDDLEWARE = [
+    "accounts.middleware.BlockProbesMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

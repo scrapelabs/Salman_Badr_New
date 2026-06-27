@@ -1,0 +1,124 @@
+INFO:waitress:Serving on http://0.0.0.0:80
+Not Found: /favicon.ico
+WARNING:django.request:Not Found: /favicon.ico
+Not Found: /favicon.ico
+WARNING:django.request:Not Found: /favicon.ico
+Not Found: /.env
+WARNING:django.request:Not Found: /.env
+Forbidden (CSRF cookie not set.): /
+WARNING:django.security.csrf:Forbidden (CSRF cookie not set.): /
+Not Found: /.env
+WARNING:django.request:Not Found: /.env
+Not Found: /conf/.env
+WARNING:django.request:Not Found: /conf/.env
+Not Found: /wp-content/.env
+WARNING:django.request:Not Found: /wp-content/.env
+Not Found: /wp-admin/.env
+WARNING:django.request:Not Found: /wp-admin/.env
+Not Found: /library/.env
+WARNING:django.request:Not Found: /library/.env
+Not Found: /new/.env
+WARNING:django.request:Not Found: /new/.env
+Not Found: /vendor/.env
+WARNING:django.request:Not Found: /vendor/.env
+Not Found: /old/.env
+WARNING:django.request:Not Found: /old/.env
+Not Found: /local/.env
+WARNING:django.request:Not Found: /local/.env
+Not Found: /api/.env
+WARNING:django.request:Not Found: /api/.env
+Not Found: /blog/.env
+WARNING:django.request:Not Found: /blog/.env
+Not Found: /crm/.env
+WARNING:django.request:Not Found: /crm/.env
+Not Found: /laravel/.env
+WARNING:django.request:Not Found: /laravel/.env
+Not Found: /app/.env
+WARNING:django.request:Not Found: /app/.env
+Not Found: /app/config/.env
+WARNING:django.request:Not Found: /app/config/.env
+Not Found: /apps/.env
+WARNING:django.request:Not Found: /apps/.env
+Not Found: /audio/.env
+WARNING:django.request:Not Found: /audio/.env
+Not Found: /cgi-bin/.env
+WARNING:django.request:Not Found: /cgi-bin/.env
+Not Found: /backend/.env
+WARNING:django.request:Not Found: /backend/.env
+Not Found: /src/.env
+WARNING:django.request:Not Found: /src/.env
+Not Found: /base/.env
+WARNING:django.request:Not Found: /base/.env
+Not Found: /core/.env
+WARNING:django.request:Not Found: /core/.env
+Not Found: /vendor/laravel/.env
+WARNING:django.request:Not Found: /vendor/laravel/.env
+Not Found: /storage/.env
+WARNING:django.request:Not Found: /storage/.env
+Not Found: /protected/.env
+WARNING:django.request:Not Found: /protected/.env
+Not Found: /newsite/.env
+WARNING:django.request:Not Found: /newsite/.env
+Not Found: /www/.env
+WARNING:django.request:Not Found: /www/.env
+Not Found: /sites/all/libraries/mailchimp/.env
+WARNING:django.request:Not Found: /sites/all/libraries/mailchimp/.env
+Not Found: /database/.env
+WARNING:django.request:Not Found: /database/.env
+Not Found: /public/.env
+WARNING:django.request:Not Found: /public/.env
+Not Found: /40.71.187.109/.env
+WARNING:django.request:Not Found: /40.71.187.109/.env
+Forbidden (CSRF cookie not set.): /
+WARNING:django.security.csrf:Forbidden (CSRF cookie not set.): /
+Not Found: /vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php
+WARNING:django.request:Not Found: /vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
