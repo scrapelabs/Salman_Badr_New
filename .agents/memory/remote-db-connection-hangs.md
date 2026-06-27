@@ -40,6 +40,7 @@ scrape-worker subprocess vs. a low Postgres `max_connections`) or lock/wait
 contention — check `pg_stat_activity` during a hang for connection count, wait
 events, and idle-in-transaction sessions.
 
-**Also reduced query count** on that tab: the four per-status `COUNT`s were
-collapsed into one `aggregate(Count(..., filter=Q(...)))` — each saved query is a
-saved network round-trip on a remote DB.
+**Also trimmed that tab's DB work:** the four per-status headline `COUNT`s (the
+stat cards) were removed entirely at the user's request — the Key queue tab is
+now table-only, so its only DB work is the paginator (one count + one slice).
+Fewer queries = fewer network round-trips on a remote DB.
