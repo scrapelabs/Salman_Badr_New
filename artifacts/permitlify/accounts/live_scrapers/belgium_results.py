@@ -313,9 +313,12 @@ class Parser:
     _RE_SET_PAIR = re.compile(r"(\d{1,2})\s*/\s*(\d{1,2})")
     _RE_WALKOVER = re.compile(r"walk\s*-?\s*over|w\.?o\.?", re.IGNORECASE)
     _RE_RETIRED = re.compile(r"\b(opgave|abandon|retir|ret\.?)\b", re.IGNORECASE)
-    _RE_PLAYER_SUFFIX = re.compile(
-        r"\s*-\s*\d+(?:\.\d+)?\s*\(\s*\d+\s*ptn\s*\)\s*$", re.IGNORECASE
-    )
+    # Ranking/points suffix trailing a player name. The site exposes several
+    # shapes — "- 9.1 (25 ptn)", "- 35, ptn", "- 100 ptn nr., 207" — that all
+    # begin with " - ", so strip from the first " - " to the end (mirrors the
+    # source's correct_name()). A parens-only regex left the rest intact and
+    # mangled the name (e.g. "Goranov Alexandar - 35,, ptn").
+    _RE_PLAYER_SUFFIX = re.compile(r"\s*-\s.*$")
     _RE_SEED = re.compile(r"^\s*\(\s*\d+\s*\)\s*")
     _RE_USERID = re.compile(r"userId=([^&]+)")
     _RE_PERIOD = re.compile(

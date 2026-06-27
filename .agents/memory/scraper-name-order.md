@@ -29,7 +29,16 @@ that may already emit `"Last, First"`. Single-token / empty names pass through.
   `brazil_results`/`uruguay_results` (`_last_first`), `padelfip`/`usta_team_captains`
   (`_format_name`), and the rankings family (`wtatennis`/`atptour`) + MaxPreps/NJ/
   Stadion/Australia/Ioncourt which build the name from already-separated last/first
-  fields. Czech/Poland handle source-specific surname-first order.
+  fields. Czech/Poland/Belgium handle source-specific surname-first order
+  (`"Lastname Firstname"`): they use their OWN reorder where the **leading**
+  tokens are the surname (NOT the shared `last_first`, which treats the last
+  token as surname and would reverse them wrongly). `belgium_results._last_first`
+  is correct on compound Flemish surnames (`De Wolf Pieter`→`De Wolf, Pieter`,
+  `Van Opstal Alex`→`Van Opstal, Alex`); the source's `parts[0]` heuristic is
+  worse here. **Gotcha:** belgium's ranking suffix must be stripped from the
+  first `" - "` to end (general `r"\s*-\s.*$"`, mirroring the source's
+  `correct_name`) — a parens-only regex leaks `"- 35, ptn"` /
+  `"- 100 ptn nr., 207"` and mangles the name (e.g. `"Goranov Alexandar - 35,, ptn"`).
 
 **Known limitation (intentional):** the deterministic heuristic treats the last
 whitespace token as the surname, so compound/particle/Hispanic surnames are split
