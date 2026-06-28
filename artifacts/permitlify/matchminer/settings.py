@@ -80,6 +80,7 @@ INSTALLED_APPS = [
 # rendering inside the Replit preview iframe (a cross-origin frame).
 MIDDLEWARE = [
     "accounts.middleware.BlockProbesMiddleware",
+    "accounts.middleware.DBReconnectMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
