@@ -1820,7 +1820,6 @@ code {
 .rt-opt { font-weight: 400; color: var(--app-muted); }
 .rt-req { font-weight: 500; color: var(--app-accent); }
 .rt-start-btn { height: 42px; white-space: nowrap; flex: 0 0 auto; padding-inline: 18px; }
-.rt-start-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
 .rt-start-note {
   display: flex;
   align-items: center;

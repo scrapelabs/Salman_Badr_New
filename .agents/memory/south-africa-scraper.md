@@ -55,24 +55,23 @@ or two scrapers' queues will collide.
 was the simplest correct choice for one scraper but silently breaks multi-scraper
 reuse.
 
-## Queue-driven scrapers have NO Real-time tab — run/monitor/stop from the Key queue
-For `has_key_store` scrapers the Lab **hides the Real-time test tab**: the default
-landing tab is `keys`, `?tab=real-time` 302-redirects to `?tab=keys`, the nav link
-is `{% if not has_key_store %}`-gated, and other surfaces that linked to
-`?tab=real-time` (overview recent-runs, scrapers-table "Open lab", Calls empty
-state, Schedule copy) point to the keys tab or drop the param so the server's
-default-tab logic routes per scraper. The Key queue tab carries its own launcher
-("Run all pending keys (N)" → POST `run_all=on`), a maintenance/active/exclusivity
-status note, **and** a Stop-run button (only when a run is active — it's the *only*
-stop control now that the runbar is gone). Two sibling `<form>`s in a
-`.rt-start-actions` flex row (can't nest forms). Monitoring is the **table itself**:
-keys flip Pending→Done as they're scraped; the user refreshes (no live console).
+## south_africa has NO Key queue tab — run/monitor the queue from the Real-time tab
+The Lab's **Key queue tab is retired from the UI**. `?tab=keys` 302-redirects to
+`?tab=real-time` (unconditionally — only south_africa ever had the tab), the nav
+link is removed, and the seeded `Scraper.description` no longer points at it (fixed
+in the seed migration **and** via a follow-up data migration so existing
+self-hosted DBs get the corrected copy on `migrate`). The queue is still launched +
+monitored from the **Real-time tab**, unchanged: its start form (paste-keys
+textarea + "run the whole pending queue" checkbox) + live console still work, and
+keys still flip Pending→Done in the DB as they're scraped. The `elif tab == "keys"`
+view ctx branch and the `{% elif tab == 'keys' %}` template block are left in place
+but are now **unreachable dead code** (the redirect fires first) — kept for easy
+re-enable.
 
-**Why:** the real-time tab's ~1s live-console poll (`run_events`) hammered the
-user's **remote/networked Postgres** (self-hosted Azure VM) and looked like the
-scraper "failing"; the queue table already shows progress, so polling was pure
-overhead for this scraper. The paste-keys textarea was dropped with it (queue is
-run-all only) — re-addable as a secondary control if ad-hoc keys are ever needed.
+**Why:** the user explicitly asked to remove the Key queue tab and keep Real-time.
+An earlier attempt did the opposite (hid Real-time, made `keys` the default) and was
+reverted. The queue *table* was the only thing the tab added; everything needed to
+run and watch the scraper already lives on the Real-time tab.
 
 ## Row ceiling is soft
 `KEY_BATCH_MAX_ROWS` is checked *between* keys, so the final key can push the

@@ -22,8 +22,8 @@ SCRAPER = {
     "description": (
         "Tennis South Africa results from the SportyHQ public results API. "
         "Queue-driven: works through a list of SportyHQ tournament keys, each "
-        "unlocking one tournament's full result set. Manage the queue and paste "
-        "extra keys from the Lab's Key queue / Real-time tabs."
+        "unlocking one tournament's full result set. Paste extra keys or run the "
+        "whole pending queue from the Lab's Real-time tab."
     ),
     "returns": "CSV",
     "tournaments": ["Tennis South Africa"],
