@@ -29,9 +29,11 @@
   </div>
 
   <nav class="tabs">
+    {% if not has_key_store %}
     <a class="tab {% if tab == 'real-time' %}active{% endif %}" href="?tab=real-time" {% if tab == 'real-time' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg><span>Real-time test</span>
     </a>
+    {% endif %}
     <a class="tab {% if tab == 'calls' %}active{% endif %}" href="?tab=calls" {% if tab == 'calls' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg><span>Calls history</span>
     </a>
@@ -581,7 +583,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="10" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
+        <tr><td colspan="10" class="runs-empty">No runs yet — start one from the {% if has_key_store %}<a href="?tab=keys">Key queue</a>{% else %}<a href="?tab=real-time">Real-time test</a>{% endif %} tab.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -719,6 +721,46 @@
     <div>
       <h2 class="section-title">Key queue</h2>
       <p class="data-sub">Every SportyHQ tournament key in this scraper's work list. Each key unlocks one tournament's full result set; runs work through the pending keys and mark each done or failed.</p>
+    </div>
+  </div>
+
+  <div class="panel rt-start">
+    <div class="panel-pad">
+      <div class="rt-start-head">
+        <div>
+          <div class="status-eyebrow">Run the queue</div>
+          <div class="status-name">Run {{ s.code }} on the pending keys</div>
+        </div>
+        <span class="mode-pill {{ s.mode }}">{{ s.get_mode_display }}</span>
+      </div>
+      <div class="rt-start-actions">
+        <form method="post" action="{% url 'scraper_run' s.slug %}">
+          {% csrf_token %}
+          <input type="hidden" name="run_all" value="on">
+          <button class="btn btn-primary rt-start-btn" type="submit" {% if start_disabled %}disabled{% endif %}>
+            Run all pending keys ({{ pending_key_count }})
+          </button>
+        </form>
+        {% if active_run %}
+        <form method="post" action="{% url 'run_stop' s.slug active_run.uuid %}"
+              data-confirm="Force-stop this run? The worker process will be killed immediately and the partial results kept."
+              data-confirm-title="Stop this run?"
+              data-confirm-ok="Stop run"
+              data-confirm-tone="danger">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger rt-start-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            Stop run
+          </button>
+        </form>
+        {% endif %}
+      </div>
+      <p class="rt-start-note {% if s.is_maintenance %}is-warn{% elif active_run %}is-info{% elif exclusivity_blocker %}is-info{% else %}is-ready{% endif %}">
+        {% if s.is_maintenance %}This source is in maintenance — runs are blocked.
+        {% elif active_run %}A run is in progress (<a href="{% url 'run_log' s.slug active_run.uuid %}">#{{ active_run.short_id }}</a>) — keys flip from Pending to Done in the table below as they're scraped; refresh to update.
+        {% elif exclusivity_blocker %}{{ start_block_msg }}
+        {% else %}Process every pending key in one run. Keys flip from Pending to Done in the table below as they're scraped — refresh to update.{% endif %}
+      </p>
     </div>
   </div>
 
@@ -1176,8 +1218,8 @@
 
       <p class="rt-intro">
         Each time this schedule comes due, the background scheduler logs what happened here —
-        live proof the cron is running. A launched run streams on the
-        <a href="?tab=real-time">Real-time test</a> tab; if a run is already in progress the
+        live proof the cron is running.
+        {% if has_key_store %}A launched run works the <a href="?tab=keys">Key queue</a> (keys move to Done as they're scraped){% else %}A launched run streams on the <a href="?tab=real-time">Real-time test</a> tab{% endif %}; if a run is already in progress the
         cycle is logged as a healthy skip (the cron passed — a job is already working); a real
         failure shows exactly why it couldn't start.
       </p>

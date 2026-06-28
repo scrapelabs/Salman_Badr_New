@@ -15,11 +15,11 @@ The tbody is refreshed live by the overview poller.{% endcomment %}
     </thead>
     <tbody id="recentRunsBody">
       {% for r in recent_runs %}
-      <tr data-href="{% url 'scraper_detail' r.scraper.slug %}?tab=real-time">
+      <tr data-href="{% url 'scraper_detail' r.scraper.slug %}">
         <td>
           <div class="tbl-name">
             <span class="tbl-badge">{{ r.scraper.code }}</span>
-            <span><a class="tbl-title" href="{% url 'scraper_detail' r.scraper.slug %}?tab=real-time">{{ r.scraper.name }}</a></span>
+            <span><a class="tbl-title" href="{% url 'scraper_detail' r.scraper.slug %}">{{ r.scraper.name }}</a></span>
           </div>
         </td>
         <td><span class="run-badge run-st-{{ r.run_state }}">{{ r.get_status_display }}</span></td>

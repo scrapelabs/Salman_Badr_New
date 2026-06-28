@@ -55,6 +55,25 @@ or two scrapers' queues will collide.
 was the simplest correct choice for one scraper but silently breaks multi-scraper
 reuse.
 
+## Queue-driven scrapers have NO Real-time tab — run/monitor/stop from the Key queue
+For `has_key_store` scrapers the Lab **hides the Real-time test tab**: the default
+landing tab is `keys`, `?tab=real-time` 302-redirects to `?tab=keys`, the nav link
+is `{% if not has_key_store %}`-gated, and other surfaces that linked to
+`?tab=real-time` (overview recent-runs, scrapers-table "Open lab", Calls empty
+state, Schedule copy) point to the keys tab or drop the param so the server's
+default-tab logic routes per scraper. The Key queue tab carries its own launcher
+("Run all pending keys (N)" → POST `run_all=on`), a maintenance/active/exclusivity
+status note, **and** a Stop-run button (only when a run is active — it's the *only*
+stop control now that the runbar is gone). Two sibling `<form>`s in a
+`.rt-start-actions` flex row (can't nest forms). Monitoring is the **table itself**:
+keys flip Pending→Done as they're scraped; the user refreshes (no live console).
+
+**Why:** the real-time tab's ~1s live-console poll (`run_events`) hammered the
+user's **remote/networked Postgres** (self-hosted Azure VM) and looked like the
+scraper "failing"; the queue table already shows progress, so polling was pure
+overhead for this scraper. The paste-keys textarea was dropped with it (queue is
+run-all only) — re-addable as a secondary control if ad-hoc keys are ever needed.
+
 ## Row ceiling is soft
 `KEY_BATCH_MAX_ROWS` is checked *between* keys, so the final key can push the
 output slightly over the cap. Intentional — keep it unless a strict cap is

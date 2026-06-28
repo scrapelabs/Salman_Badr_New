@@ -679,15 +679,24 @@ def scraper_detail_view(request, slug):
         messages.success(request, "Status updated.")
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=status")
 
-    tab = request.GET.get("tab", "real-time")
+    # Queue-driven scrapers (south_africa) hide the Real-time tab entirely: its
+    # live-console polling is heavy on a networked DB, and the Key queue tab now
+    # both launches runs and shows live progress (keys flip pending->done as
+    # they're scraped). So their default landing tab is "keys", and any bookmarked
+    # ?tab=real-time link is routed there too.
+    is_queue_driven = registry.spec_for(slug).has_key_store
+    default_tab = "keys" if is_queue_driven else "real-time"
+    tab = request.GET.get("tab", default_tab)
     if tab not in TAB_LABELS:
-        tab = "real-time"
+        tab = default_tab
+    if tab == "real-time" and is_queue_driven:
+        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=keys")
     # The Settings (routing & performance) tab is admin-only.
     if tab == "settings" and not request.user.is_superuser:
-        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
+        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab={default_tab}")
     # The Match database tab only exists for scrapers that persist matches.
     if tab == "data" and not registry.spec_for(slug).has_match_store:
-        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
+        return redirect(f"{reverse('scraper_detail', args=[slug])}?tab={default_tab}")
     # The Key queue tab only exists for queue-driven scrapers (south_africa).
     if tab == "keys" and not registry.spec_for(slug).has_key_store:
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
@@ -815,6 +824,23 @@ def scraper_detail_view(request, slug):
         qs = s.sa_keys.select_related("last_run").all()
         paginator = Paginator(qs, KEYS_PER_PAGE)
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
+        # This tab doubles as the run launcher for the queue-driven scraper (the
+        # Real-time tab is hidden for it), so expose enough run state to render a
+        # "Run all pending keys" button + a live "run in progress" notice. Reap
+        # first so active_run / exclusivity reflect reality.
+        _reap_stale_runs()
+        active_run = (
+            s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
+        )
+        ctx["active_run"] = active_run
+        blocker, this_uses_browser = _exclusivity_blocker(s)
+        ctx["exclusivity_blocker"] = blocker
+        if blocker is not None:
+            ctx["start_block_msg"] = _exclusivity_block_msg(blocker, this_uses_browser)
+        ctx["start_disabled"] = bool(s.is_maintenance or active_run or blocker)
+        ctx["pending_key_count"] = SAKey.objects.filter(
+            scraper=s, status=SAKey.Status.PENDING
+        ).count()
     elif tab == "schedule":
         spec = registry.spec_for(slug)
         trigger_url = request.build_absolute_uri(
@@ -1389,7 +1415,11 @@ def _start_scraper_run(scraper, *, inputs, launched_by):
 @require_http_methods(["POST"])
 def scraper_run_view(request, slug):
     s = get_object_or_404(Scraper, slug=slug)
-    back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+    # Queue-driven scrapers hide the Real-time tab; land their runs back on the
+    # Key queue tab, where progress is monitored (keys flip pending->done).
+    is_queue_driven = registry.spec_for(slug).has_key_store
+    back_tab = "keys" if is_queue_driven else "real-time"
+    back = f"{reverse('scraper_detail', args=[slug])}?tab={back_tab}"
     try:
         inputs = validate_run_params(registry.spec_for(slug), request.POST)
         run = _start_scraper_run(s, inputs=inputs, launched_by=request.user)
@@ -1397,9 +1427,15 @@ def scraper_run_view(request, slug):
         messages.error(request, exc.message)
         return redirect(back)
 
-    messages.success(
-        request, f"Run #{run.short_id} started — streaming the live log below."
-    )
+    if is_queue_driven:
+        messages.success(
+            request,
+            f"Run #{run.short_id} started — keys move to Done below as they're scraped.",
+        )
+    else:
+        messages.success(
+            request, f"Run #{run.short_id} started — streaming the live log below."
+        )
     return redirect(back)
 
 
