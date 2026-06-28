@@ -27,7 +27,7 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Count, Exists, Max, OuterRef, Subquery
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -1848,47 +1848,76 @@ def _download_filename(slug, run, kind):
     return f"{slug}__{stamp}_{kind}.csv"
 
 
-@login_required
-def run_log_download_view(request, slug, run_uuid):
-    run = _get_run(slug, run_uuid)
-    resp = HttpResponse(_run_log_text(run), content_type="text/plain; charset=utf-8")
+# Large runs (e.g. the queue-driven south_africa job — 230k rows / 100 MB+)
+# produce CSV/log payloads too big for a plain ``HttpResponse``: that buffers
+# the whole body in memory twice (str + encoded bytes) and the WSGI server
+# can't start sending until it's fully built, so over a remote/networked DB the
+# download reliably times out. Streaming the column in fixed-size chunks starts
+# the transfer immediately (keeping the WSGI channel active under its inactivity
+# timeout) and avoids the double buffering. The column is still fetched up front
+# inside the view (so the DB read is covered by DBReconnectMiddleware's retry);
+# the generator then only hands an already in-memory string out in pieces.
+_DOWNLOAD_CHUNK = 256 * 1024  # 256 KB text slices
+
+
+def _iter_text_chunks(text, size=_DOWNLOAD_CHUNK):
+    if not text:
+        return
+    for i in range(0, len(text), size):
+        # Slicing a str is codepoint-safe, so each slice encodes cleanly.
+        yield text[i : i + size].encode("utf-8")
+
+
+def _run_for_download(slug, run_uuid, *fields):
+    """Fetch a run loading only ``started_at`` (for the filename) plus the
+    requested payload column(s) — never all four giant TextFields at once."""
+    return get_object_or_404(
+        Run.objects.only("started_at", *fields),
+        uuid=run_uuid,
+        scraper__slug=slug,
+    )
+
+
+def _stream_text_download(slug, run, body, kind, content_type):
+    resp = StreamingHttpResponse(
+        _iter_text_chunks(body), content_type=content_type
+    )
     resp["Content-Disposition"] = (
-        f'attachment; filename="{_download_filename(slug, run, "log")}"'
+        f'attachment; filename="{_download_filename(slug, run, kind)}"'
     )
     return resp
+
+
+@login_required
+def run_log_download_view(request, slug, run_uuid):
+    run = _run_for_download(slug, run_uuid, "log_text")
+    return _stream_text_download(
+        slug, run, _run_log_text(run), "log", "text/plain; charset=utf-8"
+    )
 
 
 @login_required
 def run_csv_download_view(request, slug, run_uuid):
-    run = _get_run(slug, run_uuid)
-    body = run.csv_data or ""
-    resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = (
-        f'attachment; filename="{_download_filename(slug, run, "item")}"'
+    run = _run_for_download(slug, run_uuid, "csv_data")
+    return _stream_text_download(
+        slug, run, run.csv_data or "", "item", "text/csv; charset=utf-8"
     )
-    return resp
 
 
 @login_required
 def run_requests_download_view(request, slug, run_uuid):
-    run = _get_run(slug, run_uuid)
-    body = run.requests_csv or ""
-    resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = (
-        f'attachment; filename="{_download_filename(slug, run, "request")}"'
+    run = _run_for_download(slug, run_uuid, "requests_csv")
+    return _stream_text_download(
+        slug, run, run.requests_csv or "", "request", "text/csv; charset=utf-8"
     )
-    return resp
 
 
 @login_required
 def run_errors_download_view(request, slug, run_uuid):
-    run = _get_run(slug, run_uuid)
-    body = run.errors_csv or ""
-    resp = HttpResponse(body, content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = (
-        f'attachment; filename="{_download_filename(slug, run, "error")}"'
+    run = _run_for_download(slug, run_uuid, "errors_csv")
+    return _stream_text_download(
+        slug, run, run.errors_csv or "", "error", "text/csv; charset=utf-8"
     )
-    return resp
 
 
 @login_required
@@ -1933,8 +1962,9 @@ def college_matches_export_view(request, slug):
     else:
         filename = f"{slug}_all_matches.csv"
 
-    resp = HttpResponse(
-        college_store.to_csv(rows), content_type="text/csv; charset=utf-8"
+    resp = StreamingHttpResponse(
+        _iter_text_chunks(college_store.to_csv(rows)),
+        content_type="text/csv; charset=utf-8",
     )
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp

@@ -22,6 +22,9 @@ cd /d "%~dp0..\artifacts\permitlify"
 
 echo Starting MatchMiner (Waitress) at http://localhost/   (press Ctrl+C to stop)
 echo.
-"%VENV_PY%" -m waitress --listen=0.0.0.0:80 matchminer.wsgi:application
+REM  --channel-timeout raises the per-connection inactivity limit (default 120s)
+REM  so very large CSV/log downloads (south_africa runs can be 100 MB+) have time
+REM  to start streaming over a slow/remote link without the channel being closed.
+"%VENV_PY%" -m waitress --listen=0.0.0.0:80 --channel-timeout=1200 matchminer.wsgi:application
 
 endlocal
