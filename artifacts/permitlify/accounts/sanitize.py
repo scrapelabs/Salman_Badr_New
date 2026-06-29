@@ -31,10 +31,17 @@ ALLOWED_ATTRIBUTES = {
     "img": {"src", "alt", "width", "height", "class", "style"},
     # Quill 2 renders both list kinds as <ol> and distinguishes them per <li>.
     "li": {"data-list"},
+    # @mention tokens carry the mentioned account on a <span class="rt-mention">.
+    "span": {"data-username"},
 }
 
-# Quill encodes alignment / indent / font / size as ``ql-*`` classes.
-_CLASS_RE = re.compile(r"^ql-[a-z0-9\-]+$")
+# Quill encodes alignment / indent / font / size as ``ql-*`` classes; the
+# ``rt-mention`` class styles an @mention token (its data-username is validated
+# separately below).
+_CLASS_RE = re.compile(r"^(?:ql-[a-z0-9\-]+|rt-mention)$")
+
+# Django usernames: letters, digits and @/./+/-/_ . Guards the mention attr.
+_USERNAME_RE = re.compile(r"^[\w.@+\-]{1,150}$")
 
 # Inline CSS we accept (colour + alignment). Anything else is dropped.
 _SAFE_STYLE_PROPS = {"text-align", "color", "background-color"}
@@ -113,6 +120,8 @@ def _attribute_filter(tag, attr, value):
         return _filter_style(value)
     if attr == "data-list" and tag == "li":
         return value if value in {"ordered", "bullet"} else None
+    if attr == "data-username" and tag == "span":
+        return value if _USERNAME_RE.match(value or "") else None
     if attr == "src" and tag == "img":
         return _filter_img_src(value)
     if attr == "href" and tag == "a":

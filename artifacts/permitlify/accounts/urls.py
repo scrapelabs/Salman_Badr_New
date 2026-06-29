@@ -95,6 +95,7 @@ urlpatterns = [
     path("qa/t/<uuid:uuid>/edit/", qa_views.ticket_edit, name="qa_ticket_edit"),
     path("qa/t/<uuid:uuid>/delete/", qa_views.ticket_delete, name="qa_ticket_delete"),
     path("qa/t/<uuid:uuid>/comment/", qa_views.comment_add, name="qa_comment_add"),
+    path("qa/mention-users/", qa_views.mention_users, name="qa_mention_users"),
     path("qa/attachments/", qa_views.attachment_upload, name="qa_attachment_upload"),
     path(
         "qa/attachments/<uuid:uuid>/",

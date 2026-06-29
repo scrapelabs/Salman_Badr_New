@@ -3066,6 +3066,29 @@ body.mm-modal-open { overflow: hidden; }
 }
 .qa-comment-form .rt-quill .ql-editor { min-height: 110px; }
 
+/* --- @mention token + autocomplete --- */
+.rt-mention {
+  display: inline; background: var(--app-accent-bg); color: var(--app-accent);
+  border-radius: 5px; padding: 0 4px; font-weight: 600; white-space: nowrap;
+}
+.bell-text .rt-mention, .qa-body .rt-mention { cursor: default; }
+.rt-mention-list {
+  position: absolute; z-index: 4000; min-width: 200px; max-width: 320px;
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-radius: 10px; box-shadow: 0 14px 34px rgba(0, 0, 0, .18);
+  padding: 5px; max-height: 248px; overflow-y: auto;
+}
+.rt-mention-list[hidden] { display: none; }
+.rt-mention-opt {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: 0; background: transparent; border-radius: 7px; cursor: pointer;
+  font: 500 11.5px "DM Sans", sans-serif; color: var(--app-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rt-mention-opt:hover, .rt-mention-opt.is-active {
+  background: var(--app-accent-bg); color: var(--app-accent);
+}
+
 /* Quill dark-mode legibility */
 [data-theme="dark"] .ql-snow .ql-stroke { stroke: var(--app-text-2); }
 [data-theme="dark"] .ql-snow .ql-fill { fill: var(--app-text-2); }

@@ -136,6 +136,7 @@
                data-target="#tBody"
                data-upload-url="{% url 'qa_attachment_upload' %}"
                data-csrf="{{ csrf_token }}"
+               data-mention-url="{% url 'qa_mention_users' %}"
                data-placeholder="Describe the bug, steps to reproduce, and attach screenshots…"></div>
           <textarea id="tBody" name="body_html" hidden></textarea>
         </div>

@@ -9,6 +9,8 @@ Shared page context comes from :func:`accounts.views._app_ctx`; importing it her
 is one-way (``views`` never imports this module), so there is no import cycle.
 """
 
+import re
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -37,9 +39,15 @@ STATUS_COLUMNS = [
 # --------------------------------------------------------------------------- #
 # Notifications fan-out
 # --------------------------------------------------------------------------- #
-def _notify(actor, ticket, kind, text):
-    """Create one notification per active user except the actor (fan-out)."""
+def _notify(actor, ticket, kind, text, exclude_pks=None):
+    """Create one notification per active user except the actor (fan-out).
+
+    ``exclude_pks`` skips recipients already getting a higher-signal row for the
+    same event (an @mention), so they see one bell entry rather than two.
+    """
     recipients = User.objects.filter(is_active=True).exclude(pk=actor.pk)
+    if exclude_pks:
+        recipients = recipients.exclude(pk__in=exclude_pks)
     Notification.objects.bulk_create(
         [
             Notification(
@@ -48,6 +56,48 @@ def _notify(actor, ticket, kind, text):
             for u in recipients
         ]
     )
+
+
+# --------------------------------------------------------------------------- #
+# @mentions
+# --------------------------------------------------------------------------- #
+# Mention tokens are <span class="rt-mention" data-username="…">@name</span>
+# emitted by the editor; we also accept a plain "@username" typed by hand so a
+# mention still lands if the token never formed. Both are resolved against real
+# active accounts, so an unknown handle quietly notifies no one.
+_MENTION_TOKEN_RE = re.compile(r'data-username="([^"]+)"')
+_MENTION_TEXT_RE = re.compile(r"(?:^|[\s>(\u00a0])@([\w.@+\-]{1,150})")
+
+
+def _mentioned_users(html, *, exclude=None):
+    """Return the active users referenced by @mentions in ``html``."""
+    if not html:
+        return []
+    names = set(_MENTION_TOKEN_RE.findall(html))
+    names.update(_MENTION_TEXT_RE.findall(html))
+    if not names:
+        return []
+    qs = User.objects.filter(is_active=True, username__in=names)
+    if exclude is not None:
+        qs = qs.exclude(pk=exclude.pk)
+    return list(qs)
+
+
+def _notify_mentions(actor, ticket, users, text):
+    """Fan a MENTIONED notification out to a specific set of users (not actor)."""
+    rows = [
+        Notification(
+            recipient=u,
+            actor=actor,
+            ticket=ticket,
+            kind=Notification.Kind.MENTIONED,
+            text=text,
+        )
+        for u in users
+        if u.pk != actor.pk
+    ]
+    if rows:
+        Notification.objects.bulk_create(rows)
 
 
 # --------------------------------------------------------------------------- #
@@ -167,12 +217,21 @@ def ticket_create(request):
         priority=priority,
         created_by=request.user,
     )
+    mentioned = _mentioned_users(body_html, exclude=request.user)
     _notify(
         request.user,
         ticket,
         Notification.Kind.TICKET_CREATED,
         f"{request.user.username} filed “{title[:80]}” on {scraper.name}",
+        exclude_pks={u.pk for u in mentioned},
     )
+    if mentioned:
+        _notify_mentions(
+            request.user,
+            ticket,
+            mentioned,
+            f"{request.user.username} mentioned you in “{title[:80]}”",
+        )
     messages.success(request, "Ticket created.")
     return redirect("qa_ticket", uuid=ticket.uuid)
 
@@ -224,6 +283,7 @@ def ticket_edit(request, uuid):
         priority = ticket.priority
 
     status_changed = status != ticket.status
+    old_mention_pks = {u.pk for u in _mentioned_users(ticket.body_html)}
 
     ticket.scraper = scraper
     ticket.title = title[:200]
@@ -247,6 +307,18 @@ def ticket_edit(request, uuid):
             ticket,
             Notification.Kind.STATUS_CHANGED,
             f"{request.user.username} moved “{ticket.title[:50]}” to {ticket.get_status_display()}",
+        )
+    new_mentions = [
+        u
+        for u in _mentioned_users(body_html, exclude=request.user)
+        if u.pk not in old_mention_pks
+    ]
+    if new_mentions:
+        _notify_mentions(
+            request.user,
+            ticket,
+            new_mentions,
+            f"{request.user.username} mentioned you in “{ticket.title[:80]}”",
         )
     messages.success(request, "Ticket updated.")
     return redirect("qa_ticket", uuid=ticket.uuid)
@@ -322,17 +394,39 @@ def comment_add(request, uuid):
     if is_blank_html(body):
         messages.error(request, "Write something before posting a comment.")
         return redirect("qa_ticket", uuid=ticket.uuid)
+    cleaned = clean_html(body)
     TicketComment.objects.create(
-        ticket=ticket, author=request.user, body_html=clean_html(body)
+        ticket=ticket, author=request.user, body_html=cleaned
     )
+    mentioned = _mentioned_users(cleaned, exclude=request.user)
     _notify(
         request.user,
         ticket,
         Notification.Kind.COMMENT_ADDED,
         f"{request.user.username} commented on “{ticket.title[:80]}”",
+        exclude_pks={u.pk for u in mentioned},
     )
+    if mentioned:
+        _notify_mentions(
+            request.user,
+            ticket,
+            mentioned,
+            f"{request.user.username} mentioned you in a comment on “{ticket.title[:80]}”",
+        )
     messages.success(request, "Comment posted.")
     return redirect(reverse("qa_ticket", args=[ticket.uuid]) + "#comments")
+
+
+@login_required
+def mention_users(request):
+    """Active accounts for the @mention autocomplete (username + display label)."""
+    out = []
+    for u in User.objects.filter(is_active=True).order_by("username"):
+        full = (u.get_full_name() or "").strip()
+        out.append(
+            {"username": u.username, "label": f"{full} (@{u.username})" if full else u.username}
+        )
+    return JsonResponse({"users": out})
 
 
 # --------------------------------------------------------------------------- #

@@ -14,3 +14,11 @@ QA ticket/comment rich text comes from an in-browser Quill editor (untrusted), i
 
 **Formatting is also allowlisted.** Tags/attributes live in `ALLOWED_TAGS` / `ALLOWED_ATTRIBUTES`, plus `ql-*` classes and a tiny inline-CSS safelist (`text-align`, `color`, `background-color`). Quill 2 renders both list kinds as `<ol>` and marks the kind via `li[data-list=ordered|bullet]`, so that attr is allowlisted.
 - **How to apply:** adding a new toolbar format (e.g. a new block) usually needs matching tag/attr/`ql-*` allowlist updates or the formatting drops on save.
+
+**@mention tokens are part of that same allowlist.** A mention is a `<span class="rt-mention" data-username="…">@name</span>` (a registered Quill Embed blot). The sanitizer must keep both the `rt-mention` class and a username-validated `data-username` on `<span>`, or the whole mention is silently stripped on save and no one is notified.
+- **Why:** `data-username` is a new stored-HTML surface; it is span-only and regex-validated against the Django username charset to keep it from becoming an injection vector.
+- **How to apply:** server extraction reads `data-username` first, then falls back to plain `@username` text — both resolved against *active* users only, so an unknown/inactive handle quietly notifies no one.
+
+**Mention notifications suppress the generic fan-out for the mentioned user.** On ticket-create / comment-add, a user who is @mentioned is excluded (`_notify(..., exclude_pks=…)`) from the team-wide `TICKET_CREATED` / `COMMENT_ADDED` row and gets only the higher-signal `MENTIONED` row — one bell entry, not two.
+- **Why:** the mention links to the same ticket as the generic row, so two rows for one event is pure noise.
+- **How to apply:** keep mention resolution *before* the `_notify` fan-out so the exclude set exists; on edit, only NEW mentions (vs the pre-edit body's mentioned PKs) notify, so re-saving never re-spams.

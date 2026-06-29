@@ -588,6 +588,7 @@ class Notification(models.Model):
         TICKET_CREATED = "ticket_created", "New ticket"
         COMMENT_ADDED = "comment_added", "New comment"
         STATUS_CHANGED = "status_changed", "Status changed"
+        MENTIONED = "mentioned", "Mention"
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,

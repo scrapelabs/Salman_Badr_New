@@ -94,6 +94,7 @@
                data-target="#cBody"
                data-upload-url="{% url 'qa_attachment_upload' %}"
                data-csrf="{{ csrf_token }}"
+               data-mention-url="{% url 'qa_mention_users' %}"
                data-placeholder="Write a comment, paste or attach a screenshot…"></div>
           <textarea id="cBody" name="body_html" hidden></textarea>
           <div class="qa-comment-actions">
@@ -195,6 +196,7 @@
                data-target="#eBody"
                data-upload-url="{% url 'qa_attachment_upload' %}"
                data-csrf="{{ csrf_token }}"
+               data-mention-url="{% url 'qa_mention_users' %}"
                data-placeholder="Describe the bug, steps to reproduce, and attach screenshots…"></div>
           <textarea id="eBody" name="body_html" hidden>{{ ticket.body_html }}</textarea>
         </div>
