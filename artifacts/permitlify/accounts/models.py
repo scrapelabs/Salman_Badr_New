@@ -423,12 +423,20 @@ class QueueState(models.Model):
     transaction (``_dispatch_next``), giving every worker one shared gate. The
     gate is closed once the global request-thread usage reaches the HIGH cap and
     reopens only when it drains back to the LOW watermark.
+
+    ``seeded`` records whether the gate has been reconciled from the live thread
+    count at least once. A brand-new row (fresh DB, or the deploy that first
+    creates this singleton) defaults the gate *open*; if that deploy lands while
+    request jobs are already mid-band the open default would wrongly admit more
+    churn. The dispatcher therefore treats an unseeded row as "unknown" and
+    rebuilds the gate from live state on its first pass (see ``_dispatch_next``).
     """
 
     SINGLETON_ID = 1
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_ID)
     request_gate_open = models.BooleanField(default=True)
+    seeded = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

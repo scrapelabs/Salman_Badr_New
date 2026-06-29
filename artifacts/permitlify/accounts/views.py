@@ -517,13 +517,26 @@ def _dispatch_next(*, blocking=True):
             # serialises every dispatcher, so we are the only writer right now.
             gate = QueueState.load()
             gate_open = gate.request_gate_open
+            need_seed = not gate.seeded
 
-            # Update the gate from live state: close at the HIGH cap, reopen only
-            # once drained to LOW, otherwise hold the previous state.
-            if threads_in_use >= REQUEST_THREAD_CAP_HIGH:
-                gate_open = False
-            elif threads_in_use <= REQUEST_THREAD_RESUME_LOW:
-                gate_open = True
+            if need_seed:
+                # First dispatch since this gate row was created — fresh DB, or
+                # the deploy/migration that first introduced the singleton. The
+                # default is "open", but if that landed while request jobs were
+                # already mid-band we'd wrongly admit more churn. We can't
+                # reconstruct the pre-restart band, so reconcile conservatively
+                # from the live thread count: only the drained-to-LOW state is
+                # safely "open"; anything above LOW (mid-band or at/over HIGH)
+                # starts closed so the queue drains before re-admitting. Persist
+                # the reconciliation so every worker stops treating it as unknown.
+                gate_open = threads_in_use <= REQUEST_THREAD_RESUME_LOW
+            else:
+                # Steady-state hysteresis: close at the HIGH cap, reopen only
+                # once drained to LOW, otherwise hold the previous state.
+                if threads_in_use >= REQUEST_THREAD_CAP_HIGH:
+                    gate_open = False
+                elif threads_in_use <= REQUEST_THREAD_RESUME_LOW:
+                    gate_open = True
 
             queued = (
                 Run.objects.select_for_update(skip_locked=True)
@@ -566,11 +579,15 @@ def _dispatch_next(*, blocking=True):
                 if threads_in_use >= REQUEST_THREAD_CAP_HIGH:
                     gate_open = False
 
-            # Persist the gate only when it actually flipped, so we avoid a write
-            # (and an updated_at churn) on every dispatch cycle.
-            if gate_open != gate.request_gate_open:
+            # Persist the gate only when it actually flipped (or on the first
+            # reconciliation), so we avoid a write — and an updated_at churn — on
+            # every dispatch cycle.
+            if gate_open != gate.request_gate_open or need_seed:
                 gate.request_gate_open = gate_open
-                gate.save(update_fields=["request_gate_open", "updated_at"])
+                gate.seeded = True
+                gate.save(
+                    update_fields=["request_gate_open", "seeded", "updated_at"]
+                )
     except Exception:  # noqa: BLE001
         logger.exception("Queue dispatch failed.")
         return []

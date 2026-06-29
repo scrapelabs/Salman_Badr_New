@@ -38,11 +38,24 @@ advisory-locked txn — that lock is the serialization primitive, so no
 (`save(update_fields=["request_gate_open","updated_at"])`) to avoid write churn.
 If you ever add admin/manual editing of `QueueState`, take the same lock.
 
-**Caveat:** on a live migration with request jobs already mid-band (11-29
-threads) the singleton defaults open and can't reconstruct a previously-closed
-in-memory gate. Hard HIGH cap still enforced; only exact hysteresis continuity
-across that one deploy is lost. Seed `QueueState` during maintenance if it
-matters.
+**Startup reconciliation (deploy/restart fairness):** a brand-new `QueueState`
+row (fresh DB, or the deploy that first created the singleton) defaults
+`request_gate_open=True`. If that landed while request jobs were already mid-band
+(11-29 threads) the open default would briefly admit more churn than intended.
+To avoid that, the row carries a `seeded` flag and the gate is reconciled from
+the **live thread count** the first time it's used:
+
+- **Policy:** only a drained-to-LOW count (`threads_in_use <= LOW`) seeds the gate
+  *open*; anything above LOW — mid-band OR at/over HIGH — seeds it *closed*, so the
+  queue drains before re-admitting. Conservative on purpose: we can't reconstruct
+  the pre-restart band, so we never re-open mid-load.
+- **Two seed points, same policy:** (1) data migration `0043_queuestate_seeded`
+  reconciles the singleton at migrate time (the actual deploy-mid-load moment),
+  reading RUNNING non-browser runs; (2) `_dispatch_next` reconciles on its first
+  pass for any unseeded row (fresh DB / wiped row), inside the advisory-locked txn.
+- Once `seeded=True` the normal HIGH/LOW hysteresis takes over and the reconcile
+  never runs again — it's a one-time, globally-shared (DB) event, not per-process,
+  so a late-starting worker can't clobber a legitimately-open gate.
 
 ## Cancelling a QUEUED job
 
