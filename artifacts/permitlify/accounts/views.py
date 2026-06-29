@@ -123,9 +123,11 @@ SCHEDULE_TIMEZONES = [
 
 # Date-range run inputs (date_range / date_range_or_url scrapers).
 DEFAULT_RANGE_DAYS = 30   # webhook window when a scheduled call omits dates
+BIWEEKLY_DEFAULT_DAYS = 15  # rolling-window size when bi_weekly omits a day count
 MAX_RANGE_DAYS = 400      # reject absurd windows
 MAX_URL_LEN = 2048
 MAX_API_KEY_LEN = 200     # cap a user-supplied feed API key
+MAX_TEXT_FIELD_LEN = 100  # cap a free-text inert field (state / country)
 FEED_GENDERS = ("both", "boys", "girls")  # feed gender selector options
 MONTHS = [
     (1, "January"), (2, "February"), (3, "March"), (4, "April"),
@@ -777,6 +779,18 @@ def _run_form_ctx(s, spec, ctx):
     ctx["feed_api_key_default"] = spec.feed_api_key_default
     ctx["feed_gender"] = spec.feed_gender
     ctx["default_gender"] = "both"
+    # Singles / Doubles / Both selector (rank-snapshot + maxpreps).
+    ctx["rank_type"] = spec.rank_type
+    ctx["default_rank_type"] = "both"
+    # bi_weekly rolling-window toggle (date-range scrapers).
+    ctx["bi_weekly"] = spec.bi_weekly
+    ctx["default_bi_weekly_days"] = BIWEEKLY_DEFAULT_DAYS
+    ctx["max_range_days"] = MAX_RANGE_DAYS
+    # Inert State / Country text fields (brazil/uruguay year+month forms).
+    ctx["wants_state"] = spec.wants_state
+    ctx["wants_country"] = spec.wants_country
+    ctx["default_state"] = ""
+    ctx["default_country"] = ""
     return ctx
 
 
@@ -1210,6 +1224,7 @@ def scraper_detail_view(request, slug):
             url_required=spec.url_required,
             feed_api_key=spec.feed_api_key,
             feed_gender=spec.feed_gender,
+            bi_weekly=spec.bi_weekly,
         )
         # In-app scheduler config + dropdown choices for the "Run automatically"
         # card. The schedule row is created lazily so every scraper has one.
@@ -1495,6 +1510,54 @@ def _parse_time_of_day(raw, fallback):
     return fallback
 
 
+def _normalize_rank_type(raw, *, default="both"):
+    """A Singles / Doubles / Both selector (blank -> default)."""
+    rt = (raw or "").strip().lower()
+    if not rt:
+        return default
+    if rt not in ("singles", "doubles", "both"):
+        raise RunStartError(
+            "invalid_rank_type", "Rank type must be singles, doubles, or both.", 400
+        )
+    return rt
+
+
+def _parse_biweekly_days(raw, *, default=BIWEEKLY_DEFAULT_DAYS):
+    """The rolling-window size in days (1..MAX_RANGE_DAYS; blank -> default)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return default
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        raise RunStartError(
+            "invalid_window",
+            "The rolling-window size must be a whole number of days.",
+            400,
+        )
+    if n < 1 or n > MAX_RANGE_DAYS:
+        raise RunStartError(
+            "invalid_window",
+            f"The rolling-window size must be between 1 and {MAX_RANGE_DAYS} days.",
+            400,
+        )
+    return n
+
+
+def _year_month_extras(spec, get):
+    """Collect the (inert) State / Country fields for year+month scrapers.
+
+    These are carried on ``Run.params`` for display/parity with the supplied spec
+    but do not change what the scraper fetches.
+    """
+    extra = {}
+    if spec.wants_state:
+        extra["state"] = (get("state") or "").strip()[:MAX_TEXT_FIELD_LEN]
+    if spec.wants_country:
+        extra["country"] = (get("country") or "").strip()[:MAX_TEXT_FIELD_LEN]
+    return extra
+
+
 def validate_run_params(spec, data, *, webhook=False):
     """Validate the start inputs for ``spec`` from a dict-like ``data``.
 
@@ -1506,18 +1569,29 @@ def validate_run_params(spec, data, *, webhook=False):
     kind = spec.input_kind
     get = data.get
 
+    if kind == registry.INPUT_NONE:
+        # This scraper takes no inputs — it always fetches the current data
+        # (e.g. padelfip world rankings). The runner derives any date itself.
+        return RunInputs(
+            params={},
+            date_from=None,
+            date_to=None,
+            tournament="rankings",
+        )
+
     if kind == registry.INPUT_YEAR_MONTH:
         year = _parse_year(get("year"), default_current=webhook)
         month = _parse_month(get("month"), default_all=webhook)
+        extra = _year_month_extras(spec, get)
         if month:
             return RunInputs(
-                params={"year": year, "month": month},
+                params={"year": year, "month": month, **extra},
                 date_from=date(year, month, 1),
                 date_to=_month_end(year, month),
                 tournament=f"{year}-{month:02d}",
             )
         return RunInputs(
-            params={"year": year, "month": 0},
+            params={"year": year, "month": 0, **extra},
             date_from=date(year, 1, 1),
             date_to=date(year, 12, 31),
             tournament=f"{year} · all months",
@@ -1528,11 +1602,18 @@ def validate_run_params(spec, data, *, webhook=False):
             snap = timezone.localdate()
         else:
             snap = _parse_iso_date(get("snapshot_date"), "snapshot")
+        params = {"single_date": snap.isoformat()}
+        label = f"ranking @ {snap.isoformat()}"
+        if spec.rank_type:
+            rt = _normalize_rank_type(get("rank_type"))
+            params["rank_type"] = rt
+            if rt != "both":
+                label = f"{label} · {rt}"
         return RunInputs(
-            params={"single_date": snap.isoformat()},
+            params=params,
             date_from=snap,
             date_to=snap,
-            tournament=f"ranking @ {snap.isoformat()}",
+            tournament=label,
         )
 
     if kind == registry.INPUT_KEY_BATCH:
@@ -1585,11 +1666,21 @@ def validate_run_params(spec, data, *, webhook=False):
                 "URL — enter one to start the run.",
                 400,
             )
-        if (
-            webhook
-            and not (get("date_from") or "").strip()
-            and not (get("date_to") or "").strip()
-        ):
+        blank_dates = not (get("date_from") or "").strip() and not (
+            get("date_to") or ""
+        ).strip()
+        bw_on = spec.bi_weekly and (
+            get("bi_weekly_on") in ("on", "true", "1", True)
+            or (webhook and blank_dates)
+        )
+        bw_days = None
+        if bw_on:
+            # Rolling window: a trailing N-day span ending today, recomputed on
+            # every run so scheduled runs always grab the most recent N days.
+            bw_days = _parse_biweekly_days(get("bi_weekly_days"))
+            end = timezone.localdate()
+            start = end - timedelta(days=bw_days)
+        elif webhook and blank_dates:
             end = timezone.localdate()
             start = end - timedelta(days=DEFAULT_RANGE_DAYS)
         else:
@@ -1609,6 +1700,14 @@ def validate_run_params(spec, data, *, webhook=False):
             )
         params = {"date_from": start.isoformat(), "date_to": end.isoformat()}
         label = f"{start.isoformat()} → {end.isoformat()}"
+        if bw_on:
+            params["bi_weekly"] = bw_days
+            label = f"last {bw_days} days ({label})"
+        if spec.rank_type:
+            rt = _normalize_rank_type(get("rank_type"))
+            params["rank_type"] = rt
+            if rt != "both":
+                label = f"{label} · {rt}"
         if spec.feed_api_key:
             params["api_key"] = _normalize_feed_api_key(
                 get("api_key"), spec.feed_api_key_default
@@ -1870,6 +1969,8 @@ def _trigger_example_json(
         return "{%s}" % ",".join(parts)
     if input_kind == registry.INPUT_RANK_SNAPSHOT:
         return '{"snapshot_date":"%s"}' % defaults["snapshot_date"]
+    if input_kind == registry.INPUT_NONE:
+        return "{}"
     return '{"year":"%s"}' % defaults["year"]
 
 
@@ -1883,6 +1984,7 @@ def _github_workflow_yaml(
     url_required=False,
     feed_api_key=False,
     feed_gender=False,
+    bi_weekly=False,
 ):
     """Render the copy-ready GitHub Actions workflow shown on the Schedule tab.
 
@@ -1929,11 +2031,13 @@ def _github_workflow_yaml(
             # empty window — the server then computes a fresh trailing window
             # (ending today) on every run, instead of freezing the dates that were
             # baked in when this YAML was generated. Manual dispatch can still type
-            # exact dates (fill both together).
+            # exact dates (fill both together). bi_weekly scrapers default to a
+            # shorter rolling window.
+            win = BIWEEKLY_DEFAULT_DAYS if bi_weekly else DEFAULT_RANGE_DAYS
             inputs = (
                 f"    inputs:\n"
                 f"      date_from:\n"
-                f'        description: "Start date (YYYY-MM-DD; blank = last {DEFAULT_RANGE_DAYS} days)"\n'
+                f'        description: "Start date (YYYY-MM-DD; blank = last {win} days)"\n'
                 f"        required: false\n"
                 f'        default: ""\n'
                 f"      date_to:\n"
@@ -1990,6 +2094,11 @@ def _github_workflow_yaml(
             f"${{{{ github.event.inputs.snapshot_date || '{ds}' }}}}\n"
         )
         data = '{\\"snapshot_date\\":\\"$SNAPSHOT_DATE\\"}'
+    elif input_kind == registry.INPUT_NONE:
+        # No inputs — a manual dispatch posts an empty JSON body.
+        inputs = ""
+        env = ""
+        data = "{}"
     else:  # INPUT_YEAR
         dy = defaults["year"]
         inputs = (

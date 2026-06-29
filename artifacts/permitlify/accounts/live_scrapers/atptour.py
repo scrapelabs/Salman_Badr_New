@@ -162,7 +162,7 @@ def run(run_obj, log):
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering ranked players \u2500\u2500\u2500\u2500")
     players = []
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
-        for rank_type in _rankings.RANK_TYPES:
+        for rank_type in _rankings.resolve_rank_types(run_obj):
             players.extend(_discover(discovery, rank_type, date_week, date_iso, log))
 
     total = len(players)

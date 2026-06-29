@@ -48,6 +48,22 @@ def snapshot_date(run_obj):
     return run_obj.date_from or timezone.localdate()
 
 
+def resolve_rank_types(run_obj):
+    """The ranking tables to collect for a run.
+
+    Honours an optional ``rank_type`` param (``singles`` / ``doubles`` / ``both``)
+    recorded by the start form / webhook; anything else (blank / ``both`` /
+    unknown) collects both tables, preserving the historical default.
+    """
+    params = run_obj.params or {}
+    rt = (params.get("rank_type") or "").strip().lower()
+    if rt == "singles":
+        return ("singles",)
+    if rt == "doubles":
+        return ("doubles",)
+    return RANK_TYPES
+
+
 def to_mdy(raw, in_format):
     """Reformat ``raw`` from ``in_format`` to ``m/d/Y`` (zero-padded) or ''.
 

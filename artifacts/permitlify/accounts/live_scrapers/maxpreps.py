@@ -92,9 +92,32 @@ HEADER = [c.replace("_", " ").title() for c in COLUMNS]
 # ---------------------------------------------------------------------------
 # Deterministic helpers (AI-free ports of the source's formatters)
 # ---------------------------------------------------------------------------
-def _api_key():
-    """The MaxPreps feed API key, with a settings override."""
-    return getattr(settings, "MAXPREPS_API_KEY", MAXPREPS_API_KEY)
+def _api_key(params=None):
+    """The MaxPreps feed API key.
+
+    Prefers a run-supplied ``api_key`` param (start form / webhook), then a
+    ``settings.MAXPREPS_API_KEY`` override, then the module default.
+    """
+    params = params or {}
+    return (
+        (params.get("api_key") or "").strip()
+        or (getattr(settings, "MAXPREPS_API_KEY", "") or "").strip()
+        or MAXPREPS_API_KEY
+    )
+
+
+def _match_types(params):
+    """The match-type feeds to scrape (Singles / Doubles / both).
+
+    Honours an optional ``rank_type`` param (``singles`` / ``doubles`` / ``both``);
+    anything else collects both feeds, preserving the historical default.
+    """
+    rt = (params.get("rank_type") or "").strip().lower()
+    if rt == "singles":
+        return ("Singles",)
+    if rt == "doubles":
+        return ("Doubles",)
+    return MATCH_TYPES
 
 
 def _feed_ssid(params):
@@ -324,19 +347,20 @@ def run(run_obj, log):
         start_d, end_d = end_d, start_d
 
     ssid = _feed_ssid(params)
-    api_key = _api_key()
+    api_key = _api_key(params)
+    match_types = _match_types(params)
     proxies = build_proxies(scraper, log)
 
-    # One task per (match-type, day); the source requests both feeds for every
-    # day in the window.
+    # One task per (match-type, day); the source requests the selected feeds for
+    # every day in the window (both Singles and Doubles unless rank_type narrows it).
     tasks = [
         (job_type, job_date)
-        for job_type in MATCH_TYPES
+        for job_type in match_types
         for job_date in _date_window(start_d, end_d)
     ]
     total = len(tasks)
     Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
-    log("INFO", f"\U0001f4cb {total} feed request(s) queued ({len(MATCH_TYPES)} type(s) \u00d7 days)")
+    log("INFO", f"\U0001f4cb {total} feed request(s) queued ({len(match_types)} type(s) \u00d7 days)")
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")

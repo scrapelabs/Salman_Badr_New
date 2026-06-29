@@ -27,6 +27,7 @@ INPUT_DATE_RANGE = "date_range"                # a from/to calendar window
 INPUT_DATE_RANGE_OR_URL = "date_range_or_url"  # a tournament URL OR a date window
 INPUT_RANK_SNAPSHOT = "rank_snapshot"          # a single ranking-snapshot date
 INPUT_KEY_BATCH = "key_batch"                  # a batch of SportyHQ tournament keys
+INPUT_NONE = "none"                            # no inputs (always scrapes current data)
 
 INPUT_KINDS = frozenset(
     {
@@ -36,6 +37,7 @@ INPUT_KINDS = frozenset(
         INPUT_DATE_RANGE_OR_URL,
         INPUT_RANK_SNAPSHOT,
         INPUT_KEY_BATCH,
+        INPUT_NONE,
     }
 )
 
@@ -68,6 +70,10 @@ class ScraperSpec:
     has_key_store: bool = False        # queue-driven over SAKey rows + a "Key queue" tab
     model_upload_label: str = ""       # surface a model-file upload field on the Settings tab
     model_filename: str = ""           # canonical on-disk filename the uploaded model is saved as
+    rank_type: bool = False            # surface a singles / doubles / both selector
+    bi_weekly: bool = False            # surface a rolling-window (last N days) toggle
+    wants_state: bool = False          # surface a State field (inert: the runner ignores it)
+    wants_country: bool = False        # surface a Country field (inert: the runner ignores it)
 
     def load_runner(self):
         """Import and return the runner ``run(run_obj, log)``.
@@ -99,11 +105,15 @@ SPECS = {
         slug="brazil_results",
         input_kind=INPUT_YEAR_MONTH,
         runner_path="accounts.live_scrapers.brazil_results:run",
+        wants_state=True,
+        wants_country=True,
     ),
     "uruguay_results": ScraperSpec(
         slug="uruguay_results",
         input_kind=INPUT_YEAR_MONTH,
         runner_path="accounts.live_scrapers.uruguay_results:run",
+        wants_state=True,
+        wants_country=True,
     ),
     "croatia_league": ScraperSpec(
         slug="croatia_league",
@@ -141,42 +151,49 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.croatia_tournament:run",
         allowed_hosts=("hts.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "denmark_tournament": ScraperSpec(
         slug="denmark_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.denmark_tournament:run",
         allowed_hosts=("dtf.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "sweden_tournament": ScraperSpec(
         slug="sweden_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.sweden_tournament:run",
         allowed_hosts=("svtf.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "hong_kong_tournament": ScraperSpec(
         slug="hong_kong_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.hong_kong_tournament:run",
         allowed_hosts=("hkta.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "finland_tournament": ScraperSpec(
         slug="finland_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.finland_tournament:run",
         allowed_hosts=("www.tennisassa.fi", "tennisassa.fi"),
+        bi_weekly=True,
     ),
     "ireland_tournament": ScraperSpec(
         slug="ireland_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.ireland_tournament:run",
         allowed_hosts=("ti.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "luxembourg_tournament": ScraperSpec(
         slug="luxembourg_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.luxembourg_tournament:run",
         allowed_hosts=("flt.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     # --- dynamic-country tournamentsoftware.com sites (shared engine) -----
     # One host aggregates tournaments from many countries; country is read
@@ -186,24 +203,28 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.glta_tournament:run",
         allowed_hosts=("glta.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "tennis_europe": ScraperSpec(
         slug="tennis_europe",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.tennis_europe:run",
         allowed_hosts=("te.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "cosat_tournament": ScraperSpec(
         slug="cosat_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.cosat_tournament:run",
         allowed_hosts=("cosat.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     "itf_juniors_tournament_software": ScraperSpec(
         slug="itf_juniors_tournament_software",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.itf_juniors_tournament_software:run",
         allowed_hosts=("itfjuniors.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     # --- itftennis.com circuits (shared engine, parameterised by circuit) -
     "itftennis_juniors": ScraperSpec(
@@ -212,6 +233,7 @@ SPECS = {
         runner_path="accounts.live_scrapers.itftennis_juniors:run",
         allowed_hosts=("www.itftennis.com",),
         uses_browser=True,
+        bi_weekly=True,
     ),
     "itftennis_masters": ScraperSpec(
         slug="itftennis_masters",
@@ -219,6 +241,7 @@ SPECS = {
         runner_path="accounts.live_scrapers.itftennis_masters:run",
         allowed_hosts=("www.itftennis.com",),
         uses_browser=True,
+        bi_weekly=True,
     ),
     "itftennis_mens": ScraperSpec(
         slug="itftennis_mens",
@@ -226,6 +249,7 @@ SPECS = {
         runner_path="accounts.live_scrapers.itftennis_mens:run",
         allowed_hosts=("www.itftennis.com",),
         uses_browser=True,
+        bi_weekly=True,
     ),
     "itftennis_womens": ScraperSpec(
         slug="itftennis_womens",
@@ -233,6 +257,7 @@ SPECS = {
         runner_path="accounts.live_scrapers.itftennis_womens:run",
         allowed_hosts=("www.itftennis.com",),
         uses_browser=True,
+        bi_weekly=True,
     ),
     # --- ioncourt.com JSON API (college dual matches) ---------------------
     # A pure date-range scraper (no tournament URL). No host allowlist: it
@@ -281,6 +306,11 @@ SPECS = {
         slug="maxpreps",
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.maxpreps:run",
+        feed_api_key=True,
+        # Non-secret feed key baked into the source URL; mirrors
+        # maxpreps.MAXPREPS_API_KEY so the form can prefill it.
+        feed_api_key_default="50B280F4-5F20-4191-8AEC-726AA3AD800C",
+        rank_type=True,
     ),
     "new_jersey_high_school": ScraperSpec(
         slug="new_jersey_high_school",
@@ -299,6 +329,7 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.estonia_tournament:run",
         allowed_hosts=("etl.tournamentsoftware.com",),
+        bi_weekly=True,
     ),
     # --- player-ranking snapshots (singles + doubles in one run) ----------
     # Not match results: a single snapshot date yields a 9-column ranking
@@ -309,17 +340,19 @@ SPECS = {
         slug="wtatennis",
         input_kind=INPUT_RANK_SNAPSHOT,
         runner_path="accounts.live_scrapers.wtatennis:run",
+        rank_type=True,
     ),
     "atptour": ScraperSpec(
         slug="atptour",
         input_kind=INPUT_RANK_SNAPSHOT,
         runner_path="accounts.live_scrapers.atptour:run",
+        rank_type=True,
     ),
     # padelfip: FIP world padel rankings (www.padelfip.com WordPress API).
     # A rank-snapshot scraper like wtatennis; only calls its own host.
     "padelfip": ScraperSpec(
         slug="padelfip",
-        input_kind=INPUT_RANK_SNAPSHOT,
+        input_kind=INPUT_NONE,
         runner_path="accounts.live_scrapers.padelfip:run",
     ),
     # --- Tennis Australia (Azure Blob match feed) -------------------------

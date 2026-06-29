@@ -43,3 +43,29 @@ dates; partial (one blank) still 400s on purpose. This blank-date emission appli
 **every** date_range scraper's generated YAML (a general correctness fix, not NJ-only) —
 no date_range runner requires non-blank dates because the webhook materialises concrete
 dates onto the Run before the worker starts.
+
+## The GitHub/curl schedule YAML is computed but NO LONGER surfaced in the UI
+
+`_github_workflow_yaml` is still built into `_run_form_ctx` context, but **no template
+renders it** (`scraper_detail.html` has zero `workflow_yaml`/`workflow_dispatch`
+references — the in-app scheduler replaced it). So the older "mirror across BOTH schedule
+generators" lockstep is now only *internal hygiene*, not user-facing: a new run-form
+param that you forget to plumb into the YAML generator will NOT hand the user a broken
+payload (there is no payload shown). Keep the generator internally correct when cheap,
+but the load-bearing lockstep is: registry flag → start form → `validate_run_params` →
+realtime ctx defaults → toggle JS. The webhook (`validate_run_params(..., webhook=True)`)
+is the real programmatic surface, not the dead YAML.
+
+## Run-form param flags follow this same lockstep; some are intentionally INERT
+
+`ScraperSpec` carries param flags (`rank_type`, `bi_weekly`, `wants_state`,
+`wants_country`, plus the feed ones) all wired form→ctx→validate→toggle-JS, riding
+`Run.params` (JSONField, no migration). **`rank_type` default is `both`** — preserve that
+or you silently change historical scrape scope (wtatennis/atptour via
+`_rankings.resolve_rank_types`; maxpreps via `_match_types`, both keying off
+`params["rank_type"]`). **State/Country (brazil/uruguay) are deliberately INERT**: stored
+on `Run.params` for spec parity / display only, never read by the runner — don't "fix"
+them into filters. `bi_weekly` = a rolling trailing-N-day window recomputed every run
+(checkbox `bi_weekly_on` + `bi_weekly_days`, or webhook blank-dates), shares
+`.rt-dates-group` so the URL-mode toggle hides it, with `.rt-date-field` vs
+`.rt-biweekly-days` chosen by the biweekly toggle inside date mode.

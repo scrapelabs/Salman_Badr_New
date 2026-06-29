@@ -63,7 +63,7 @@ def run(run_obj, log):
 
     csv_out = _rankings.RankingsCsv()
     with ScraperClient(log=log, tele=tele, proxies=proxies) as client:
-        for rank_type in _rankings.RANK_TYPES:
+        for rank_type in _rankings.resolve_rank_types(run_obj):
             log("INFO", f"\u2500\u2500\u2500\u2500 {rank_type} table \u2500\u2500\u2500\u2500")
             seen = set()
             kept_before = csv_out.row_count

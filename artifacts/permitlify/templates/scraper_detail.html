@@ -1332,37 +1332,63 @@
 <script>
 (function () {
   function wire(form) {
-    if (!form.querySelector('[data-mode-toggle]')) return;
+    var hasMode = !!form.querySelector('[data-mode-toggle]');
+    var bwToggle = form.querySelector('[data-biweekly-toggle]');
+    if (!hasMode && !bwToggle) return;
     var radios = form.querySelectorAll('input[name="input_mode"]');
     var urlGroups = form.querySelectorAll('.rt-url-group');
-    var dateGroups = form.querySelectorAll('.rt-dates-group');
+    var allDateGroups = form.querySelectorAll('.rt-dates-group');
     var urlInput = form.querySelector('[name="tournament_url"]');
-    var dateInputs = form.querySelectorAll('.rt-dates-group [type="date"]');
+    // .rt-date-field = the From / To pickers; .rt-biweekly-days = the rolling
+    // "Window (days)" field. Both carry .rt-dates-group so the URL toggle hides
+    // the whole date side; the biweekly toggle then picks WHICH of the two shows.
+    var dateFieldGroups = form.querySelectorAll('.rt-date-field');
+    var dateInputs = form.querySelectorAll('.rt-date-field [type="date"]');
+    var bwDaysGroups = form.querySelectorAll('.rt-biweekly-days');
     function showGroups(list, on) {
       for (var i = 0; i < list.length; i++) list[i].classList.toggle('rt-hide', !on);
     }
-    function apply(mode) {
-      var urlMode = mode === 'url';
-      showGroups(urlGroups, urlMode);
-      showGroups(dateGroups, !urlMode);
-      if (urlMode) {
+    function applyBiweekly() {
+      var on = !!(bwToggle && bwToggle.checked);
+      // Rolling window on -> hide From/To (and clear them) + show the days field.
+      // Off -> show From/To (restore defaults) + hide the days field.
+      showGroups(dateFieldGroups, !on);
+      showGroups(bwDaysGroups, on);
+      if (on) {
         for (var i = 0; i < dateInputs.length; i++) dateInputs[i].value = '';
-        if (urlInput) urlInput.required = true;
       } else {
-        if (urlInput) { urlInput.value = ''; urlInput.required = false; }
         for (var j = 0; j < dateInputs.length; j++) {
           var di = dateInputs[j];
           if (!di.value && di.dataset.defaultDate) di.value = di.dataset.defaultDate;
         }
       }
     }
+    function applyMode(mode) {
+      var urlMode = mode === 'url';
+      showGroups(urlGroups, urlMode);
+      showGroups(allDateGroups, !urlMode);
+      if (urlMode) {
+        for (var i = 0; i < dateInputs.length; i++) dateInputs[i].value = '';
+        if (urlInput) urlInput.required = true;
+      } else {
+        if (urlInput) { urlInput.value = ''; urlInput.required = false; }
+        // Re-apply the biweekly split within date mode (URL toggle just made all
+        // date groups visible; biweekly decides From/To vs. the days field).
+        applyBiweekly();
+      }
+    }
+    if (bwToggle) bwToggle.addEventListener('change', applyBiweekly);
     for (var k = 0; k < radios.length; k++) {
       radios[k].addEventListener('change', function () {
-        if (this.checked) apply(this.value);
+        if (this.checked) applyMode(this.value);
       });
     }
-    var checked = form.querySelector('input[name="input_mode"]:checked');
-    apply(checked ? checked.value : 'dates');
+    if (hasMode) {
+      var checked = form.querySelector('input[name="input_mode"]:checked');
+      applyMode(checked ? checked.value : 'dates');
+    } else {
+      applyBiweekly();
+    }
   }
   function init() { document.querySelectorAll('form.rt-start').forEach(wire); }
   if (document.readyState === 'loading') {
