@@ -646,6 +646,9 @@ def scrapers_view(request):
 @login_required
 def live_stats_view(request):
     """JSON feed polled by the Overview + Scrapers pages for real-time stats."""
+    # Opportunistically pump the queue from these frequently-polled pages so the
+    # batch queue keeps draining even when no Lab tab is open (non-blocking).
+    _dispatch_next(blocking=False)
     threads_running, running_scrapers = _threads_running()
     today = timezone.localdate()
     scr_map = {
@@ -1029,13 +1032,14 @@ def scraper_detail_view(request, slug):
             ctx["log_page"] = paginator.get_page(request.GET.get("logpage"))
             ctx["log_total"] = len(log_lines)
         spec = registry.spec_for(slug)
-        # Mirror the backend browser-exclusivity guard in the UI: while a
-        # browser-based source (itftennis family) is RUNNING no other source may
-        # start, and a browser source can't start while ANY other run is live.
-        # Disable the start controls so the button isn't clickable into a 409.
+        # "Run now" always enqueues: a job that can't start immediately (this
+        # source already running, or a browser source holding the host) WAITS in
+        # the queue and dispatches automatically — it is never 409-blocked. So the
+        # start controls are disabled ONLY for maintenance; capacity contention is
+        # surfaced as an informational note, not a disabled button.
         blocker, this_uses_browser = _exclusivity_blocker(s)
         ctx["exclusivity_blocker"] = blocker
-        ctx["start_disabled"] = bool(s.is_maintenance or active_run or blocker)
+        ctx["start_disabled"] = bool(s.is_maintenance)
         if blocker is not None:
             ctx["start_block_msg"] = _exclusivity_block_msg(blocker, this_uses_browser)
         # The Real-time header carries a live badge of the currently-running job
@@ -1256,15 +1260,17 @@ def _exclusivity_blocker(scraper):
 
 
 def _exclusivity_block_msg(blocker, this_uses_browser):
-    """Human explanation for why the start controls are disabled right now."""
+    """Human explanation for why a new job would queue rather than start now."""
     if this_uses_browser:
         return (
             "This is a browser-based source and needs the server to itself, but "
-            f"“{blocker.scraper.name}” is running. Start is disabled until it finishes."
+            f"“{blocker.scraper.name}” is running. A new run will wait in the queue "
+            "and start automatically once the server is free."
         )
     return (
         f"A browser-based scrape (“{blocker.scraper.name}”) is running and needs the "
-        "server to itself. Start is disabled until it finishes."
+        "server to itself. A new run will wait in the queue and start automatically "
+        "once it finishes."
     )
 
 
@@ -1277,6 +1283,10 @@ def scraper_start_status_view(request, slug):
     runs elsewhere come and go — without a full page reload.
     """
     s = get_object_or_404(Scraper, slug=slug)
+    # Opportunistically pump the queue so an idle Lab page left open helps drain
+    # pending jobs even when nothing else is polling (non-blocking: defers if
+    # another dispatcher holds the lock).
+    _dispatch_next(blocking=False)
     _reap_stale_runs()
     blocker, this_uses_browser = _exclusivity_blocker(s)
     running = (

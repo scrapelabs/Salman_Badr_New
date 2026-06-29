@@ -284,20 +284,20 @@
           Run scrape
         </button>
       </div>
-      <p class="rt-start-note {% if s.is_maintenance %}is-warn{% elif active_run %}is-info{% elif exclusivity_blocker %}is-info{% else %}is-ready{% endif %}" id="rtStartNote">
+      <p class="rt-start-note {% if s.is_maintenance %}is-warn{% elif active_run or exclusivity_blocker %}is-info{% else %}is-ready{% endif %}" id="rtStartNote">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        <span id="rtStartNoteText">{% if s.is_maintenance %}Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.{% elif active_run %}A run is in progress — stop it or wait for it to finish before starting another.{% elif exclusivity_blocker %}{{ start_block_msg }}{% else %}The run starts immediately and streams its log in the console below.{% endif %}</span>
+        <span id="rtStartNoteText">{% if s.is_maintenance %}Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.{% elif active_run %}A run is in progress — a new job will be queued and start automatically once a slot frees up.{% elif exclusivity_blocker %}{{ start_block_msg }}{% else %}A job starts immediately when there's capacity, otherwise it waits in the queue and starts automatically once a slot frees up.{% endif %}</span>
       </p>
     </div>
   </form>
 
   {% if not active_run and not s.is_maintenance %}
   {% comment %}
-     Live exclusivity poll: a browser-based source (itftennis family) needs the
-     server to itself, so while one is RUNNING every other source's start button
-     is disabled — and re-enabled the moment that run stops or finishes, without
-     a manual refresh. Mirrors the backend guard so the button never sits clickable
-     into a guaranteed 409.
+     Live start poll: "Run now" always enqueues, so the button is only disabled
+     for maintenance. When a browser-based source (itftennis family) is holding
+     the host, the button STAYS clickable — a new job simply queues — and the note
+     explains it will start automatically once capacity frees up. Refreshes live
+     without a manual reload.
   {% endcomment %}
   <script>
   (function () {
@@ -308,7 +308,7 @@
     if (!btn || !form) return;
     var inputs = form.querySelectorAll('.rt-input');
     var url = "{% url 'scraper_start_status' s.slug %}";
-    var READY = 'The run starts immediately and streams its log in the console below.';
+    var READY = "A job starts immediately when there's capacity, otherwise it waits in the queue and starts automatically once a slot frees up.";
     var MAINT = 'Runs are blocked while this source is in maintenance. Re-enable it from the Status tab.';
     function setNote(kind, text) {
       if (note) note.className = 'rt-start-note is-' + kind;
@@ -327,11 +327,13 @@
           // console + stop controls.
           if (d.own_running) { window.location.reload(); return; }
           if (d.maintenance) {
+            // Maintenance is the ONLY state that disables the button.
             setDisabled(true);
             setNote('warn', MAINT);
           } else if (d.blocked) {
-            setDisabled(true);
-            setNote('info', d.block_msg || 'Start is disabled while a browser-based scrape is running.');
+            // Capacity contention is informational only — the job will queue.
+            setDisabled(false);
+            setNote('info', d.block_msg || 'A new run will wait in the queue and start automatically once the server is free.');
           } else {
             setDisabled(false);
             setNote('ready', READY);
