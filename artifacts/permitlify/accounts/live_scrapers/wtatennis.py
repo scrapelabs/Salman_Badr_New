@@ -48,7 +48,7 @@ def _row_from(result, rank_type):
         "points": result.get("points", "") or "",
         "rank": result.get("ranking", "") or "",
         "rankdate": _rankings.to_mdy(result.get("rankedAt", ""), "%Y-%m-%dT%H:%M:%SZ"),
-        "ranktype": rank_type,
+        "ranktype": (rank_type or "").capitalize(),
     }
 
 

@@ -162,7 +162,7 @@ def _enrich_one(client, player, bio_cache, cache_lock):
         "points": player.get("points", ""),
         "rank": player.get("rank", ""),
         "rankdate": player.get("range_date", ""),
-        "ranktype": player.get("rank_type", ""),
+        "ranktype": (player.get("rank_type", "") or "").capitalize(),
     }
 
 
