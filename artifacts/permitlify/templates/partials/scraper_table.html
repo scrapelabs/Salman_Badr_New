@@ -69,7 +69,7 @@ columns (asc/desc) and client-side pagination. Omit it for the small overview sn
         <td>{{ s.run_count }}</td>
         <td>{% if s.last_run_at %}{{ s.last_run_at|timesince }} ago{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="td-actions">
-          <a class="btn btn-ghost btn-sm" href="{% url 'scraper_detail' s.slug %}?tab=real-time">
+          <a class="btn btn-ghost btn-sm" href="{% url 'scraper_detail' s.slug %}?tab=batch">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v5.2a2 2 0 0 1-.3 1L5 18a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-4.7-8.8a2 2 0 0 1-.3-1V3"/></svg>
             Open lab
           </a>

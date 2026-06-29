@@ -308,7 +308,7 @@ def _run_brief(run):
         "rows": run.row_count,
         "duration_label": run.duration_label,
         "log_url": reverse("run_log", args=[run.scraper.slug, run.uuid]),
-        "detail_url": f"{reverse('scraper_detail', args=[run.scraper.slug])}?tab=real-time",
+        "detail_url": f"{reverse('scraper_detail', args=[run.scraper.slug])}?tab=batch",
     }
 
 
@@ -994,9 +994,11 @@ def scraper_detail_view(request, slug):
         messages.success(request, "Status updated.")
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=status")
 
-    tab = request.GET.get("tab", "real-time")
+    # Clicking a scraper lands on the Batch-jobs tab so the current status of its
+    # jobs (running / queued / recent) is the first thing shown.
+    tab = request.GET.get("tab", "batch")
     if tab not in TAB_LABELS:
-        tab = "real-time"
+        tab = "batch"
     # The Settings (routing & performance) tab is admin-only.
     if tab == "settings" and not request.user.is_superuser:
         return redirect(f"{reverse('scraper_detail', args=[slug])}?tab=real-time")
