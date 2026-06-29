@@ -228,6 +228,7 @@ class Run(models.Model):
         FAILED = "failed", "Failed"
         RUNNING = "running", "Running"
         STOPPED = "stopped", "Stopped"
+        QUEUED = "queued", "Queued"
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     scraper = models.ForeignKey(
@@ -411,6 +412,33 @@ class RunLogLine(models.Model):
 
     def __str__(self):
         return f"{self.run.short_id} #{self.seq}"
+
+
+class QueueState(models.Model):
+    """Singleton holding cross-process job-queue state.
+
+    Currently just the request-thread hysteresis gate. Production runs several
+    gunicorn workers, so a per-process flag would diverge between them; this row
+    is read and written *only* inside the dispatcher's advisory-locked
+    transaction (``_dispatch_next``), giving every worker one shared gate. The
+    gate is closed once the global request-thread usage reaches the HIGH cap and
+    reopens only when it drains back to the LOW watermark.
+    """
+
+    SINGLETON_ID = 1
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_ID)
+    request_gate_open = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"QueueState(request_gate_open={self.request_gate_open})"
+
+    @classmethod
+    def load(cls):
+        """Fetch (creating on first use) the singleton row."""
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
+        return obj
 
 
 class Ticket(models.Model):
@@ -756,7 +784,10 @@ class ScheduleEvent(models.Model):
     time a schedule comes due, recording what happened so operators can see the
     cron is alive and why any given cycle did or didn't start a fresh run:
 
-    - ``LAUNCHED`` — a run was started (it streams live on the Real-time tab).
+    - ``LAUNCHED`` — a run started immediately (it streams live on the Real-time
+      tab).
+    - ``QUEUED`` — a job was enqueued but capacity was full, so it waits in the
+      Batch-jobs queue and starts automatically when a slot frees up.
     - ``SKIPPED_IN_FLIGHT`` — a run was already in progress, so the cycle was a
       healthy skip (the cron passed — a job is already working).
     - ``SKIPPED_MAINTENANCE`` — the source is in maintenance.
@@ -769,6 +800,7 @@ class ScheduleEvent(models.Model):
 
     class Outcome(models.TextChoices):
         LAUNCHED = "launched", "Launched"
+        QUEUED = "queued", "Queued"
         SKIPPED_IN_FLIGHT = "skipped_in_flight", "Skipped — run already in progress"
         SKIPPED_MAINTENANCE = "skipped_maintenance", "Skipped — in maintenance"
         SKIPPED_DISABLED = "skipped_disabled", "Skipped — schedule disabled"

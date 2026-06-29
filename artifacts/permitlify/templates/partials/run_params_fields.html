@@ -1,0 +1,118 @@
+{% comment %}
+Run-parameter fields shared by the Real-time and Batch-jobs forms. Both post the
+same field names to their respective start endpoints, so the field set is defined
+once here. Inputs honour ``start_disabled`` (set only on the Real-time tab, where
+an in-flight run / maintenance / browser-exclusivity disables the controls); the
+Batch form never sets it — queueing always accepts a job. The enclosing
+``.rt-start-row`` wrapper and the submit button live in each form (their labels
+differ), not in this partial.
+{% endcomment %}
+{% if input_kind == 'year_month' %}
+<div class="rt-field">
+  <label class="field-label" for="rtYear">Season year</label>
+  <select class="rt-input" id="rtYear" name="year" {% if start_disabled %}disabled{% endif %}>
+    {% for y in years %}
+    <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+    {% endfor %}
+  </select>
+</div>
+<div class="rt-field">
+  <label class="field-label" for="rtMonth">Month</label>
+  <select class="rt-input" id="rtMonth" name="month" {% if start_disabled %}disabled{% endif %}>
+    <option value="0" {% if default_month == 0 %}selected{% endif %}>All months</option>
+    {% for m_val, m_label in months %}
+    <option value="{{ m_val }}" {% if m_val == default_month %}selected{% endif %}>{{ m_label }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% elif input_kind == 'date_range' or input_kind == 'date_range_or_url' %}
+{% if allows_url %}
+<div class="rt-field rt-field-wide">
+  {% if url_required %}
+  <label class="field-label" for="rtUrl">Google Sheet / tournament URL <span class="rt-req">(required)</span></label>
+  <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" required placeholder="https://docs.google.com/spreadsheets/d/…  (sheet of Team / Link rows)" {% if start_disabled %}disabled{% endif %}>
+  {% else %}
+  <label class="field-label" for="rtUrl">Tournament URL <span class="rt-opt">(optional)</span></label>
+  <input class="rt-input" id="rtUrl" name="tournament_url" type="url" inputmode="url" placeholder="https://…  — leave blank to scrape the date range" {% if start_disabled %}disabled{% endif %}>
+  {% endif %}
+  {% if accepts_sheet %}
+  <div class="rt-help">
+    <p class="rt-help-lead">This scraper accepts <strong>either</strong> input:</p>
+    <ul class="rt-help-list">
+      <li>
+        <strong>A whole Google Sheet</strong> — paste the sheet link
+        (<code>https://docs.google.com/spreadsheets/…</code>) and every row is
+        scraped in one run. The script reads <strong>only the tab named
+        “Main”</strong> (any other tabs are ignored). That tab needs a header row
+        with a <strong>Link</strong> column — each <em>Link</em> is a box-score /
+        schedule page the scraper opens. A <strong>Team</strong> column is
+        optional: it only helps you organise the sheet and is <em>not</em> included
+        in the scraped output.
+      </li>
+      <li>
+        <strong>A single link</strong> — paste one box-score, schedule, or
+        tournament page URL directly (no Google Sheet needed) to scrape just that page.
+      </li>
+    </ul>
+    <p class="rt-help-note">
+      The Google Sheet must be shared as <em>“Anyone with the link can view”</em> so
+      the script can read it. The Claude API key on the <a href="?tab=settings">Settings tab</a>
+      is required for the AI box-score extraction.
+    </p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% if not url_required %}
+<div class="rt-field">
+  <label class="field-label" for="rtFrom">From</label>
+  <input class="rt-input" id="rtFrom" name="date_from" type="date" value="{{ default_date_from }}" {% if start_disabled %}disabled{% endif %}>
+</div>
+<div class="rt-field">
+  <label class="field-label" for="rtTo">To</label>
+  <input class="rt-input" id="rtTo" name="date_to" type="date" value="{{ default_date_to }}" {% if start_disabled %}disabled{% endif %}>
+</div>
+{% endif %}
+{% if feed_gender %}
+<div class="rt-field">
+  <label class="field-label" for="rtGender">Gender</label>
+  <select class="rt-input" id="rtGender" name="gender" {% if start_disabled %}disabled{% endif %}>
+    <option value="both" {% if default_gender == 'both' %}selected{% endif %}>Both</option>
+    <option value="boys" {% if default_gender == 'boys' %}selected{% endif %}>Boys</option>
+    <option value="girls" {% if default_gender == 'girls' %}selected{% endif %}>Girls</option>
+  </select>
+</div>
+{% endif %}
+{% if feed_api_key %}
+<div class="rt-field rt-field-wide">
+  <label class="field-label" for="rtApiKey">API key</label>
+  <input class="rt-input" id="rtApiKey" name="api_key" type="text" value="{{ feed_api_key_default }}" autocomplete="off" spellcheck="false" placeholder="Feed API key" {% if start_disabled %}disabled{% endif %}>
+</div>
+{% endif %}
+{% elif input_kind == 'rank_snapshot' %}
+<div class="rt-field">
+  <label class="field-label" for="rtSnap">Ranking date</label>
+  <input class="rt-input" id="rtSnap" name="snapshot_date" type="date" value="{{ default_snapshot_date }}" {% if start_disabled %}disabled{% endif %}>
+</div>
+{% elif input_kind == 'key_batch' %}
+<div class="rt-field rt-field-wide">
+  <label class="field-label" for="rtKeys">Tournament keys</label>
+  <textarea class="rt-input rt-textarea" id="rtKeys" name="keys" rows="4" autocomplete="off" spellcheck="false" placeholder="Paste 32-character SportyHQ tournament keys (one per line, or separated by spaces / commas)…" {% if start_disabled %}disabled{% endif %}></textarea>
+  <label class="rt-check">
+    <input type="checkbox" name="run_all" value="on" {% if start_disabled %}disabled{% endif %}>
+    <span>Ignore the box above and run the entire pending queue in one run ({{ pending_key_count }} key{{ pending_key_count|pluralize }})</span>
+  </label>
+  <div class="rt-help">
+    <p class="rt-help-note">Each key unlocks one tournament's full result set. Tick the box to process the whole pending queue in a single run; keys already marked done are skipped (and logged) so they aren't re-scraped.</p>
+  </div>
+</div>
+{% else %}
+<div class="rt-field">
+  <label class="field-label" for="rtYear">Season year</label>
+  <select class="rt-input" id="rtYear" name="year" {% if start_disabled %}disabled{% endif %}>
+    {% for y in years %}
+    <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}

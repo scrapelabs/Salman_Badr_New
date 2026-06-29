@@ -152,6 +152,16 @@ def tick(now=None):
                 to_launch.append((sched.scraper, sched.pk, due_at))
         for scraper, sched_pk, due_at in to_launch:
             _launch(scraper, sched_pk, due_at)
+        # Safety-net pump: drain the job queue every cycle even when nothing is
+        # due and no Lab page is open to poll. A browser job finishing or a
+        # thread slot freeing with no watcher would otherwise leave queued jobs
+        # stuck until someone opens a page; this guarantees forward progress.
+        try:
+            from .views import _dispatch_next
+
+            _dispatch_next(blocking=False)
+        except Exception:  # noqa: BLE001
+            logger.exception("Scheduler queue-pump failed.")
     finally:
         close_old_connections()
 
@@ -166,15 +176,23 @@ def _launch(scraper, sched_pk, due_at=None):
     disabled), or a real launch failure with the reason attached.
     """
     from .live_scrapers import registry
-    from .models import ScheduleEvent, ScraperSchedule
-    from .views import RunStartError, _start_scraper_run, validate_run_params
+    from .models import Run, ScheduleEvent, ScraperSchedule
+    from .views import (
+        RunStartError,
+        _dispatch_next,
+        _enqueue_run,
+        validate_run_params,
+    )
 
     Outcome = ScheduleEvent.Outcome
     # Map the shared run-start guard's error codes onto cron-history outcomes.
     # Only "already in progress" / browser-busy are *healthy* skips; maintenance
     # is a skip; anything else (a launch failure or an unknown/validation code,
     # e.g. a URL-required schedule with no URL) is a real FAILED — so the default
-    # is FAILED, never a misleading "already running".
+    # is FAILED, never a misleading "already running". Under the unified
+    # enqueue+dispatch path the only RunStartError raised here is "maintenance"
+    # (concurrency no longer blocks — it queues); the other codes remain mapped
+    # defensively in case a shared helper raises them.
     outcome_for_code = {
         "maintenance": Outcome.SKIPPED_MAINTENANCE,
         "already_running": Outcome.SKIPPED_IN_FLIGHT,
@@ -212,12 +230,17 @@ def _launch(scraper, sched_pk, due_at=None):
     try:
         spec = registry.spec_for(scraper.slug)
         inputs = validate_run_params(spec, {}, webhook=True)
-        run = _start_scraper_run(scraper, inputs=inputs, launched_by=None)
+        # Unified path: enqueue the job, then pump the dispatcher. It promotes to
+        # RUNNING immediately if capacity allows, otherwise the job waits in the
+        # per-scraper queue and starts automatically once a slot frees up.
+        run = _enqueue_run(scraper, inputs=inputs, launched_by=None)
+        _dispatch_next()
+        run.refresh_from_db()
     except RunStartError as exc:
-        # already-running / browser-busy = healthy skip; maintenance = skip;
-        # launch failure / unknown / validation code = real FAILED. The
-        # RunStartError message is curated operator-facing copy (no secrets); a
-        # failed launch carries its Run so the history can link to it.
+        # maintenance = skip; anything else (launch failure / unknown /
+        # validation code, e.g. a URL-required schedule with no URL) = real
+        # FAILED. The RunStartError message is curated operator-facing copy (no
+        # secrets); a failed launch carries its Run so the history can link to it.
         outcome = outcome_for_code.get(exc.code, Outcome.FAILED)
         logger.info("Scheduled run for %s not started: %s", scraper.slug, exc.message)
         record(outcome, detail=exc.message, run=getattr(exc, "run", None))
@@ -232,5 +255,14 @@ def _launch(scraper, sched_pk, due_at=None):
         )
         return
     ScraperSchedule.objects.filter(pk=sched_pk).update(last_run=run)
-    record(Outcome.LAUNCHED, run=run, detail=f"Run #{run.short_id} started.")
-    logger.info("Scheduled run #%s launched for %s.", run.short_id, scraper.slug)
+    if run.status == Run.Status.QUEUED:
+        record(
+            Outcome.QUEUED,
+            run=run,
+            detail=f"Job #{run.short_id} queued — capacity full, will start "
+            "automatically.",
+        )
+        logger.info("Scheduled job #%s queued for %s.", run.short_id, scraper.slug)
+    else:
+        record(Outcome.LAUNCHED, run=run, detail=f"Run #{run.short_id} started.")
+        logger.info("Scheduled run #%s launched for %s.", run.short_id, scraper.slug)

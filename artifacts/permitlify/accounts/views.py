@@ -26,7 +26,19 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Count, Exists, Max, OuterRef, Subquery
+from django.db.models import (
+    Case,
+    Count,
+    DateTimeField,
+    Exists,
+    F,
+    IntegerField,
+    Max,
+    OuterRef,
+    Subquery,
+    Value,
+    When,
+)
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -40,6 +52,7 @@ from .live_scrapers import _ssrf, registry
 from .models import (
     CollegeMatch,
     Proxy,
+    QueueState,
     Run,
     SAKey,
     Scraper,
@@ -59,6 +72,17 @@ RUN_INACTIVITY_TIMEOUT = timezone.timedelta(minutes=30)
 # in-flight / browser-exclusivity checks in ``_start_scraper_run`` are race-free
 # even when several triggers (e.g. scheduled webhooks) fire at the same instant.
 RUN_START_LOCK_KEY = 0x6D6D7273  # "mmrs" — MatchMiner run-start
+# Global request-thread budget for the job queue. Request-based scrapers run
+# concurrently as long as the sum of their worker-pool sizes stays within these
+# bounds, with hysteresis: once the live thread count reaches HIGH the dispatcher
+# stops admitting new request jobs until it drains back down to LOW. This avoids
+# thrashing at the ceiling. Browser-based scrapers ignore this — they run alone.
+REQUEST_THREAD_CAP_HIGH = 30
+REQUEST_THREAD_RESUME_LOW = 10
+# The hysteresis gate for request-job admission (True == admitting) is persisted
+# in the QueueState singleton, read/written only inside the dispatcher's
+# advisory-locked transaction so all gunicorn workers share one gate and the
+# LOW/HIGH band is honoured across processes, not just within one worker.
 YEAR_MIN = 2000
 YEAR_MAX = 2030
 IS_WINDOWS = os.name == "nt"
@@ -110,6 +134,7 @@ MONTHS = [
 ]
 
 TAB_LABELS = {
+    "batch": "Batch jobs",
     "real-time": "Real-time test",
     "calls": "Calls history",
     "data": "Match database",
@@ -120,6 +145,7 @@ TAB_LABELS = {
 }
 
 CALLS_PER_PAGE = 12
+JOBS_PER_PAGE = 15        # rows per page in the "Batch jobs" tab
 MATCHES_PER_PAGE = 50     # rows per page in the "Match database" tab
 KEYS_PER_PAGE = 50        # rows per page in the "Key queue" tab
 MAX_KEY_BATCH_PASTE = 20000  # cap how many chars/keys we scan from a paste
@@ -191,11 +217,43 @@ def _run_status_state(run):
     """Badge state for a single Run row (Overview "recently active" table)."""
     if run.status == Run.Status.RUNNING:
         return "running"
+    if run.status == Run.Status.QUEUED:
+        return "queued"
     if run.status == Run.Status.FAILED:
         return "failed"
     if run.status == Run.Status.STOPPED:
         return "stopped"
     return "healthy"  # success / partial
+
+
+def _job_state(run):
+    """Badge state for a Batch-jobs table row (adds the queued state)."""
+    if run.status == Run.Status.RUNNING:
+        return "running"
+    if run.status == Run.Status.QUEUED:
+        return "queued"
+    if run.status == Run.Status.FAILED:
+        return "failed"
+    if run.status == Run.Status.STOPPED:
+        return "stopped"
+    return "healthy"  # success / partial
+
+
+def _run_params_label(run):
+    """Short, human label of a run's inputs for the Batch-jobs table.
+
+    Prefers the stored display label (``Run.tournament``), which is always built
+    without any secret (a feed API key never enters it). Falls back to the run's
+    year (year-only sources store the generic "all tournaments" label) so queued
+    jobs stay distinguishable, and otherwise to a dash. A feed ``api_key`` lives
+    only in ``Run.params`` and is never surfaced here.
+    """
+    label = (run.tournament or "").strip()
+    params = run.params if isinstance(run.params, dict) else {}
+    if (not label or label == ALL_TOURNAMENTS) and params.get("year"):
+        year = params["year"]
+        return f"{ALL_TOURNAMENTS} · {year}" if label else str(year)
+    return label or "—"
 
 
 def _with_run_state(scrapers):
@@ -227,7 +285,9 @@ def _recent_runs(finished_limit=5):
         .order_by("-started_at")
     )
     finished = list(
-        Run.objects.exclude(status=Run.Status.RUNNING)
+        Run.objects.exclude(
+            status__in=[Run.Status.RUNNING, Run.Status.QUEUED]
+        )
         .select_related("scraper")
         .order_by("-started_at")[:finished_limit]
     )
@@ -339,6 +399,196 @@ def _reap_stale_runs(scraper=None):
         run.save(update_fields=["status", "finished_at", "duration_ms", "log_text"])
 
 
+def _capacity_snapshot():
+    """Current live-run state used to decide what the queue can promote next.
+
+    Returns ``(running, browser_running, threads_in_use, running_scraper_ids)``:
+
+    - ``running`` — the list of RUNNING runs (scraper preselected),
+    - ``browser_running`` — True if any RUNNING run is a browser-based source
+      (which holds the whole host to itself),
+    - ``threads_in_use`` — the sum of ``worker_count`` across RUNNING *non*-browser
+      runs (the live slice of the global request-thread budget),
+    - ``running_scraper_ids`` — the set of scraper ids with a RUNNING run (the
+      one-run-per-scraper guard).
+    """
+    running = list(
+        Run.objects.filter(status=Run.Status.RUNNING).select_related("scraper")
+    )
+    browser_running = False
+    threads_in_use = 0
+    running_scraper_ids = set()
+    for r in running:
+        running_scraper_ids.add(r.scraper_id)
+        spec = registry.spec_for(r.scraper.slug)
+        if spec and spec.uses_browser:
+            browser_running = True
+        else:
+            threads_in_use += r.scraper.worker_count
+    return running, browser_running, threads_in_use, running_scraper_ids
+
+
+def _enqueue_run(scraper, *, inputs, launched_by):
+    """Create a QUEUED run — the single admission point for the job queue.
+
+    Shared by the real-time form, the batch form, the trigger webhook and the
+    scheduler so every path lands one queued row. The only pre-queue guard is
+    maintenance (a source in maintenance refuses work outright); the concurrency
+    rules (one run per scraper, browser exclusivity, the thread budget) are NOT
+    enforced here — that's the dispatcher's job. ``inputs`` is a validated
+    :class:`RunInputs`. Returns the created QUEUED :class:`Run`; raises
+    RunStartError(503) when the source is in maintenance.
+
+    ``started_at`` is left at its model default (now) and is *reset* to the real
+    start instant when the run is promoted to RUNNING; queue order is by
+    ``created_at`` (auto, insert order), so it is stable regardless.
+    """
+    if scraper.is_maintenance:
+        raise RunStartError(
+            "maintenance", "This source is in maintenance — runs are blocked.", 503
+        )
+    return Run.objects.create(
+        scraper=scraper,
+        launched_by=launched_by,
+        tournament=(inputs.tournament or ALL_TOURNAMENTS)[:120],
+        date_from=inputs.date_from,
+        date_to=inputs.date_to,
+        params=inputs.params,
+        status=Run.Status.QUEUED,
+    )
+
+
+def _promote_run(run):
+    """Flip a QUEUED run to RUNNING and stamp a fresh start instant.
+
+    ``pid`` is cleared (the worker sets its own once launched); ``started_at`` is
+    reset to now so durations/Overview counts reflect the real start, not the time
+    the job was enqueued.
+    """
+    run.status = Run.Status.RUNNING
+    run.started_at = timezone.now()
+    run.pid = None
+    run.save(update_fields=["status", "started_at", "pid"])
+
+
+def _dispatch_next(*, blocking=True):
+    """Promote every currently-eligible QUEUED run to RUNNING and launch it.
+
+    The single place that turns queued jobs into live ones. Honours, in order:
+
+    - **one run per scraper** — a scraper with a live run is skipped,
+    - **browser exclusivity** — a browser-based run needs the whole host, so it
+      starts only when nothing else is live, and nothing else starts while it is,
+    - **request-thread budget** — non-browser jobs are admitted FIFO while the
+      global thread count stays within the LOW/HIGH hysteresis band.
+
+    FIFO-strict: a head-of-queue browser job that can't start yet *blocks* the
+    jobs behind it (the scan stops), so it can't be starved by a steady stream of
+    later request jobs. Serialised across web workers by the run-start advisory
+    lock; ``blocking=False`` (used by poll pumps) takes the lock only if free and
+    otherwise defers to whichever caller holds it. Returns the list of launched
+    runs. Workers are spawned *after* the promotion transaction commits.
+    """
+    _reap_stale_runs()
+    to_launch = []
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cur:
+                if blocking:
+                    cur.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", [RUN_START_LOCK_KEY]
+                    )
+                else:
+                    cur.execute(
+                        "SELECT pg_try_advisory_xact_lock(%s)", [RUN_START_LOCK_KEY]
+                    )
+                    if not cur.fetchone()[0]:
+                        return []
+
+            (
+                running,
+                browser_running,
+                threads_in_use,
+                running_scraper_ids,
+            ) = _capacity_snapshot()
+
+            # Shared hysteresis gate (persisted so all gunicorn workers agree).
+            # Safe to read without row-locking: the advisory lock above already
+            # serialises every dispatcher, so we are the only writer right now.
+            gate = QueueState.load()
+            gate_open = gate.request_gate_open
+
+            # Update the gate from live state: close at the HIGH cap, reopen only
+            # once drained to LOW, otherwise hold the previous state.
+            if threads_in_use >= REQUEST_THREAD_CAP_HIGH:
+                gate_open = False
+            elif threads_in_use <= REQUEST_THREAD_RESUME_LOW:
+                gate_open = True
+
+            queued = (
+                Run.objects.select_for_update(skip_locked=True)
+                .filter(status=Run.Status.QUEUED)
+                .select_related("scraper")
+                .order_by("created_at")
+            )
+            for run in queued:
+                if run.scraper_id in running_scraper_ids:
+                    # That source already has a live (or just-promoted) run —
+                    # one run per scraper. Skip it; try the next source.
+                    continue
+                spec = registry.spec_for(run.scraper.slug)
+                uses_browser = bool(spec and spec.uses_browser)
+
+                if uses_browser:
+                    # Needs the whole host: only startable when nothing is live or
+                    # promoted this pass. FIFO-strict — if it can't go now, stop,
+                    # never promote a later job past it (no starvation).
+                    if running or to_launch:
+                        break
+                    _promote_run(run)
+                    to_launch.append(run)
+                    break  # it owns the server; nothing else starts this pass
+
+                # Request-based job.
+                if browser_running:
+                    # A browser run owns the host — no request job may start. Stop.
+                    break
+                want = run.scraper.worker_count
+                if not gate_open:
+                    break
+                if threads_in_use + want > REQUEST_THREAD_CAP_HIGH:
+                    # Admitting this would breach the hard cap. FIFO: stop here.
+                    break
+                _promote_run(run)
+                to_launch.append(run)
+                running_scraper_ids.add(run.scraper_id)
+                threads_in_use += want
+                if threads_in_use >= REQUEST_THREAD_CAP_HIGH:
+                    gate_open = False
+
+            # Persist the gate only when it actually flipped, so we avoid a write
+            # (and an updated_at churn) on every dispatch cycle.
+            if gate_open != gate.request_gate_open:
+                gate.request_gate_open = gate_open
+                gate.save(update_fields=["request_gate_open", "updated_at"])
+    except Exception:  # noqa: BLE001
+        logger.exception("Queue dispatch failed.")
+        return []
+
+    # Launch workers outside the lock/transaction. A spawn failure fails just that
+    # run (and frees its slot for the next dispatch) instead of the whole batch.
+    for run in to_launch:
+        try:
+            _launch_run(run)
+        except Exception:  # noqa: BLE001
+            run.status = Run.Status.FAILED
+            run.finished_at = timezone.now()
+            run.log_text = "Failed to launch the scraper process.\n"
+            run.save(update_fields=["status", "finished_at", "log_text"])
+            logger.exception("Failed to launch queued run %s.", run.short_id)
+    return to_launch
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("overview")
@@ -363,7 +613,9 @@ def overview_view(request):
     ctx = _app_ctx(
         "overview",
         active_scrapers=Scraper.objects.filter(mode=Scraper.Mode.PRODUCTION).count(),
-        runs_today=Run.objects.filter(started_at__date=today).count(),
+        runs_today=Run.objects.exclude(status=Run.Status.QUEUED)
+        .filter(started_at__date=today)
+        .count(),
         maint_count=Scraper.objects.filter(mode=Scraper.Mode.MAINTENANCE).count(),
         monitor=_monitor_cards(collect_system_stats()),
         threads_running=threads_running,
@@ -412,7 +664,9 @@ def live_stats_view(request):
                 "active_scrapers": Scraper.objects.filter(
                     mode=Scraper.Mode.PRODUCTION
                 ).count(),
-                "runs_today": Run.objects.filter(started_at__date=today).count(),
+                "runs_today": Run.objects.exclude(status=Run.Status.QUEUED)
+                .filter(started_at__date=today)
+                .count(),
                 "maint_count": Scraper.objects.filter(
                     mode=Scraper.Mode.MAINTENANCE
                 ).count(),
@@ -463,6 +717,47 @@ def _save_model_upload(scraper, upload, user):
         },
     )
     return ""
+
+
+def _run_form_ctx(s, spec, ctx):
+    """Populate the run-parameters form context shared by the Real-time and Batch
+    tabs (both include ``partials/run_params_fields.html``).
+
+    Adds the input-kind flag set, the year/month/date defaults and the feed-key /
+    gender knobs. The Batch form posts the same field names, so it needs the same
+    context as the Real-time form.
+    """
+    current_year = timezone.localdate().year
+    today = timezone.localdate()
+    ctx["input_kind"] = spec.input_kind
+    # Queue-driven start form (south_africa): show how many keys are still
+    # pending so the "run the pending queue" control has a live count.
+    if spec.has_key_store:
+        ctx["pending_key_count"] = SAKey.objects.filter(
+            scraper=s, status=SAKey.Status.PENDING
+        ).count()
+        ctx["KEY_BATCH_MAX_KEYS"] = registry.KEY_BATCH_MAX_KEYS
+    ctx["allows_url"] = spec.input_kind == registry.INPUT_DATE_RANGE_OR_URL
+    ctx["url_required"] = spec.url_required
+    ctx["accepts_sheet"] = spec.accepts_sheet
+    ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
+    ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)
+    ctx["months"] = MONTHS
+    ctx["default_month"] = 0
+    ctx["default_date_to"] = today.isoformat()
+    ctx["default_date_from"] = (
+        today - timedelta(days=DEFAULT_RANGE_DAYS)
+    ).isoformat()
+    # Rankings publish weekly on Mondays, so default the snapshot picker to
+    # the most recent Monday rather than an arbitrary mid-week day.
+    ctx["default_snapshot_date"] = (
+        today - timedelta(days=today.weekday())
+    ).isoformat()
+    ctx["feed_api_key"] = spec.feed_api_key
+    ctx["feed_api_key_default"] = spec.feed_api_key_default
+    ctx["feed_gender"] = spec.feed_gender
+    ctx["default_gender"] = "both"
+    return ctx
 
 
 @login_required
@@ -743,38 +1038,70 @@ def scraper_detail_view(request, slug):
         ctx["start_disabled"] = bool(s.is_maintenance or active_run or blocker)
         if blocker is not None:
             ctx["start_block_msg"] = _exclusivity_block_msg(blocker, this_uses_browser)
-        current_year = timezone.localdate().year
-        today = timezone.localdate()
-        ctx["input_kind"] = spec.input_kind
-        # Queue-driven start form (south_africa): show how many keys are still
-        # pending so the "run the pending queue" control has a live count.
-        if spec.has_key_store:
-            ctx["pending_key_count"] = SAKey.objects.filter(
-                scraper=s, status=SAKey.Status.PENDING
-            ).count()
-            ctx["KEY_BATCH_MAX_KEYS"] = registry.KEY_BATCH_MAX_KEYS
-        ctx["allows_url"] = spec.input_kind == registry.INPUT_DATE_RANGE_OR_URL
-        ctx["url_required"] = spec.url_required
-        ctx["accepts_sheet"] = spec.accepts_sheet
-        ctx["years"] = list(range(YEAR_MAX, YEAR_MIN - 1, -1))
-        ctx["default_year"] = min(max(current_year, YEAR_MIN), YEAR_MAX)
-        ctx["months"] = MONTHS
-        ctx["default_month"] = 0
-        ctx["default_date_to"] = today.isoformat()
-        ctx["default_date_from"] = (
-            today - timedelta(days=DEFAULT_RANGE_DAYS)
-        ).isoformat()
-        # Rankings publish weekly on Mondays, so default the snapshot picker to
-        # the most recent Monday rather than an arbitrary mid-week day.
-        ctx["default_snapshot_date"] = (
-            today - timedelta(days=today.weekday())
-        ).isoformat()
-        ctx["feed_api_key"] = spec.feed_api_key
-        ctx["feed_api_key_default"] = spec.feed_api_key_default
-        ctx["feed_gender"] = spec.feed_gender
-        ctx["default_gender"] = "both"
+        # The Real-time header carries a live badge of the currently-running job
+        # for this scraper (kept in sync by the start-status poll).
+        ctx["running_run"] = active_run
+        ctx["uses_browser"] = bool(spec.uses_browser)
+        _run_form_ctx(s, spec, ctx)
+    elif tab == "batch":
+        spec = registry.spec_for(slug)
+        _reap_stale_runs()
+        # One paginated table, ordered: RUNNING first (newest), then QUEUED
+        # (oldest-first = FIFO dispatch order), then finished (newest). Mixed
+        # sort directions per bucket are expressed with two NULL-gated keys.
+        jobs_qs = (
+            s.runs.annotate(
+                _bucket=Case(
+                    When(status=Run.Status.RUNNING, then=Value(0)),
+                    When(status=Run.Status.QUEUED, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                ),
+                _q_ord=Case(
+                    When(status=Run.Status.QUEUED, then=F("created_at")),
+                    default=Value(None),
+                    output_field=DateTimeField(),
+                ),
+                _f_ord=Case(
+                    When(status=Run.Status.QUEUED, then=Value(None)),
+                    default=F("started_at"),
+                    output_field=DateTimeField(),
+                ),
+            )
+            .select_related("scraper")
+            .order_by("_bucket", "_q_ord", "-_f_ord")
+        )
+        paginator = Paginator(jobs_qs, JOBS_PER_PAGE)
+        page_obj = paginator.get_page(request.GET.get("page"))
+        for r in page_obj:
+            r.params_label = _run_params_label(r)
+            r.job_state = _job_state(r)
+        ctx["page_obj"] = page_obj
+        ctx["job_total"] = paginator.count
+        queued_uuids = list(
+            jobs_qs.filter(status=Run.Status.QUEUED)
+            .order_by("created_at")
+            .values_list("uuid", flat=True)
+        )
+        ctx["queued_count"] = len(queued_uuids)
+        # Structural fingerprint for the live poller: a change to the running run
+        # or the ordered queue (a promotion, cancel, or new enqueue) triggers a
+        # table re-render. The page only shows one slice; this spans all queued.
+        ctx["queued_uuids_csv"] = ",".join(str(u) for u in queued_uuids)
+        ctx["running_run"] = (
+            s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
+        )
+        ctx["uses_browser"] = bool(spec.uses_browser)
+        ctx["thread_cap_high"] = REQUEST_THREAD_CAP_HIGH
+        ctx["thread_resume_low"] = REQUEST_THREAD_RESUME_LOW
+        ctx["worker_count"] = s.worker_count
+        _run_form_ctx(s, spec, ctx)
     elif tab == "calls":
-        paginator = Paginator(s.runs.all(), CALLS_PER_PAGE)
+        # Calls history is the record of runs that actually executed — queued
+        # (not-yet-started) jobs live on the Batch jobs tab instead.
+        paginator = Paginator(
+            s.runs.exclude(status=Run.Status.QUEUED), CALLS_PER_PAGE
+        )
         ctx["page_obj"] = paginator.get_page(request.GET.get("page"))
         ctx["run_total"] = paginator.count
     elif tab == "data":
@@ -952,9 +1279,15 @@ def scraper_start_status_view(request, slug):
     s = get_object_or_404(Scraper, slug=slug)
     _reap_stale_runs()
     blocker, this_uses_browser = _exclusivity_blocker(s)
+    running = (
+        s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
+    )
     return JsonResponse(
         {
-            "own_running": s.runs.filter(status=Run.Status.RUNNING).exists(),
+            "own_running": running is not None,
+            # Live data for the Real-time header job badge.
+            "running_short_id": running.short_id if running else None,
+            "running_uuid": str(running.uuid) if running else None,
             "blocked": blocker is not None,
             "block_msg": (
                 _exclusivity_block_msg(blocker, this_uses_browser) if blocker else None
@@ -1394,14 +1727,23 @@ def scraper_run_view(request, slug):
     back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
     try:
         inputs = validate_run_params(registry.spec_for(slug), request.POST)
-        run = _start_scraper_run(s, inputs=inputs, launched_by=request.user)
+        run = _enqueue_run(s, inputs=inputs, launched_by=request.user)
     except RunStartError as exc:
         messages.error(request, exc.message)
         return redirect(back)
 
-    messages.success(
-        request, f"Run #{run.short_id} started — streaming the live log below."
-    )
+    _dispatch_next()
+    run.refresh_from_db()
+    if run.status == Run.Status.RUNNING:
+        messages.success(
+            request, f"Run #{run.short_id} started — streaming the live log below."
+        )
+    else:
+        messages.success(
+            request,
+            f"Run #{run.short_id} queued — it will start automatically when "
+            "capacity frees up. Track it on the Batch jobs tab.",
+        )
     return redirect(back)
 
 
@@ -1456,12 +1798,14 @@ def scraper_trigger_view(request, slug):
         inputs = validate_run_params(
             registry.spec_for(slug), _request_params(request), webhook=True
         )
-        run = _start_scraper_run(s, inputs=inputs, launched_by=None)
+        run = _enqueue_run(s, inputs=inputs, launched_by=None)
     except RunStartError as exc:
         return JsonResponse(
             {"ok": False, "error": exc.code, "detail": exc.message}, status=exc.status
         )
 
+    _dispatch_next()
+    run.refresh_from_db()
     return JsonResponse(
         {
             "ok": True,
@@ -1758,6 +2102,9 @@ def stop_run_view(request, slug, run_uuid):
     lines.append("[stopped] Run force-stopped by user — worker process killed.")
     run.log_text = "\n".join(lines) + "\n"
     run.save(update_fields=["status", "finished_at", "duration_ms", "log_text"])
+    # Stopping freed capacity (a thread slot, or the browser-exclusivity lock) —
+    # promote whatever the queue can now start.
+    _dispatch_next()
     messages.success(request, f"Run #{run.short_id} stopped.")
     return redirect(back)
 
@@ -1788,6 +2135,11 @@ def run_events_view(request, slug, run_uuid):
     if run.status == Run.Status.RUNNING:
         _reap_stale_runs(run.scraper)
         run.refresh_from_db()
+    elif run.status == Run.Status.QUEUED:
+        # Pump the queue while a waiting run is being watched, so it promotes
+        # itself the moment capacity frees up — no page reload needed.
+        _dispatch_next(blocking=False)
+        run.refresh_from_db()
     try:
         after = int(request.GET.get("after", "0"))
     except (TypeError, ValueError):
@@ -1801,7 +2153,8 @@ def run_events_view(request, slug, run_uuid):
         {
             "status": run.status,
             "status_display": run.get_status_display(),
-            "done": run.status != Run.Status.RUNNING,
+            "queued": run.status == Run.Status.QUEUED,
+            "done": run.status not in (Run.Status.RUNNING, Run.Status.QUEUED),
             "lines": lines,
             "row_count": run.row_count,
             "progress_done": run.progress_done,
@@ -1815,6 +2168,129 @@ def run_events_view(request, slug, run_uuid):
             "has_errors": run.has_errors,
         }
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def queue_events_view(request, slug):
+    """JSON poll for the Batch-jobs tab.
+
+    Pumps the dispatcher (so queued jobs promote themselves while the tab is
+    open), then reports:
+
+    - ``running_short_id`` / ``running_uuid`` — this scraper's live job, for the
+      header badge,
+    - ``queued_uuids`` — the ordered list of this scraper's still-queued jobs, so
+      the page can detect a structural change (a new job, a promotion, a cancel)
+      and reload to re-render the table,
+    - ``jobs`` — a per-uuid state map for the rows currently shown on the page
+      (uuids passed via ``?ids=…``), so progress bars / statuses / log links
+      update live without a reload.
+    """
+    s = get_object_or_404(Scraper, slug=slug)
+    _dispatch_next(blocking=False)
+
+    running = (
+        s.runs.filter(status=Run.Status.RUNNING).order_by("-started_at").first()
+    )
+    queued_uuids = list(
+        s.runs.filter(status=Run.Status.QUEUED)
+        .order_by("created_at")
+        .values_list("uuid", flat=True)
+    )
+
+    ids = []
+    raw = (request.GET.get("ids") or "").strip()
+    if raw:
+        for tok in raw.split(",")[:JOBS_PER_PAGE]:
+            try:
+                ids.append(uuid.UUID(tok.strip()))
+            except (ValueError, AttributeError):
+                continue
+    jobs = {}
+    if ids:
+        for r in s.runs.filter(uuid__in=ids):
+            jobs[str(r.uuid)] = {
+                "status": r.status,
+                "status_display": r.get_status_display(),
+                "state": _job_state(r),
+                "row_count": r.row_count,
+                "progress_done": r.progress_done,
+                "progress_total": r.progress_total,
+                "progress_percent": r.progress_percent,
+                "duration_label": r.duration_label,
+                "size_label": r.size_label,
+                "has_csv": r.has_csv,
+                "has_requests": r.has_requests,
+                "has_errors": r.has_errors,
+                "can_cancel": r.status == Run.Status.QUEUED,
+                "done": r.status not in (Run.Status.RUNNING, Run.Status.QUEUED),
+            }
+
+    return JsonResponse(
+        {
+            "running_short_id": running.short_id if running else None,
+            "running_uuid": str(running.uuid) if running else None,
+            "queued_uuids": [str(u) for u in queued_uuids],
+            "jobs": jobs,
+        }
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def run_cancel_view(request, slug, run_uuid):
+    """Cancel a still-QUEUED job (Batch tab). Only waiting jobs are cancellable —
+    a running job is ended via Stop run, a finished one is immutable."""
+    run = _get_run(slug, run_uuid)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=batch"
+    # Atomic conditional cancel: the transition fires in a single UPDATE guarded
+    # by ``status=QUEUED`` in the WHERE clause, so it can never stomp a job the
+    # dispatcher promoted to RUNNING in the same instant (which would orphan a
+    # live worker as "stopped"). If the dispatcher won the race, 0 rows match and
+    # we report the job as no-longer-cancellable.
+    cancelled = Run.objects.filter(
+        uuid=run.uuid, status=Run.Status.QUEUED
+    ).update(
+        status=Run.Status.STOPPED,
+        finished_at=timezone.now(),
+        log_text="Job cancelled while queued — it never started.\n",
+    )
+    if not cancelled:
+        messages.error(
+            request,
+            "That job is no longer queued — only waiting jobs can be cancelled.",
+        )
+        return redirect(back)
+    messages.success(request, f"Queued job #{run.short_id} cancelled.")
+    return redirect(back)
+
+
+@login_required
+@require_http_methods(["POST"])
+def scraper_queue_view(request, slug):
+    """Batch-tab submit: validate inputs, enqueue a job, then pump the dispatcher
+    (it starts immediately when capacity allows, otherwise waits in the queue)."""
+    s = get_object_or_404(Scraper, slug=slug)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=batch"
+    try:
+        inputs = validate_run_params(registry.spec_for(slug), request.POST)
+        run = _enqueue_run(s, inputs=inputs, launched_by=request.user)
+    except RunStartError as exc:
+        messages.error(request, exc.message)
+        return redirect(back)
+
+    _dispatch_next()
+    run.refresh_from_db()
+    if run.status == Run.Status.RUNNING:
+        messages.success(request, f"Job #{run.short_id} started immediately.")
+    else:
+        messages.success(
+            request,
+            f"Job #{run.short_id} queued — it will start automatically when "
+            "capacity frees up.",
+        )
+    return redirect(back)
 
 
 @login_required

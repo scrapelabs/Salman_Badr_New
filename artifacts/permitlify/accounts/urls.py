@@ -9,6 +9,12 @@ urlpatterns = [
     path("scrapers/", views.scrapers_view, name="scrapers"),
     path("scrapers/<slug:slug>/", views.scraper_detail_view, name="scraper_detail"),
     path("scrapers/<slug:slug>/run/", views.scraper_run_view, name="scraper_run"),
+    path("scrapers/<slug:slug>/queue/", views.scraper_queue_view, name="scraper_queue"),
+    path(
+        "scrapers/<slug:slug>/queue/events/",
+        views.queue_events_view,
+        name="queue_events",
+    ),
     path(
         "scrapers/<slug:slug>/start-status/",
         views.scraper_start_status_view,
@@ -58,6 +64,11 @@ urlpatterns = [
         "scrapers/<slug:slug>/runs/<uuid:run_uuid>/stop/",
         views.stop_run_view,
         name="run_stop",
+    ),
+    path(
+        "scrapers/<slug:slug>/runs/<uuid:run_uuid>/cancel/",
+        views.run_cancel_view,
+        name="run_cancel",
     ),
     path(
         "scrapers/<slug:slug>/matches.csv",

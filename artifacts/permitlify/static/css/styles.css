@@ -2247,6 +2247,101 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .run-act-danger:hover { color: #fff; border-color: var(--app-maint); background: var(--app-maint); }
 .run-del-form { display: inline-flex; margin: 0; }
 
+/* ─── Batch jobs tab ─── per-scraper job queue */
+.run-status.queued { color: #64748b; background: rgba(100, 116, 139, 0.14); }
+
+/* Live "running job" badge — shared by the Real-time & Batch headers */
+.rt-head-right { display: inline-flex; align-items: center; gap: 10px; }
+.rt-head-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 10.6px;
+  font-weight: 700;
+  color: var(--app-accent);
+  background: var(--app-accent-bg);
+  border: 1px solid var(--app-accent-bg);
+  white-space: nowrap;
+}
+.rt-head-badge b { font-weight: 800; }
+.rt-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--app-accent);
+  box-shadow: 0 0 0 0 var(--app-accent);
+  animation: rtLivePulse 1.6s ease-out infinite;
+}
+@keyframes rtLivePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.45); }
+  70%  { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+/* Concurrency notice banners */
+.batch-banner {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  margin-bottom: 16px;
+  font-size: 11.2px;
+  line-height: 1.5;
+}
+.batch-banner svg { width: 17px; height: 17px; flex: 0 0 auto; margin-top: 1px; }
+.batch-banner strong { display: block; margin-bottom: 2px; font-weight: 700; }
+.batch-banner--browser { color: var(--app-amber); background: var(--app-amber-bg); border-color: var(--app-amber-bg); }
+.batch-banner--info { color: var(--app-accent); background: var(--app-accent-bg); border-color: var(--app-accent-bg); }
+
+.batch-start { margin-bottom: 18px; }
+.batch-jobs { margin-top: 4px; }
+.batch-tbl { min-width: 920px; }
+
+/* Parameters cell */
+.batch-params { max-width: 320px; }
+.batch-params-main { display: block; color: var(--app-text); font-weight: 600; }
+.batch-window { display: block; margin-top: 2px; font-size: 10.2px; color: var(--app-text-2); white-space: nowrap; }
+
+/* Progress bar */
+.batch-prog-col { width: 190px; }
+.batch-prog-cell { vertical-align: middle; }
+.batch-prog { display: flex; flex-direction: column; gap: 5px; min-width: 150px; }
+.batch-prog-track {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--app-border-2);
+  overflow: hidden;
+}
+.batch-prog-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--app-accent);
+  transition: width .4s ease;
+}
+.batch-prog-label { font-size: 10px; font-weight: 600; color: var(--app-text-2); }
+.batch-prog--queued .batch-prog-fill { background: #94a3b8; }
+.batch-prog--running .batch-prog-fill { background: var(--app-accent); }
+.batch-prog--healthy .batch-prog-fill { background: var(--app-prod); }
+.batch-prog--failed .batch-prog-fill { background: var(--app-maint); }
+.batch-prog--stopped .batch-prog-fill { background: #94a3b8; }
+/* Indeterminate (running with no known total) — sliding shimmer */
+.batch-prog.is-indeterminate .batch-prog-track { background: var(--app-border-2); }
+.batch-prog.is-indeterminate .batch-prog-fill {
+  width: 38% !important;
+  background: linear-gradient(90deg, transparent, var(--app-accent), transparent);
+  animation: batchProgSlide 1.25s ease-in-out infinite;
+}
+@keyframes batchProgSlide {
+  0%   { transform: translateX(-130%); }
+  100% { transform: translateX(330%); }
+}
+
 /* Flash messages */
 .msg-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .msg {
