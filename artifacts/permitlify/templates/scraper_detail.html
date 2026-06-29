@@ -1320,4 +1320,56 @@
   </div>
   {% endif %}
 </div>
+
+{% comment %}
+   Dual-mode toggle (date range OR tournament link). Lives OUTSIDE the tab
+   if/elif chain so it wires whichever .rt-start form rendered — the Batch form
+   or the Real-time form (only one tab renders at a time). Scoped PER-FORM so the
+   duplicate ids in the two copies of run_params_fields.html don't collide; drives
+   display via show/hide + value-clearing only (never the ``disabled`` attribute,
+   which the poll / run-complete JS owns).
+{% endcomment %}
+<script>
+(function () {
+  function wire(form) {
+    if (!form.querySelector('[data-mode-toggle]')) return;
+    var radios = form.querySelectorAll('input[name="input_mode"]');
+    var urlGroups = form.querySelectorAll('.rt-url-group');
+    var dateGroups = form.querySelectorAll('.rt-dates-group');
+    var urlInput = form.querySelector('[name="tournament_url"]');
+    var dateInputs = form.querySelectorAll('.rt-dates-group [type="date"]');
+    function showGroups(list, on) {
+      for (var i = 0; i < list.length; i++) list[i].classList.toggle('rt-hide', !on);
+    }
+    function apply(mode) {
+      var urlMode = mode === 'url';
+      showGroups(urlGroups, urlMode);
+      showGroups(dateGroups, !urlMode);
+      if (urlMode) {
+        for (var i = 0; i < dateInputs.length; i++) dateInputs[i].value = '';
+        if (urlInput) urlInput.required = true;
+      } else {
+        if (urlInput) { urlInput.value = ''; urlInput.required = false; }
+        for (var j = 0; j < dateInputs.length; j++) {
+          var di = dateInputs[j];
+          if (!di.value && di.dataset.defaultDate) di.value = di.dataset.defaultDate;
+        }
+      }
+    }
+    for (var k = 0; k < radios.length; k++) {
+      radios[k].addEventListener('change', function () {
+        if (this.checked) apply(this.value);
+      });
+    }
+    var checked = form.querySelector('input[name="input_mode"]:checked');
+    apply(checked ? checked.value : 'dates');
+  }
+  function init() { document.querySelectorAll('form.rt-start').forEach(wire); }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
 {% endblock %}

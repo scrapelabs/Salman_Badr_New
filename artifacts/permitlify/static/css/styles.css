@@ -1819,6 +1819,42 @@ code {
 .rt-start-row .rt-field-wide { flex: 1 1 100%; min-width: 240px; }
 .rt-opt { font-weight: 400; color: var(--app-muted); }
 .rt-req { font-weight: 500; color: var(--app-accent); }
+/* Dual-mode (date range OR tournament link) segmented toggle. The per-form JS in
+   scraper_detail.html shows one input group and clears + hides the other. */
+.rt-hide { display: none !important; }
+.rt-mode-toggle { gap: 8px; }
+.rt-seg {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 3px;
+  gap: 3px;
+  background: var(--app-surface-2);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+}
+.rt-seg-opt { position: relative; margin: 0; display: flex; }
+.rt-seg-opt input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.rt-seg-opt span {
+  padding: 6px 18px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--app-text-2);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.rt-seg-opt input:checked + span { background: var(--app-accent); color: #fff; }
+.rt-seg-opt input:focus-visible + span { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+.rt-seg-opt input:disabled + span { opacity: 0.55; cursor: not-allowed; }
 .rt-start-btn { height: 42px; white-space: nowrap; flex: 0 0 auto; padding-inline: 18px; }
 .rt-start-note {
   display: flex;
