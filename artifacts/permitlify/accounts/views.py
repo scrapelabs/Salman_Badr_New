@@ -2073,9 +2073,14 @@ def _terminate_run_worker(run, settle=0.2):
 @login_required
 @require_http_methods(["POST"])
 def stop_run_view(request, slug, run_uuid):
-    """Force-stop an in-flight run: kill its worker PID and mark it STOPPED."""
+    """Force-stop an in-flight run: kill its worker PID and mark it STOPPED.
+
+    Shared by the Real-time stop button and the Batch jobs table's inline Stop
+    control; the latter posts ``return_tab=batch`` so we redirect back there.
+    """
     run = _get_run(slug, run_uuid)
-    back = f"{reverse('scraper_detail', args=[slug])}?tab=real-time"
+    return_tab = "batch" if request.POST.get("return_tab") == "batch" else "real-time"
+    back = f"{reverse('scraper_detail', args=[slug])}?tab={return_tab}"
 
     if run.status != Run.Status.RUNNING:
         messages.info(request, "That run is no longer in progress.")

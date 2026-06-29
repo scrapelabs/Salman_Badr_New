@@ -174,6 +174,18 @@
                 <input type="hidden" name="page" value="{{ page_obj.number }}" />
                 <button type="submit" class="run-act run-act-danger" title="Cancel this queued job">Cancel</button>
               </form>
+              {% elif r.status == 'running' %}
+              <form class="run-del-form" method="post" action="{% url 'run_stop' s.slug r.uuid %}"
+                    data-confirm="Force-stop running job #{{ r.short_id }}? The worker process will be killed immediately and the partial results kept."
+                    data-confirm-title="Stop this run?" data-confirm-ok="Stop run" data-confirm-tone="danger">
+                {% csrf_token %}
+                <input type="hidden" name="return_tab" value="batch" />
+                <button type="submit" class="run-act run-act-danger" title="Stop this running job">Stop</button>
+              </form>
+              <a class="run-act" href="{% url 'run_log' s.slug r.uuid %}" target="_blank" rel="noopener" title="Open log in a new tab">
+                <svg class="ic-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                Open log
+              </a>
               {% else %}
               <a class="run-act" href="{% url 'run_log' s.slug r.uuid %}" target="_blank" rel="noopener" title="Open log in a new tab">
                 <svg class="ic-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
