@@ -37,9 +37,16 @@ RANK_RANGES = [
     (601, 700), (701, 800), (801, 900), (901, 1000), (1001, 1100),
     (1101, 1200), (1201, 1300), (1301, 1400), (1401, 1500), (1501, 5000),
 ]
+# Select every player row in the desktop rankings table by the presence of a
+# player-profile link, NOT by an exact ``tr`` class. ATP renders the top 10 in
+# ``<tr class="">`` (empty class) and ranks 11+ in ``<tr class="lower-row">``;
+# the old ``tr[@class="lower-row"]`` selector silently dropped the entire top
+# 10. Filtering on the player link captures both, while still excluding the
+# header row and the empty spacer rows (neither has a /players/ link).
 ROW_XPATH = (
     '//table[contains(@class, "mega-table") and '
-    'contains(@class, "desktop-table")]//tr[@class="lower-row"]'
+    'contains(@class, "desktop-table")]'
+    '//tr[.//td[contains(@class, "player")]//a[contains(@href, "/players/")]]'
 )
 LINK_XPATH = (
     './/td[contains(@class, "player")]//ul[@class="player-stats"]'
