@@ -332,10 +332,14 @@ SPECS = {
         bi_weekly=True,
     ),
     # --- player-ranking snapshots (singles + doubles in one run) ----------
-    # Not match results: a single snapshot date yields a 9-column ranking
-    # table. Each only calls its own hard-coded host, so no URL input / host
-    # allowlist is needed. atptour sits behind Cloudflare — without a residential
-    # proxy that clears it, the run fails honestly (like the Stadion scrapers).
+    # Not match results: a ranking date yields a 9-column ranking table. Each
+    # only calls its own hard-coded host, so no URL input / host allowlist is
+    # needed. atptour sits behind Cloudflare — without a residential proxy that
+    # clears it, the run fails honestly (like the Stadion scrapers).
+    #
+    # wtatennis takes a single snapshot date; atptour takes a DATE RANGE and
+    # collects every weekly ranking (published each Monday) that falls inside
+    # it — e.g. 6/08 → 6/22 yields the 6/08, 6/15 and 6/22 snapshots in one run.
     "wtatennis": ScraperSpec(
         slug="wtatennis",
         input_kind=INPUT_RANK_SNAPSHOT,
@@ -344,7 +348,7 @@ SPECS = {
     ),
     "atptour": ScraperSpec(
         slug="atptour",
-        input_kind=INPUT_RANK_SNAPSHOT,
+        input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.atptour:run",
         rank_type=True,
     ),

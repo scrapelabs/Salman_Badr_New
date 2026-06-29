@@ -11,7 +11,7 @@ runners stay byte-for-byte consistent.
 import csv
 import io
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 
@@ -46,6 +46,39 @@ def snapshot_date(run_obj):
         except ValueError:
             pass
     return run_obj.date_from or timezone.localdate()
+
+
+def snapshot_dates(run_obj):
+    """Resolve the list of ranking dates a run should collect.
+
+    ATP/WTA publish a fresh ranking every **Monday**, so a date-range run expands
+    to one snapshot per Monday inside ``[date_from, date_to]`` (inclusive) — e.g.
+    6/08 → 6/22 yields ``[6/08, 6/15, 6/22]``. A single-snapshot run (the
+    ``single_date`` param the rank-snapshot form / webhook records) yields exactly
+    that one date, and a run with no usable range falls back to one date so it
+    never collects nothing by accident.
+    """
+    params = run_obj.params or {}
+    raw = (params.get("single_date") or "").strip()
+    if raw:
+        try:
+            return [datetime.strptime(raw, "%Y-%m-%d").date()]
+        except ValueError:
+            pass
+    start = run_obj.date_from
+    end = run_obj.date_to
+    if start and end and end >= start:
+        # Advance to the first Monday on/after the start, then step weekly.
+        first_monday = start + timedelta(days=(0 - start.weekday()) % 7)
+        out = []
+        cur = first_monday
+        while cur <= end:
+            out.append(cur)
+            cur += timedelta(days=7)
+        # A sub-week range that straddles no Monday still gets one date so the
+        # run reflects the user's window rather than silently collecting nothing.
+        return out or [start]
+    return [snapshot_date(run_obj)]
 
 
 def resolve_rank_types(run_obj):

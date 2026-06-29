@@ -20,6 +20,7 @@ Returns the standard runner 5-tuple
 """
 
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
@@ -125,20 +126,39 @@ def _discover(client, rank_type, date_week, date_iso, log):
     return players
 
 
-def _enrich_one(client, player):
-    """Fetch a player's hero JSON and return a finished row dict, or ``None``."""
+def _enrich_one(client, player, bio_cache, cache_lock):
+    """Build a finished row for one player, reusing a cached hero bio when present.
+
+    A multi-week date range collects the same player on several Mondays; their
+    profile (name / nationality / birthdate) is static, so the bio is cached and
+    reused across weeks instead of refetched every time (the cache is not strict
+    single-flight, so a rare concurrent miss may fetch twice — harmless). Only
+    the rank / points / rankdate (which DO vary by week) come from ``player``.
+    """
     player_id = player["player_id"]
-    hero = client.get_json(HERO_URL.format(player_id=player_id), timeout=30)
-    if not hero:
-        return None
-    last_name = hero.get("LastName", "") or ""
-    first_name = hero.get("FirstName", "") or ""
+    with cache_lock:
+        bio = bio_cache.get(player_id)
+    if bio is None:
+        hero = client.get_json(HERO_URL.format(player_id=player_id), timeout=30)
+        if not hero:
+            return None
+        last_name = hero.get("LastName", "") or ""
+        first_name = hero.get("FirstName", "") or ""
+        bio = {
+            "birthdate": _rankings.to_mdy(
+                hero.get("BirthDate", ""), "%Y-%m-%dT%H:%M:%S"
+            ),
+            "name": f"{last_name}, {first_name}",
+            "nationality": hero.get("NatlId", "") or "",
+        }
+        with cache_lock:
+            bio_cache[player_id] = bio
     return {
-        "birthdate": _rankings.to_mdy(hero.get("BirthDate", ""), "%Y-%m-%dT%H:%M:%S"),
+        "birthdate": bio["birthdate"],
         "gender": "M",
         "player_id": player_id,
-        "name": f"{last_name}, {first_name}",
-        "nationality": hero.get("NatlId", "") or "",
+        "name": bio["name"],
+        "nationality": bio["nationality"],
         "points": player.get("points", ""),
         "rank": player.get("rank", ""),
         "rankdate": player.get("range_date", ""),
@@ -151,10 +171,17 @@ def run(run_obj, log):
     tele = Telemetry()
     scraper = run_obj.scraper
     workers = scraper.worker_count
-    snap = _rankings.snapshot_date(run_obj)
-    date_iso = snap.isoformat()
-    date_week = "Current+Week" if _is_current_week(snap) else date_iso
-    log("INFO", f"\U0001f3be ATP rankings starting \u2014 snapshot {date_iso}")
+    # A date range collects every weekly ranking (Monday) inside it; a single
+    # date collects just that snapshot. Either way, one Monday == one snapshot.
+    snaps = _rankings.snapshot_dates(run_obj)
+    rank_types = _rankings.resolve_rank_types(run_obj)
+    span = (
+        snaps[0].isoformat()
+        if len(snaps) == 1
+        else f"{snaps[0].isoformat()} \u2192 {snaps[-1].isoformat()} "
+        f"({len(snaps)} weekly snapshot(s))"
+    )
+    log("INFO", f"\U0001f3be ATP rankings starting \u2014 {span}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = build_proxies(scraper, log)
 
@@ -162,27 +189,39 @@ def run(run_obj, log):
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering ranked players \u2500\u2500\u2500\u2500")
     players = []
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
-        for rank_type in _rankings.resolve_rank_types(run_obj):
-            players.extend(_discover(discovery, rank_type, date_week, date_iso, log))
+        for snap in snaps:
+            date_iso = snap.isoformat()
+            date_week = "Current+Week" if _is_current_week(snap) else date_iso
+            if len(snaps) > 1:
+                log("INFO", f"\U0001f4c5 ranking week {date_iso}")
+            for rank_type in rank_types:
+                players.extend(
+                    _discover(discovery, rank_type, date_week, date_iso, log)
+                )
 
     total = len(players)
     Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
-    log("INFO", f"\U0001f4cb {total} player(s) to enrich")
+    log("INFO", f"\U0001f4cb {total} player-week row(s) to enrich")
 
     csv_out = _rankings.RankingsCsv()
+    # A player appears once per week in a multi-week range; their static bio is
+    # cached and reused across weeks so a 3-week range isn't ~3x the hero requests.
+    bio_cache = {}
+    cache_lock = threading.Lock()
 
     def process(chunk):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
         try:
             for player in chunk:
                 try:
-                    row = _enrich_one(client, player)
+                    row = _enrich_one(client, player, bio_cache, cache_lock)
                     if row:
                         csv_out.add(row)
                         log(
                             "INFO",
-                            f"   \U0001f3c6 {row['ranktype']} #{row['rank'] or '?'}: "
-                            f"{row['name'] or '?'} ({row['nationality'] or '?'})",
+                            f"   \U0001f3c6 {row['rankdate']} {row['ranktype']} "
+                            f"#{row['rank'] or '?'}: {row['name'] or '?'} "
+                            f"({row['nationality'] or '?'})",
                         )
                 except Exception as exc:  # noqa: BLE001 - one bad player can't kill the run
                     tele.record_error(
