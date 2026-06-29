@@ -56,7 +56,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urljoin
 
 from django.conf import settings
@@ -465,16 +465,60 @@ def _extract_records(data):
 # ======================================================================
 _DOB_NS = {"ns": "http://schemas.datacontract.org/2004/07/Itf.Tennis.Core.Models.Api"}
 
+# ``GetHeadToHeadPlayerDetails`` is an ASP.NET endpoint that content-negotiates:
+# asked with the browser ``fetch`` default ``Accept: */*`` it returns JSON, but
+# the DOB parser below expects the XML document. So the lookup must explicitly
+# prefer XML (mirroring the original reference scraper's headers) or every DOB
+# silently comes back blank.
+_DOB_REQUEST_HEADERS = {
+    "accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
+}
+
+
+def _dob_from_value(value):
+    """Normalize an ITF ``DateOfBirth`` into ``MM/DD/YYYY`` (or "").
+
+    Handles the ISO form (``2003-05-14T00:00:00``) and the WCF DataContract JSON
+    epoch (``/Date(1052870400000-0000)/``) the same endpoint emits as JSON.
+    """
+    value = (value or "").strip()
+    if not value:
+        return ""
+    m = re.match(r"/Date\((-?\d+)", value)
+    if m:
+        try:
+            return (
+                datetime(1970, 1, 1) + timedelta(milliseconds=int(m.group(1)))
+            ).strftime("%m/%d/%Y")
+        except (ValueError, OverflowError):
+            return ""
+    return _to_mdy(value[:19], "%Y-%m-%dT%H:%M:%S")
+
 
 def _extract_dob(resp):
     """Pull ``DateOfBirth`` (→ m/d/Y) out of a ``GetHeadToHeadPlayerDetails``
-    XML body. Returns "" for a missing/blank DOB or unparseable XML."""
+    response. Prefers the XML document the endpoint returns when XML is
+    requested, and falls back to the JSON shape if it negotiated that instead.
+    Returns "" for a missing/blank DOB or an unparseable body."""
+    body = getattr(resp, "content", b"") or b""
     try:
-        tree = etree.fromstring(resp.content)
+        tree = etree.fromstring(body)
         text = tree.xpath("string(./ns:DateOfBirth)", namespaces=_DOB_NS)
         if text:
-            return _to_mdy(text.strip()[:19], "%Y-%m-%dT%H:%M:%S")
-    except Exception:  # noqa: BLE001 - bad XML can't kill the run
+            return _dob_from_value(text)
+    except Exception:  # noqa: BLE001 - not XML; try the JSON shape next
+        pass
+    try:
+        data = json.loads(body)
+        if isinstance(data, dict):
+            return _dob_from_value(
+                data.get("DateOfBirth") or data.get("dateOfBirth") or ""
+            )
+    except Exception:  # noqa: BLE001 - bad body can't kill the run
         pass
     return ""
 
@@ -541,7 +585,7 @@ class _DobResolver:
             # fetches per second from one IP re-trigger the rate challenge.
             if self.delay:
                 time.sleep(self.delay)
-            resp = self.client.get(url)
+            resp = self.client.get(url, headers=_DOB_REQUEST_HEADERS)
             if resp is not None and 200 <= resp.status_code < 300:
                 return _extract_dob(resp)
             # Still blocked (``get`` already retried the in-page fetch). Rotate to

@@ -7,6 +7,7 @@
 - [Simulated date ahead of real data](simulated-date-ahead-of-real-data.md) — container "today" (~2026) is ahead of real-world data; future date windows return 200/empty/0-rows (NOT a bug) — validate live scrapers on a past window (e.g. 2024).
 - [ITF/Stadion CloudFront block](cloudfront-datacenter-block.md) — API 403-blocks datacenter IPs (incl. Replit) at the CDN edge; needs curl_cffi impersonation + a residential proxy.
 - [itftennis stealth browser](itftennis-patchright-browser.md) — needs patchright for Incapsula; go DIRECT (proxy IP is what's challenged, opposite of Stadion); phase-2 rotates a fresh browser+IP per tournament; Playwright SSRF + async-unsafe traps.
+- [itftennis DOB content-negotiation](itftennis-dob-content-negotiation.md) — DOB endpoint content-negotiates; in-page fetch default Accept:*/* → JSON → XML parse silently blanks DOB; carry the Accept header over when porting to the browser fetch.
 - [DB schema management](db-schema-management.md) — DATABASE_URL is Django-owned; schema only via `manage.py migrate`. NEVER run legacy Drizzle `pnpm --filter db push` against it (it drops Django tables).
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
