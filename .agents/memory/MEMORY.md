@@ -12,7 +12,7 @@
 - [Stadion full-season scrape](scraper-full-scrape.md) — never cap per-run ties; collect the whole season (fetch concurrently) or runs silently under-collect.
 - [Proxy credentials](proxy-credentials.md) — proxy addresses may carry creds: render via display_address (masked), never log the raw address; regex replacement can't use a \u escape.
 - [MatchMiner live scrapers](matchminer-live-scrapers.md) — full catalogue (37 wired) on shared parameterised engines + standalone modules; many honest-fail until creds/proxy; central SSRF guard in ScraperClient; unwired slugs fail honestly.
-- [tournamentsoftware DoSearch contract](tournamentsoftware-dosearch-contract.md) — TS-finder scrapers silently return 0 unless LoadMoreResults is page-2+ only & dates are datetime-local.
+- [tournamentsoftware DoSearch contract](tournamentsoftware-dosearch-contract.md) — strict LoadMoreResults/datetime-local payload is itfjuniors-host-specific; sibling TS hosts tolerate the legacy payload, verify per-host.
 - [PrestoSports auth](prestosports-auth.md) — login (Cognito) works via curl_cffi (no Cloudflare); events 401 "Access denied" = account authorization, not bot detection; patchright can't fix a permissions denial.
 - [Porting source scrapers](scraper-porting-pitfalls.md) — probe the live API for real field/join keys (sources have bugs), drop cosmetic AI, env-creds + honest-fail, in-process validation injecting gitignored creds, reuse brazil's 61-col schema.
 - [Player name order](scraper-name-order.md) — all scrapers emit "Lastname, Firstname"; AI-free ports dropped the Claude formatter, so apply shared `_names.last_first` at the output chokepoint or they leak raw "First Last".

@@ -1,6 +1,6 @@
 ---
 name: tournamentsoftware.com DoSearch finder contract
-description: The /find/tournament/DoSearch AJAX contract used by all TS-finder scrapers; how it silently returns 0 when the payload drifts.
+description: The /find/tournament/DoSearch AJAX contract; the STRICT variant on the itfjuniors host returns 0 on a drifted payload, while sibling TS hosts tolerate the legacy payload (verify per-host).
 ---
 
 # tournamentsoftware.com tournament-finder (`DoSearch`) contract
@@ -12,7 +12,27 @@ The finder is an unobtrusive-AJAX form: the find page GET returns an **empty**
 `<ul id="searchResultArea">` (results are loaded only when the form is submitted —
 the page does NOT auto-search on load).
 
-## The contract (verified June 2026)
+## Scope — host-specific; sibling TS scrapers are NOT broken
+
+The strict behavior below is **only** confirmed on
+`itfjuniors.tournamentsoftware.com`. Every other tournamentsoftware.com host
+tested **tolerates the legacy payload** (`LoadMoreResults` on page 1 + bare
+`YYYY-MM-DD` dates) and returns full results. Verified live (June 2026) with the
+**current shipped code**, cold session, no proxy:
+
+- `_ts_tournament` engine — svtf **485** / ireland(ti) **701** tournaments; te/etl
+  page-1 returns 20 with the legacy payload.
+- `estonia_tournament` (etl host) — **487** tournaments.
+- `_ts_league` engine (`/find/league/DoSearch`, `LeagueFilter.*`, **no**
+  `DateFilterType`/`YearNr`) — svtf **20** leagues; the league finder tolerates
+  `LoadMoreResults` on page 1 entirely.
+
+So do NOT port the itfjuniors payload fix to the siblings on the basis of static
+code similarity — they work as-is. The fixed payload is backward-compatible (also
+returns results on the lenient hosts), but applying it is needless churn unless a
+specific host later starts returning 0.
+
+## The strict contract — enforced by `itfjuniors` (verified June 2026)
 
 - **`LoadMoreResults` is page-2+ only.** Sending `LoadMoreResults=LoadMoreResults`
   means "append the next page of an *existing* search". On a cold session (page 1)
@@ -43,8 +63,11 @@ Incapsula-protected itftennis.com family (the patchright/browser scrapers),
 which is a different platform. This TS finder uses plain `curl_cffi`
 (`ScraperClient`), **no browser** — by design.
 
-**Why:** the legacy ported payloads always sent `LoadMoreResults` and bare dates,
-so when the site tightened the contract every TS-finder scraper silently
-returned 0 with no error. **How to apply:** if a TS-finder scraper reports 0,
-check the payload shape first (LoadMoreResults/date format), then confirm the
-window actually has data via a wide-range probe before assuming a code bug.
+**Why:** the legacy ported payloads always sent `LoadMoreResults` and bare dates;
+the `itfjuniors` host tightened its contract and began returning 0, but the
+sibling hosts did NOT — so the bug is host-specific, not a shared-engine defect.
+**How to apply:** if a TS-finder scraper reports 0, FIRST reproduce live against
+that exact host (cold-session POST) — do NOT assume a code-similar sibling shares
+the bug (proven false June 2026). Then check payload shape (LoadMoreResults/date
+format) and confirm the window actually has data via a wide-range probe before
+changing code.
