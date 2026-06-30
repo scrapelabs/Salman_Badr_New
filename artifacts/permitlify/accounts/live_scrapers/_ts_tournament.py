@@ -49,6 +49,7 @@ from parsel import Selector
 
 from accounts.models import Run
 
+from ._gender import draw_gender_code
 from ._http import ScraperClient, build_proxies
 from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -489,6 +490,22 @@ def _parse_dob(sel):
     return ""
 
 
+def _parse_birth_year(sel):
+    """Year of birth from a player's Biography tab → ``1/1/YYYY`` (or ``""``).
+
+    Junior profiles (e.g. Tennis Europe) don't surface DOB/YOB in the profile
+    page-head that :func:`_parse_dob` reads, but the Biography tab lists a
+    ``"Year of birth"`` definition row.
+    """
+    value = _field(
+        sel,
+        'normalize-space(//dt[contains(normalize-space(.), "Year of birth")]'
+        "/following-sibling::dd[1])",
+    )
+    match = re.search(r"(?:19|20)\d{2}", value or "")
+    return f"1/1/{match.group()}" if match else ""
+
+
 def _parse_player(client, cfg, name, url):
     """Resolve a player's ``(name, third_party_id, dob, gender, country)``.
 
@@ -522,11 +539,18 @@ def _parse_player(client, cfg, name, url):
         '//h4[contains(@class, "media__title")]/a/@href',
     )
     if profile_href:
-        profile_sel = client.get_selector(urljoin(cfg.base + "/", profile_href))
+        profile_url = urljoin(cfg.base + "/", profile_href)
+        profile_sel = client.get_selector(profile_url)
         if profile_sel is not None:
             dob = _parse_dob(profile_sel)
             if cfg.dynamic_country and not country:
                 country = _nat(profile_sel)
+        if not dob:
+            # Juniors hide DOB from the profile head but list a "Year of birth"
+            # on the Biography tab — one extra request only where DOB is missing.
+            bio_sel = client.get_selector(profile_url.rstrip("/") + "/biography")
+            if bio_sel is not None:
+                dob = _parse_birth_year(bio_sel)
     return name, third_party_id, dob, "", country
 
 
@@ -542,7 +566,14 @@ def _build_row(client, cfg, ctx, match_data):
     l1_name, l1_id, l1_dob, l1_g, l1_c = _parse_player(client, cfg, l1.get("name", ""), l1.get("profile_url", ""))
     l2_name, l2_id, l2_dob, l2_g, l2_c = _parse_player(client, cfg, l2.get("name", ""), l2.get("profile_url", ""))
 
-    draw_gender = "Male" if w1_g == "M" else ("Female" if w1_g == "F" else "")
+    # Gender is carried by the draw name (e.g. "Boys Singles" / "Juniorke
+    # pojedinačno"); every player in the match inherits it.
+    gcode = draw_gender_code(ctx.get("draw_name", ""))
+    w1_g = gcode if w1_name else ""
+    w2_g = gcode if w2_name else ""
+    l1_g = gcode if l1_name else ""
+    l2_g = gcode if l2_name else ""
+    draw_gender = "Male" if gcode == "M" else ("Female" if gcode == "F" else "")
     date = ctx.get("match_date", "") or ctx.get("tournament_start_date", "")
 
     if cfg.dynamic_country:

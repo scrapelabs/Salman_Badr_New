@@ -402,13 +402,6 @@ class _MatchParser:
             return None
         return 0 if a_wins > b_wins else 1
 
-    def expand_gender(self, gender_code):
-        if gender_code == "F":
-            return "Female"
-        if gender_code == "M":
-            return "Male"
-        return ""
-
     # ---------- one match ----------
     def parse_match(self, game_sel):
         match_data = {}
@@ -496,7 +489,10 @@ class _MatchParser:
                 winner_sets, loser_sets = row_b_sets, row_a_sets
 
             score = self._build_score(winner_sets, loser_sets, outcome)
-            g = self.expand_gender(self.draw_gender)
+            # draw_gender is the spelled-out label ("Male"/"Female"/"") derived
+            # from the Portuguese draw name; the per-player schema wants the
+            # single-letter code ("M"/"F"/"").
+            g = "M" if self.draw_gender == "Male" else ("F" if self.draw_gender == "Female" else "")
 
             winner_1_name = self._last_first(winners[0][0]) if winners else ""
             winner_1_third_party_id = winners[0][1] if winners else ""

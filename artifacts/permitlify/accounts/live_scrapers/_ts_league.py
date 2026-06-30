@@ -50,6 +50,7 @@ from parsel import Selector
 
 from accounts.models import Run
 
+from ._gender import draw_gender_code
 from ._http import ScraperClient, build_proxies
 from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -401,7 +402,14 @@ def _build_row(client, cfg, ctx, match_data):
     l1_name, l1_id, l1_dob, l1_g = _parse_player(client, cfg, l1.get("name", ""), l1.get("profile_url", ""))
     l2_name, l2_id, l2_dob, l2_g = _parse_player(client, cfg, l2.get("name", ""), l2.get("profile_url", ""))
 
-    draw_gender = "Male" if w1_g == "M" else ("Female" if w1_g == "F" else "")
+    # Gender is carried by the league / competition name (e.g. "...za seniorke"
+    # = women, "...seniorska liga" = men); every player inherits it.
+    gcode = draw_gender_code(ctx.get("draw_name", ""))
+    w1_g = gcode if w1_name else ""
+    w2_g = gcode if w2_name else ""
+    l1_g = gcode if l1_name else ""
+    l2_g = gcode if l2_name else ""
+    draw_gender = "Male" if gcode == "M" else ("Female" if gcode == "F" else "")
 
     return {
         "match_id": "",
