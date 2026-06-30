@@ -19,16 +19,19 @@ Each discovered **box score** is fed to Claude (``POST
 https://api.anthropic.com/v1/messages``): PDFs go up as base64 with media type
 ``application/pdf``; HTML is cleaned to markup and split into ~160 000-char
 chunks. Claude returns a JSON array of match objects which map 1:1 onto this
-scraper's bespoke output columns. A deterministic secondary parser (the
-``auburntigers`` sidearm stats-XML fallback) runs only when Claude yields nothing
-for a URL.
+scraper's bespoke output columns. Two deterministic parsers run as fallbacks
+(when Claude is off, or yields nothing for a URL): the ``auburntigers`` sidearm
+stats-XML fallback, and a Sidearm-**HTML** parser for box-score pages that embed
+every match in the page itself (e.g. ``cmsathletics.org``).
 
 Credentials:
 
 - ``settings.CLAUDE_KEYS`` (a list, sourced from ``CLAUDE_KEYS`` /
-  ``ANTHROPIC_API_KEY``). **Required** — when empty the run fails honestly. A key
-  is chosen with ``random.choice`` per worker (mirrors the source's rotation) and
-  is **never** logged.
+  ``ANTHROPIC_API_KEY``). **Optional** — when empty the run still proceeds using
+  the deterministic parsers (a direct box-score link works with no key); it only
+  fails honestly when nothing at all could be extracted. A key is chosen with
+  ``random.choice`` per worker (mirrors the source's rotation) and is **never**
+  logged.
 - ``settings.OPENAI_API_KEY`` — **optional**. Used only to recover a missing
   ``tournament_date`` and (in the auburn fallback) to normalize gender/college
   names. When unset that step is skipped gracefully and the field is left as-is.
@@ -1014,8 +1017,174 @@ def _auburn_extract(client, openai_key, url, content, log, tele):
     return rows
 
 
+# ---------------------------------------------------------------------------
+# Deterministic Sidearm-HTML box score (every match embedded in the page)
+# ---------------------------------------------------------------------------
+# Some athletics sites (e.g. cmsathletics.org) render the whole dual match in
+# the box-score page itself: one <table> per court with a caption ("#1 Doubles",
+# "#3 Singles"), a "Winner" marker on the winning competitor's row, player cells
+# of the form "Name [College]" (doubles join two names with " / "), and a team
+# header carrying each side's logo alt + final team score. That is enough to
+# build every row with no stats-XML API and no AI — names, colleges, per-set
+# scores and gender (from the URL/title) all come straight from the page.
+def _sidearm_cell_text(cell):
+    """Visible text of a box-score cell, dropping the sr-only 'Winner' marker."""
+    parts = cell.xpath(
+        './/text()[not(ancestor::span[contains(@class, "boxscore-winner")])]'
+    ).getall()
+    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+
+
+def _sidearm_player_cell(text):
+    """Split a "Name [College]" (or "P1 / P2 [College]") cell into names + college."""
+    text = re.sub(r"^\s*Winner\s+", "", text or "", flags=re.IGNORECASE).strip()
+    college = ""
+    match = re.search(r"\[([^\]]+)\]\s*$", text)
+    if match:
+        college = match.group(1).strip()
+        text = text[: match.start()].strip()
+    names = [
+        _clean_name(_fmt_name(part)) for part in text.split("/") if part.strip()
+    ]
+    return [n for n in names if n], college
+
+
+def _sidearm_score(winner_sets, loser_sets):
+    """Build a "6-4 6-1;" score string from the two competitors' per-set cells."""
+    parts = []
+    for w, l in zip(winner_sets, loser_sets):
+        w, l = (w or "").strip(), (l or "").strip()
+        if not w and not l:
+            continue
+        parts.append(f"{w}-{l}")
+    return (" ".join(parts) + ";") if parts else ""
+
+
+def _sidearm_table_match(table):
+    """Parse one caption table into the auburn intermediate match dict, or None."""
+    caption = (table.xpath("./caption//text()").get() or "").strip()
+    low = caption.lower()
+    if "doubles" in low:
+        team_type = "Doubles"
+    elif "singles" in low:
+        team_type = "Singles"
+    else:
+        return None
+    rows = [r for r in table.xpath(".//tr") if r.xpath("./td")]
+    if len(rows) != 2:
+        return None
+
+    def is_winner(row):
+        return bool(row.xpath('.//span[contains(@class, "boxscore-winner")]'))
+
+    if is_winner(rows[0]) == is_winner(rows[1]):
+        return None  # can't tell the winner row from the loser row
+    winner_row, loser_row = (
+        (rows[0], rows[1]) if is_winner(rows[0]) else (rows[1], rows[0])
+    )
+
+    def parse(row):
+        cells = row.xpath("./td")
+        names, college = _sidearm_player_cell(_sidearm_cell_text(cells[0]))
+        sets = [_sidearm_cell_text(c) for c in cells[1:]]
+        return names, college, sets
+
+    w_names, w_college, w_sets = parse(winner_row)
+    l_names, l_college, l_sets = parse(loser_row)
+    if not w_names or not l_names:
+        return None
+    return {
+        "draw_team_type": team_type,
+        "draw_name": caption,
+        "winner_1_name": w_names[0],
+        "winner_2_name": w_names[1] if len(w_names) > 1 else "",
+        "loser_1_name": l_names[0],
+        "loser_2_name": l_names[1] if len(l_names) > 1 else "",
+        "winner_college": w_college,
+        "loser_college": l_college,
+        "score": _sidearm_score(w_sets, l_sets),
+    }
+
+
+def _sidearm_team_block(sel, side):
+    """Return (team_name, final_score|None) for the away/home header block."""
+    blk = sel.xpath(f'//*[contains(@class, "team {side}")]')
+    if not blk:
+        return "", None
+    name = re.sub(
+        r"\s+logo$", "", (blk.xpath(".//img/@alt").get() or "").strip(),
+        flags=re.IGNORECASE,
+    ).strip()
+    raw = (blk.xpath('.//span[@class="score"]/text()').get() or "").strip()
+    try:
+        score = int(raw)
+    except ValueError:
+        score = None
+    return name, score
+
+
+def _sidearm_html_extract(url, content, log, tele):
+    """Deterministic parser for Sidearm box-score pages that embed every match in
+    the page HTML. Returns [] when the page isn't that layout (honest fail)."""
+    try:
+        sel = Selector(text=content or "")
+    except Exception:  # noqa: BLE001 - unparseable HTML is non-fatal
+        return []
+    tables = sel.xpath("//table[caption]")
+    if not tables:
+        return []
+    away_name, away_score = _sidearm_team_block(sel, "away")
+    home_name, home_score = _sidearm_team_block(sel, "home")
+    if not (away_name and home_name) or away_score is None or home_score is None:
+        return []
+    if away_score == home_score:
+        return []
+    if away_score > home_score:
+        winner_team, loser_team, hi, lo = away_name, home_name, away_score, home_score
+    else:
+        winner_team, loser_team, hi, lo = home_name, away_name, home_score, away_score
+    team_score = f"{hi}-{lo};"
+    tournament_name_pre = f"Dual Match: {winner_team} vs {loser_team}"
+
+    title = sel.xpath("//title/text()").get() or ""
+    date_match = re.search(r"on\s+(\d{1,2}/\d{1,2}/\d{4})", title) or re.search(
+        r"\b(\d{1,2}/\d{1,2}/\d{4})\b", content or ""
+    )
+    tournament_date = _convert_date(
+        date_match.group(1) if date_match else "", "%m/%d/%Y", "%m/%d/%Y"
+    )
+
+    haystack = f"{url} {title}".lower()
+    if "women" in haystack:
+        draw_gender = "Female"
+    elif "men" in haystack:
+        draw_gender = "Male"
+    else:
+        draw_gender = ""
+
+    rows = []
+    for table in tables:
+        match_data = _sidearm_table_match(table)
+        if not match_data:
+            continue
+        row = _auburn_row(
+            match_data, winner_team, loser_team, team_score, tournament_date,
+            tournament_name_pre, draw_gender, {},
+        )
+        if row:
+            rows.append(row)
+    if rows:
+        log("INFO", f"   \U0001f9fe Sidearm box score (deterministic): {len(rows)} match(es)")
+    return rows
+
+
 def _extract_box_score(client, claude_key, openai_key, system, url, log, tele, *, browser=None):
-    """Fetch one box score and extract rows (Claude first, auburn fallback)."""
+    """Fetch one box score and extract rows.
+
+    Order: Claude (only when a key is configured) -> the auburn stats-XML
+    fallback -> the deterministic Sidearm-HTML parser. The last path needs no AI,
+    so a direct box-score link works even when no Claude key is set.
+    """
     resp = _get_page(client, url, log, tele, browser=browser)
     if resp is None or not (200 <= resp.status_code < 300):
         tele.record_error(
@@ -1027,13 +1196,17 @@ def _extract_box_score(client, claude_key, openai_key, system, url, log, tele, *
     raw_bytes = resp.content or b""
     content_type = resp.headers.get("Content-Type", "")
 
-    rows = _core_extract(
-        client, claude_key, openai_key, system, url, content,
-        raw_bytes, content_type, log, tele,
-    )
+    if claude_key and system:
+        rows = _core_extract(
+            client, claude_key, openai_key, system, url, content,
+            raw_bytes, content_type, log, tele,
+        )
+        if rows:
+            return rows
+    rows = _auburn_extract(client, openai_key, url, content, log, tele)
     if rows:
         return rows
-    return _auburn_extract(client, openai_key, url, content, log, tele)
+    return _sidearm_html_extract(url, content, log, tele)
 
 
 # ---------------------------------------------------------------------------
@@ -1046,25 +1219,20 @@ def run(run_obj, log):
     workers = scraper.worker_count
     params = run_obj.params or {}
 
-    log("INFO", "\U0001f3be College Dual Match (AI) starting \u2014 Claude box-score extraction")
+    log("INFO", "\U0001f3be College Dual Match starting \u2014 box-score extraction")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
 
-    # ---- credentials gate (Claude required, OpenAI optional) -------------
+    # ---- extraction mode (Claude optional, OpenAI optional) --------------
     # Prefer the per-scraper key saved in the Lab → Settings tab; fall back to
     # the env-sourced settings.CLAUDE_KEYS. Comma-separate to rotate several.
+    # Claude is NO LONGER mandatory: a direct box-score link whose page embeds
+    # every match (e.g. a Sidearm boxscore) is parsed deterministically with no
+    # AI. The run still fails honestly later if nothing at all is extracted.
     scraper_key = (getattr(scraper, "claude_api_key", "") or "").strip()
     if scraper_key:
         claude_keys = [k.strip() for k in scraper_key.split(",") if k.strip()]
     else:
         claude_keys = [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
-    if not claude_keys:
-        msg = (
-            "Add a Claude API key in the Settings tab (or set CLAUDE_KEYS / "
-            "ANTHROPIC_API_KEY) to run the College Dual Match AI scraper."
-        )
-        log("ERROR", f"\U0001f6d1 {msg}")
-        tele.record_error(msg)
-        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
     openai_key = (getattr(settings, "OPENAI_API_KEY", "") or "").strip()
     if openai_key:
@@ -1091,12 +1259,26 @@ def run(run_obj, log):
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
-    system = _load_prompt()
-    if not system:
-        msg = f"Claude prompt file missing or empty: {PROMPT_PATH}"
-        log("ERROR", f"\U0001f6d1 {msg}")
-        tele.record_error(msg)
-        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+    # The Claude prompt is only needed for the AI path; load it when a key is
+    # present. A missing prompt downgrades to deterministic-only (not a failure).
+    system = ""
+    if claude_keys:
+        system = _load_prompt()
+        if not system:
+            log(
+                "WARN",
+                f"\u26a0\ufe0f Claude prompt missing/empty ({PROMPT_PATH}) \u2014 "
+                "AI extraction disabled; deterministic parsing only",
+            )
+            claude_keys = []
+    if claude_keys:
+        log("INFO", "\U0001f9e0 AI extraction enabled (Claude) \u2014 deterministic parser as fallback")
+    else:
+        log(
+            "INFO",
+            "\u2139\ufe0f No Claude key \u2014 deterministic box-score parsing only "
+            "(direct links such as Sidearm pages)",
+        )
 
     proxies = build_proxies(scraper, log)
 
@@ -1157,7 +1339,7 @@ def run(run_obj, log):
 
     def process(box_url):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
-        claude_key = random.choice(claude_keys)
+        claude_key = random.choice(claude_keys) if claude_keys else ""
         try:
             rows = _extract_box_score(
                 client, claude_key, openai_key, system, box_url, log, tele,
@@ -1184,7 +1366,7 @@ def run(run_obj, log):
             Run.objects.filter(pk=run_obj.pk).update(progress_done=F("progress_done") + 1)
             client.close()
 
-    log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 extracting with Claude \u2500\u2500\u2500\u2500")
+    log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 extracting box scores \u2500\u2500\u2500\u2500")
     with ThreadPoolExecutor(max_workers=workers) as executor:
         list(executor.map(process, box_scores))
 
