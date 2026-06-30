@@ -314,6 +314,32 @@ def _run_brief(run):
     }
 
 
+def _queued_jobs(limit=5):
+    """The latest jobs waiting in the batch queue (status=queued), newest first."""
+    jobs = list(
+        Run.objects.filter(status=Run.Status.QUEUED)
+        .select_related("scraper")
+        .order_by("-created_at")[:limit]
+    )
+    for r in jobs:
+        r.run_state = "queued"
+        r.params_label = _run_params_label(r)
+    return jobs
+
+
+def _queued_brief(run):
+    return {
+        "slug": run.scraper.slug,
+        "code": run.scraper.code,
+        "name": run.scraper.name,
+        "status_label": run.get_status_display(),
+        "state": "queued",
+        "params": _run_params_label(run),
+        "queued_human": f"{timesince(run.created_at)} ago",
+        "detail_url": f"{reverse('scraper_detail', args=[run.scraper.slug])}?tab=batch",
+    }
+
+
 def _monitor_cards(sys_stats):
     """Gauge-ready CPU / Memory / Disk cards from a collect_system_stats() dict."""
     cpu, mem, disk = sys_stats["cpu"], sys_stats["mem"], sys_stats["disk"]
@@ -639,6 +665,7 @@ def overview_view(request):
         monitor=_monitor_cards(collect_system_stats()),
         threads_running=threads_running,
         running_scrapers=running_scrapers,
+        queued_jobs=_queued_jobs(),
         recent_runs=_recent_runs(),
         live_stats_url=reverse("live_stats"),
     )
@@ -692,6 +719,7 @@ def live_stats_view(request):
                 "maint_count": Scraper.objects.filter(
                     mode=Scraper.Mode.MAINTENANCE
                 ).count(),
+                "queued_jobs": [_queued_brief(r) for r in _queued_jobs()],
                 "recent_runs": [_run_brief(r) for r in _recent_runs()],
             },
             "scrapers": scr_map,

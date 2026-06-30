@@ -52,6 +52,9 @@
     </div>
   </div>
 
+  <h2 class="section-title">Queued jobs</h2>
+  {% include "partials/queued_jobs.html" with queued_jobs=queued_jobs %}
+
   <h2 class="section-title">Recently active</h2>
   {% include "partials/recent_runs.html" with recent_runs=recent_runs %}
 </div>
@@ -113,6 +116,29 @@
       body.innerHTML = runs.map(rowHtml).join("");
     }
 
+    function queuedRowHtml(r) {
+      return (
+        '<tr data-href="' + esc(r.detail_url) + '">' +
+          '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
+            '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
+          "<td>" + esc(r.params) + "</td>" +
+          '<td><span class="run-badge run-st-queued">' + esc(r.status_label) + "</span></td>" +
+          "<td>" + esc(r.queued_human) + "</td>" +
+          '<td class="td-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.detail_url) + '">View queue</a></td>' +
+        "</tr>"
+      );
+    }
+
+    function updateQueued(jobs) {
+      var body = root.querySelector("#queuedJobsBody");
+      if (!body) return;
+      if (!jobs || !jobs.length) {
+        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="5">No queued jobs — the queue is clear.</td></tr>';
+        return;
+      }
+      body.innerHTML = jobs.map(queuedRowHtml).join("");
+    }
+
     function apply(d) {
       var sys = d.system || {};
       updateGauge("cpu", sys.cpu);
@@ -127,6 +153,7 @@
       setText("[data-stat-runs]", ov.runs_today);
       setText("[data-stat-maint]", ov.maint_count);
       updateRuns(ov.recent_runs);
+      updateQueued(ov.queued_jobs);
     }
 
     function tick() {

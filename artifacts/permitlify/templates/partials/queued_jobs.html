@@ -1,0 +1,36 @@
+{% comment %}Overview "queued jobs" table — the latest jobs waiting in the batch
+queue (status=queued), newest first. `queued_jobs` is a list of Run objects each
+with a `.params_label` attr. The tbody is refreshed live by the overview poller.{% endcomment %}
+<div class="tablewrap">
+  <table class="tbl" id="queuedJobsTable">
+    <thead>
+      <tr>
+        <th>Scraper</th>
+        <th>Inputs</th>
+        <th>Status</th>
+        <th>Queued</th>
+        <th class="th-actions">Job</th>
+      </tr>
+    </thead>
+    <tbody id="queuedJobsBody">
+      {% for r in queued_jobs %}
+      <tr data-href="{% url 'scraper_detail' r.scraper.slug %}?tab=batch">
+        <td>
+          <div class="tbl-name">
+            <span class="tbl-badge">{{ r.scraper.code }}</span>
+            <span><a class="tbl-title" href="{% url 'scraper_detail' r.scraper.slug %}?tab=batch">{{ r.scraper.name }}</a></span>
+          </div>
+        </td>
+        <td>{{ r.params_label }}</td>
+        <td><span class="run-badge run-st-queued">{{ r.get_status_display }}</span></td>
+        <td>{{ r.created_at|timesince }} ago</td>
+        <td class="td-actions">
+          <a class="btn btn-ghost btn-sm" href="{% url 'scraper_detail' r.scraper.slug %}?tab=batch">View queue</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr class="tbl-empty-row"><td class="tbl-empty" colspan="5">No queued jobs — the queue is clear.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

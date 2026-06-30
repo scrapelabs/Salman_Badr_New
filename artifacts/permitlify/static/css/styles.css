@@ -1079,6 +1079,10 @@ a.tbl-domain:hover svg {
   color: var(--app-text-3);
   background: var(--app-surface-2);
 }
+.run-st-queued {
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.12);
+}
 
 /* threads banner on the Scrapers page */
 .threadbar {
