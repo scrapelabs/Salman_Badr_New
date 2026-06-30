@@ -28,7 +28,10 @@ else blank); ``build_score`` (winner side first, tie-break sets rendered
 type "Tennis Connect") then ``UniqueID`` (id type "Tennis Australia"); college
 fields are always "". The single ``id_type`` column carries the first (winner 1)
 player's id type — the source stored one id type per player but the shared
-items schema has only one column.
+items schema has only one column. Separately, the four per-player
+``<side>_<n>_id_type`` columns are a constant ``"Tennis Connect"`` label: the
+two person-1 slots always carry it; the two person-2 slots (``winner_2`` /
+``loser_2``) only when that player has a name.
 
 The SAS URL is **never** hard-coded — it is read from the scraper's Settings-tab
 secret field (``Scraper.secret_value``), falling back to
@@ -68,12 +71,16 @@ COLUMNS = [
     "match_id", "ball_type", "id_type", "draw_bracket_value", "draw_name",
     "draw_team_type", "tournament_name", "date", "round", "score",
     "winner_1_name", "winner_1_gender", "winner_1_dob", "winner_1_third_party_id",
+    "winner_1_id_type",
     "winner_1_city", "winner_1_state", "winner_1_country",
     "winner_2_name", "winner_2_gender", "winner_2_dob", "winner_2_third_party_id",
+    "winner_2_id_type",
     "winner_2_city", "winner_2_state", "winner_2_country",
     "loser_1_name", "loser_1_gender", "loser_1_dob", "loser_1_third_party_id",
+    "loser_1_id_type",
     "loser_1_city", "loser_1_state", "loser_1_country",
     "loser_2_name", "loser_2_gender", "loser_2_dob", "loser_2_third_party_id",
+    "loser_2_id_type",
     "loser_2_city", "loser_2_state", "loser_2_country",
     "outcome", "draw_gender", "draw_bracket_type", "draw_type",
     "tournament_city", "tournament_state", "tournament_country_code",
@@ -85,7 +92,15 @@ COLUMNS = [
     "tournament_url", "tournament_country", "tournament_start_date",
     "tournament_end_date",
 ]
-HEADER = [c.replace("_", " ").title() for c in COLUMNS]
+# Per-player ID Type headers use all-caps "ID Type" (the downstream schema's
+# exact label), not the title-cased "Id Type" the generic derivation produces.
+_HEADER_OVERRIDES = {
+    "winner_1_id_type": "Winner 1 ID Type",
+    "winner_2_id_type": "Winner 2 ID Type",
+    "loser_1_id_type": "Loser 1 ID Type",
+    "loser_2_id_type": "Loser 2 ID Type",
+}
+HEADER = [_HEADER_OVERRIDES.get(c, c.replace("_", " ").title()) for c in COLUMNS]
 
 
 # ---------------------------------------------------------------------------
@@ -358,10 +373,16 @@ def _extract_player(match, result_upper, role, person):
 
 
 def _player_cols(prefix, p):
+    # ``*_id_type`` is a constant 'Tennis Connect' label. Person-1 slots always
+    # carry it; person-2 slots (winner_2 / loser_2) only when that player has a
+    # name (``p`` is ``None`` exactly when the second doubles player is absent).
+    is_person1 = prefix.endswith("_1")
     if not p:
         return {
             f"{prefix}_name": "", f"{prefix}_gender": "", f"{prefix}_dob": "",
-            f"{prefix}_third_party_id": "", f"{prefix}_city": "",
+            f"{prefix}_third_party_id": "",
+            f"{prefix}_id_type": "Tennis Connect" if is_person1 else "",
+            f"{prefix}_city": "",
             f"{prefix}_state": "", f"{prefix}_country": "",
         }
     return {
@@ -369,6 +390,7 @@ def _player_cols(prefix, p):
         f"{prefix}_gender": p["gender"],
         f"{prefix}_dob": p["dob"],
         f"{prefix}_third_party_id": p["third_party_id"],
+        f"{prefix}_id_type": "Tennis Connect",
         f"{prefix}_city": p["city"],
         f"{prefix}_state": p["state"],
         f"{prefix}_country": p["country"],
