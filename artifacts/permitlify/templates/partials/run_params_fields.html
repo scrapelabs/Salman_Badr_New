@@ -89,10 +89,11 @@ scraper_detail.html, scoped per-form). Defaults to "Date range".
     </ul>
     <p class="rt-help-note">
       The Google Sheet must be shared as <em>“Anyone with the link can view”</em> so
-      the script can read it. A direct box-score page that lists every match (e.g. a
-      Sidearm boxscore) is parsed automatically — no Claude key needed. The Claude
-      API key on the <a href="?tab=settings">Settings tab</a> is used for AI extraction
-      of recap pages (PDF / free-form HTML) that aren’t in that structured format.
+      the script can read it. Every box-score page (HTML or PDF) is extracted by
+      <strong>Claude</strong> — there is no deterministic fallback, so a
+      <strong>Claude API key is required</strong> (set <code>ANTHROPIC_API_KEY</code>
+      or a per-scraper key on the <a href="?tab=settings">Settings tab</a>). Without
+      one the run fails with an error.
     </p>
   </div>
   {% endif %}

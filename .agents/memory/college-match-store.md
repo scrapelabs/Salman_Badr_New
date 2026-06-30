@@ -37,19 +37,20 @@ and the `matches.csv` export (404 otherwise). Only `college_dual_match` sets it.
 To give another scraper a match database, set the flag + have its runner ingest
 through `college_store` (the table/columns are currently college-shaped).
 
-**Direct box-score link + Claude-optional extraction.** `college_dual_match`
+**Direct box-score link + Claude-ONLY extraction.** `college_dual_match`
 accepts a *direct* match-page URL (a Sidearm boxscore, e.g. cmsathletics.org), not
 just a Google Sheet / `/schedule` page — `_discover` classifies a single boxscore
-as one recap. Extraction order is **Claude (primary, when a key is configured) →
-auburn stats-XML → deterministic Sidearm-HTML parser**; Claude is *optional* (no
-hard-fail without a key) so a direct link still works as best-effort. **Why it
-matters:** `match_hash` normalizes score, so the deterministic fallbacks MUST emit
-the Claude prompt's canonical score format — sets joined `", "`, a tiebreak set as
-`(LOSER_TB)`, winner perspective, `;` suffix (e.g. `6-1, 7-6(4);`) — or the same
-real match hashes differently across paths. The deterministic parser honestly
-*skips* no-winner unfinished matches (can't assign winner/loser), so Claude (which
-emits them as `Unfinished`) has strictly fuller coverage; treat the fallback as
-best-effort, not equivalent.
+as one recap. Extraction is **Claude-only**: every box score (HTML or PDF) goes to
+Claude. **There is NO deterministic fallback** — the old auburn stats-XML and
+Sidearm-HTML parsers were deleted at the user's request. HTML is sent **raw / as-is**
+(no `_clean_html`, no chunking; a ~490k-char page ≈ ~155k input tokens, inside the
+200k context). **Claude is REQUIRED:** `run()` fails up front with an error 5-tuple
+when no key (`ANTHROPIC_API_KEY`/per-scraper) OR no prompt is present — by design,
+"no big deal" per the user. **Why:** the user wanted the pipeline dead-simple (raw
+page → Claude → done) over best-effort coverage. OpenAI stays optional (only
+`_recover_tournament_date`, which is why `_clean_html` survives — it cleans HTML
+before the OpenAI date call, gated on `openai_key`). The browser anti-bot fallback
+(`college-browser-fallback` memory) is unrelated and still in place.
 
 **Download-by-date export keys off `date_norm`.** The Match-database tab's
 "Download by date" panel filters the export by `CollegeMatch.date_norm` (the

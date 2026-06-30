@@ -1,0 +1,29 @@
+[2026-06-30 22:55:21] INFO  🚀 Worker online — Run #fc99abb9 · CDM_AI
+[2026-06-30 22:55:21] INFO  🔁 Retry budget: 2 tries per request
+[2026-06-30 22:55:21] INFO  🎾 College Dual Match starting — box-score extraction
+[2026-06-30 22:55:21] INFO  🧵 Concurrency: 10 worker thread(s)
+[2026-06-30 22:55:21] INFO  ℹ️ OpenAI fallback disabled (OPENAI_API_KEY unset) — fields left as-is
+[2026-06-30 22:55:21] INFO  🧠 AI extraction enabled (Claude) — deterministic parser as fallback
+[2026-06-30 22:55:21] INFO  🔌 HTTP client: curl_cffi (impersonate chrome) via Datacenter proxy 'plainproxies.com'
+[2026-06-30 22:55:21] INFO  ──── phase 1 · discovering box scores ────
+[2026-06-30 22:55:21] INFO  🔎 Classifying https://cmsathletics.org/sports/mens-tennis/stats/2025-26/university-of-chicago/boxscore/10186
+[2026-06-30 22:55:21] INFO  📋 1 box-score recap(s) to extract
+[2026-06-30 22:55:21] INFO  ──── phase 2 · extracting box scores ────
+[2026-06-30 22:55:21] INFO     🧹 HTML cleaned to 17,601 chars → 1 chunk(s) for Claude
+[2026-06-30 22:55:21] INFO     ⏳ Claude chunk 1/1…
+[2026-06-30 22:55:50] INFO     📊 Claude usage: 9916 in + 3142 out
+[2026-06-30 22:55:50] INFO     📅 tournament_date from Claude: 5/22/2026
+[2026-06-30 22:55:50] INFO     🏆 Doubles: Mareedu, Advik def. Ekstrand, Markus [6-1;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Doubles: Kim, Josh def. Murugesan, Shrikeshav [6-3;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Doubles: Wong, Jack def. Wilson, Henry [4-4;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Singles: Mareedu, Advik def. Murugesan, Shrikeshav [6-4, 6-1;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Singles: Grantcharov, Emil def. Pham, Warren [4-6, 6-1, 6-4;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Singles: Wilson, Henry def. Ekstrand, Alexander [2-6, 6-3, 6-2;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Singles: Choi, Michael def. Raja, Sibi [6-1, 7-6(4);] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Singles: Sher, Ajer def. Kim, Josh [6-2, 6-4;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO     🏆 Singles: Liew, Christian def. Settles, Caleb [6-2, 6-1;] — Dual Match: University of Chicago vs Claremont-Mudd-Scripps Colleges - Men
+[2026-06-30 22:55:50] INFO  ──── phase 3 · saving new matches ────
+[2026-06-30 22:55:50] INFO  ──── summary ────
+[2026-06-30 22:55:50] INFO  🧮 9 match(es) extracted — 0 new, 9 already in the database
+[2026-06-30 22:55:50] INFO  📊 Telemetry: 2 request(s), 0 error(s)
+[2026-06-30 22:55:50] INFO  🏁 Run finished — status=success, new_rows=0
