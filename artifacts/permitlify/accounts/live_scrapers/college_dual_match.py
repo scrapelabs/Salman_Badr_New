@@ -1049,15 +1049,37 @@ def _sidearm_player_cell(text):
     return [n for n in names if n], college
 
 
+def _sidearm_set_cell(cell):
+    """Return (games, tiebreak) for a set cell. A tiebreak set renders the loser's
+    points in a <sup>, e.g. ``<td>6 <sup>4</sup></td>`` -> ("6", "4")."""
+    games = re.sub(r"\s+", " ", " ".join(cell.xpath("./text()").getall())).strip()
+    tb = (cell.xpath("./sup//text()").get() or "").strip()
+    return games, tb
+
+
 def _sidearm_score(winner_sets, loser_sets):
-    """Build a "6-4 6-1;" score string from the two competitors' per-set cells."""
+    """Build a "6-4, 7-6(4);" score from the two competitors' per-set (games, tb)
+    cells. Matches the Claude prompt's canonical format: written from the match
+    winner's perspective, sets joined with ", ", and a tiebreak set carrying the
+    SET loser's tiebreak points in parentheses."""
     parts = []
-    for w, l in zip(winner_sets, loser_sets):
-        w, l = (w or "").strip(), (l or "").strip()
-        if not w and not l:
+    for (wg, wtb), (lg, ltb) in zip(winner_sets, loser_sets):
+        wg, lg = (wg or "").strip(), (lg or "").strip()
+        if not wg and not lg:
             continue
-        parts.append(f"{w}-{l}")
-    return (" ".join(parts) + ";") if parts else ""
+        piece = f"{wg}-{lg}"
+        tb = ""
+        try:
+            if int(wg) > int(lg):
+                tb = (ltb or "").strip()  # match-loser lost this set
+            elif int(lg) > int(wg):
+                tb = (wtb or "").strip()  # match-winner lost this set
+        except ValueError:
+            tb = ""
+        if tb:
+            piece += f"({tb})"
+        parts.append(piece)
+    return (", ".join(parts) + ";") if parts else ""
 
 
 def _sidearm_table_match(table):
@@ -1086,7 +1108,7 @@ def _sidearm_table_match(table):
     def parse(row):
         cells = row.xpath("./td")
         names, college = _sidearm_player_cell(_sidearm_cell_text(cells[0]))
-        sets = [_sidearm_cell_text(c) for c in cells[1:]]
+        sets = [_sidearm_set_cell(c) for c in cells[1:]]
         return names, college, sets
 
     w_names, w_college, w_sets = parse(winner_row)
@@ -1203,6 +1225,11 @@ def _extract_box_score(client, claude_key, openai_key, system, url, log, tele, *
         )
         if rows:
             return rows
+        log(
+            "WARN",
+            "\u26a0\ufe0f Claude returned no rows \u2014 falling back to the "
+            "deterministic parser (best-effort)",
+        )
     rows = _auburn_extract(client, openai_key, url, content, log, tele)
     if rows:
         return rows

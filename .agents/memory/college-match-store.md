@@ -37,6 +37,20 @@ and the `matches.csv` export (404 otherwise). Only `college_dual_match` sets it.
 To give another scraper a match database, set the flag + have its runner ingest
 through `college_store` (the table/columns are currently college-shaped).
 
+**Direct box-score link + Claude-optional extraction.** `college_dual_match`
+accepts a *direct* match-page URL (a Sidearm boxscore, e.g. cmsathletics.org), not
+just a Google Sheet / `/schedule` page — `_discover` classifies a single boxscore
+as one recap. Extraction order is **Claude (primary, when a key is configured) →
+auburn stats-XML → deterministic Sidearm-HTML parser**; Claude is *optional* (no
+hard-fail without a key) so a direct link still works as best-effort. **Why it
+matters:** `match_hash` normalizes score, so the deterministic fallbacks MUST emit
+the Claude prompt's canonical score format — sets joined `", "`, a tiebreak set as
+`(LOSER_TB)`, winner perspective, `;` suffix (e.g. `6-1, 7-6(4);`) — or the same
+real match hashes differently across paths. The deterministic parser honestly
+*skips* no-winner unfinished matches (can't assign winner/loser), so Claude (which
+emits them as `Unfinished`) has strictly fuller coverage; treat the fallback as
+best-effort, not equivalent.
+
 **Download-by-date export keys off `date_norm`.** The Match-database tab's
 "Download by date" panel filters the export by `CollegeMatch.date_norm` (the
 indexed normalized ISO `YYYY-MM-DD` *match* date — not `created_at`/scrape time)
