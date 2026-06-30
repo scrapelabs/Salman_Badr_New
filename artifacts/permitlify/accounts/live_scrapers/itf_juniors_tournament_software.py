@@ -331,15 +331,29 @@ def _discover_single(client, url, log):
 
 
 def _search_payload():
-    """The ITF Juniors tournament finder POST body (verbatim from the source)."""
+    """The ITF Juniors tournament finder POST body.
+
+    Mirrors what the site's finder form now submits. Two contract points that
+    differ from the legacy source and silently returned 0 tournaments when they
+    drifted:
+
+    * ``LoadMoreResults`` is **not** sent here. With it present the server treats
+      the call as "append the next page of an existing search" and returns an
+      empty body on a cold session. The first page is a plain submit; pagination
+      adds ``LoadMoreResults`` for page >= 2 (see :func:`_discover_range`).
+    * The form now also posts ``YearNr``/``MonthNr`` (blank for a custom range)
+      and expects ``StartDate``/``EndDate`` in ``datetime-local`` form
+      (``YYYY-MM-DDTHH:MM``) \u2014 plain ``YYYY-MM-DD`` matches nothing.
+    """
     return {
-        "LoadMoreResults": "LoadMoreResults",
         "Page": "1",
         "TournamentExtendedFilter.SportID": "0",
         "TournamentFilter.Q": "",
         "TournamentFilter.DateFilterType": "0",
-        "TournamentFilter.StartDate": "2000-01-01",
-        "TournamentFilter.EndDate": "2026-07-28",
+        "TournamentFilter.StartDate": "2000-01-01T00:00",
+        "TournamentFilter.EndDate": "2026-07-28T00:00",
+        "TournamentFilter.YearNr": "",
+        "TournamentFilter.MonthNr": "",
         "TournamentFilter.PostalCode": "",
         "TournamentFilter.Distance": "15",
         "TournamentExtendedFilter.CountryCode": "",
@@ -349,7 +363,6 @@ def _search_payload():
         "TournamentExtendedFilter.EventGameTypeIDList[2]": "false",
         "TournamentExtendedFilter.EventGameTypeIDList[3]": "false",
         "TournamentExtendedFilter.EventGameTypeIDList[4]": "false",
-        "X-Requested-With": "XMLHttpRequest",
     }
 
 
@@ -367,8 +380,12 @@ def _discover_range(client, start_str, end_str, log):
         page += 1
         data = _search_payload()
         data["Page"] = str(page)
-        data["TournamentFilter.StartDate"] = start_str
-        data["TournamentFilter.EndDate"] = end_str
+        # The finder expects datetime-local values; bare YYYY-MM-DD matches none.
+        data["TournamentFilter.StartDate"] = f"{start_str}T00:00"
+        data["TournamentFilter.EndDate"] = f"{end_str}T00:00"
+        # Page 1 is a fresh submit; later pages append via LoadMoreResults.
+        if page > 1:
+            data["LoadMoreResults"] = "LoadMoreResults"
 
         resp = client.post(SEARCH_URL, data=data, headers=headers)
         if resp is None or not (200 <= resp.status_code < 300):
