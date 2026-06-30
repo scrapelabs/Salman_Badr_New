@@ -2885,7 +2885,7 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .qa-total { font: 500 9.4px "JetBrains Mono", monospace; color: var(--app-text-3); text-transform: uppercase; letter-spacing: 0.8px; }
 
 /* --- kanban board --- */
-.qa-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.qa-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .qa-col {
   background: var(--app-surface-2); border: 1px solid var(--app-border);
   border-radius: 14px; display: flex; flex-direction: column; min-height: 120px;
@@ -2894,6 +2894,7 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .qa-col-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .qa-col--todo .qa-col-dot { background: var(--app-text-3); }
 .qa-col--in_progress .qa-col-dot { background: var(--app-accent); }
+.qa-col--qa_review .qa-col-dot { background: var(--app-amber); }
 .qa-col--done .qa-col-dot { background: var(--app-prod); }
 .qa-col-title { font: 700 11px "Plus Jakarta Sans", sans-serif; color: var(--app-text); flex: 1; }
 .qa-col-count {
@@ -2940,6 +2941,7 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .qa-pri--high { color: var(--app-maint); background: var(--app-maint-bg); }
 .qa-status--todo { color: var(--app-text-2); background: var(--app-surface-2); border-color: var(--app-border-2); }
 .qa-status--in_progress { color: var(--app-accent); background: var(--app-accent-bg); }
+.qa-status--qa_review { color: var(--app-amber); background: var(--app-amber-bg); }
 .qa-status--done { color: var(--app-prod); background: var(--app-prod-bg); }
 .qa-chip--scraper { color: var(--app-brand); background: var(--app-accent-bg); text-transform: none; letter-spacing: 0; font-family: "DM Sans", sans-serif; font-size: 9.4px; }
 
@@ -3099,9 +3101,10 @@ body.mm-modal-open { overflow: hidden; }
 /* --- responsive --- */
 @media (max-width: 1080px) {
   .qa-detail-grid { grid-template-columns: 1fr; }
-  .qa-board { grid-template-columns: 1fr; }
+  .qa-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
+  .qa-board { grid-template-columns: 1fr; }
   .qa-head { flex-direction: column; align-items: stretch; gap: 14px; }
   .qa-head .qa-new-btn { width: 100%; justify-content: center; }
   .qa-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }

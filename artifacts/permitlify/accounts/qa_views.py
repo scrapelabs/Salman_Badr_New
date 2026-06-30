@@ -32,6 +32,7 @@ MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024  # 5 MB per screenshot.
 STATUS_COLUMNS = [
     (Ticket.Status.TODO, "To Do"),
     (Ticket.Status.IN_PROGRESS, "In Progress"),
+    (Ticket.Status.QA_REVIEW, "QA Review"),
     (Ticket.Status.DONE, "Done"),
 ]
 
