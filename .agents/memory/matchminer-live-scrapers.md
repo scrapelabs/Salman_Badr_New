@@ -64,6 +64,16 @@ Source quirks worth remembering:
   whole run** (FAILED, 0 rows, error asks for the key) before any scraping if no
   Anthropic key resolves (per-scraper → Settings/workspace → env). Don't "helpfully"
   add a draw-name/heuristic gender fallback or re-drop the Claude call.
+- **brazil_results** (standalone): same Claude-only per-player gender contract as
+  estonia (infer from name via `_claude_gender.resolve_gender`, cached; NO fallback;
+  honest-fail the run before any network if no Anthropic key resolves). The
+  per-tournament `ScraperClient` + resolved `claude_keys` are threaded from `run()`
+  down to `_MatchParser` (via a `process()` closure). Unlike estonia, the
+  `draw_gender` **field** still uses the Portuguese draw-name word
+  (`masculino`/`feminino`) — that's a real Brazil signal; only the per-player gender
+  became Claude. The source already called Claude per player and **discarded** the
+  gender (fell back to the draw name, blank for age-category draws) — this restores it.
+  Don't re-add a draw-name per-player fallback or restore Claude name pretty-formatting.
 - **Shared TS engines gender modes** (`_ts_tournament`/`_ts_league`): both support
   Claude name→gender via two config flags. `claude_gender` alone = **SOFT** (if no
   key: WARN + fall back to draw-name gender; used by **Croatia**). `claude_gender` +

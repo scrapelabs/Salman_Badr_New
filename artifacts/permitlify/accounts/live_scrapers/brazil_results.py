@@ -10,10 +10,17 @@ client (:mod:`accounts.live_scrapers._http`) + telemetry. Input is a season
    every category / parameter / round and parse each ``div.game`` block into a
    match row.
 
-Unlike the production spider this port is **deterministic and AI-free**: the
-original optionally pretty-formatted new player names via Claude, but that only
-affected display casing (gender always comes from the draw), so it is dropped —
-names are emitted as scraped (normalised to ``"Last, First"``).
+Player **gender is inferred from each player's name via Claude**
+(:func:`accounts.live_scrapers._claude_gender.resolve_gender`, cached per
+distinct name), restoring the gender the source's ``format_name_gender_claude``
+call produced — the original discarded that gender and fell back to the draw
+name, which is blank for age-category draws that carry no gender word. This is
+**Claude-only with no fallback**: if no Anthropic key is configured (per-scraper
+-> workspace/Settings -> env) the run **fails immediately** and asks for the key
+rather than emitting genderless rows. The ``draw_gender`` field still reflects
+the Portuguese draw name (``masculino``/``feminino``). Player names are emitted
+as scraped, normalised to ``"Last, First"`` (the source's optional Claude name
+pretty-formatting is not restored — only gender).
 
 ``run(run_obj, log)`` returns ``(items_csv, requests_csv, errors_csv,
 row_count, status)``.
@@ -35,6 +42,7 @@ from parsel import Selector
 
 from accounts.models import Run
 
+from ._claude_gender import resolve_claude_keys, resolve_gender
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
@@ -138,9 +146,21 @@ class _MatchParser:
     _RE_PERIOD = re.compile(r"(\d{2}/\d{2}/\d{4})\s*a\s*(\d{2}/\d{2}/\d{4})")
     _RE_TRAILING_PAREN = re.compile(r"\s*\([^)]*\)\s*$")
 
-    def __init__(self, selector):
+    def __init__(self, selector, client=None, claude_keys=None):
+        # ``client`` / ``claude_keys`` drive per-player gender via Claude; the
+        # run honest-fails before any parsing when no key is configured, so by
+        # the time rows are built they are always present.
+        self._client = client
+        self._claude_keys = claude_keys or []
         self._extract_tournament(selector)
         self._extract_draw(selector)
+
+    def _gender_for(self, name):
+        """Infer one player's gender (``"M"``/``"F"``/``""``) from their name via
+        Claude, cached per distinct name (see :mod:`._claude_gender`)."""
+        if not name or self._client is None or not self._claude_keys:
+            return ""
+        return resolve_gender(self._client, self._claude_keys, name)
 
     # ---------- helpers ----------
     @staticmethod
@@ -489,18 +509,17 @@ class _MatchParser:
                 winner_sets, loser_sets = row_b_sets, row_a_sets
 
             score = self._build_score(winner_sets, loser_sets, outcome)
-            # draw_gender is the spelled-out label ("Male"/"Female"/"") derived
-            # from the Portuguese draw name; the per-player schema wants the
-            # single-letter code ("M"/"F"/"").
-            g = "M" if self.draw_gender == "Male" else ("F" if self.draw_gender == "Female" else "")
-
+            # Per-player gender is inferred from each player's name via Claude
+            # (cached); the draw_gender field below still reflects the Portuguese
+            # draw name ("masculino"/"feminino").
             winner_1_name = self._last_first(winners[0][0]) if winners else ""
             winner_1_third_party_id = winners[0][1] if winners else ""
             winner_1_country = self.COUNTRY if winner_1_name else ""
+            winner_1_gender = self._gender_for(winner_1_name)
             if len(winners) >= 2:
                 winner_2_name = self._last_first(winners[1][0])
                 winner_2_third_party_id = winners[1][1]
-                winner_2_gender = g
+                winner_2_gender = self._gender_for(winner_2_name)
                 winner_2_country = self.COUNTRY
             else:
                 winner_2_name = ""
@@ -511,10 +530,11 @@ class _MatchParser:
             loser_1_name = self._last_first(losers[0][0]) if losers else ""
             loser_1_third_party_id = losers[0][1] if losers else ""
             loser_1_country = self.COUNTRY if loser_1_name else ""
+            loser_1_gender = self._gender_for(loser_1_name)
             if len(losers) >= 2:
                 loser_2_name = self._last_first(losers[1][0])
                 loser_2_third_party_id = losers[1][1]
-                loser_2_gender = g
+                loser_2_gender = self._gender_for(loser_2_name)
                 loser_2_country = self.COUNTRY
             else:
                 loser_2_name = ""
@@ -534,7 +554,7 @@ class _MatchParser:
                 "round": round_,
                 "score": score,
                 "winner_1_name": winner_1_name,
-                "winner_1_gender": g,
+                "winner_1_gender": winner_1_gender,
                 "winner_1_dob": "",
                 "winner_1_third_party_id": winner_1_third_party_id,
                 "winner_1_city": "",
@@ -548,7 +568,7 @@ class _MatchParser:
                 "winner_2_state": "",
                 "winner_2_country": winner_2_country,
                 "loser_1_name": loser_1_name,
-                "loser_1_gender": g,
+                "loser_1_gender": loser_1_gender,
                 "loser_1_dob": "",
                 "loser_1_third_party_id": loser_1_third_party_id,
                 "loser_1_city": "",
@@ -652,8 +672,8 @@ def _discover_tournaments(client, year, month, log):
     return tournaments
 
 
-def _parse_games(tournament_url, sel):
-    parser = _MatchParser(sel)
+def _parse_games(tournament_url, sel, client=None, claude_keys=None):
+    parser = _MatchParser(sel, client=client, claude_keys=claude_keys)
     out = []
     for game_sel in sel.xpath('//div[@class="game"]'):
         md = parser.parse_match(game_sel)
@@ -664,7 +684,7 @@ def _parse_games(tournament_url, sel):
     return out
 
 
-def _parse_category(client, tournament_url, sel):
+def _parse_category(client, tournament_url, sel, claude_keys=None):
     """Walk every category / parameter / round panel; return match rows."""
     out = []
     id_categorias = sel.xpath('//select[@id="id_categoria"]/option/@value').getall()
@@ -718,14 +738,23 @@ def _parse_category(client, tournament_url, sel):
                     resp2 = client.post(PAINEL_URL, data=data2, headers=headers)
                     if resp2 is not None and 200 <= resp2.status_code < 300:
                         out.extend(
-                            _parse_games(tournament_url, Selector(text=resp2.text))
+                            _parse_games(
+                                tournament_url,
+                                Selector(text=resp2.text),
+                                client=client,
+                                claude_keys=claude_keys,
+                            )
                         )
             else:
-                out.extend(_parse_games(tournament_url, psel))
+                out.extend(
+                    _parse_games(
+                        tournament_url, psel, client=client, claude_keys=claude_keys
+                    )
+                )
     return out
 
 
-def _scrape_tournament(client, tournament_url):
+def _scrape_tournament(client, tournament_url, claude_keys=None):
     """Return all match rows for one tournament URL."""
     warm = client.get(tournament_url, headers={"Referer": BASE + "/"})
     if warm is None or not (200 <= warm.status_code < 300):
@@ -740,7 +769,7 @@ def _scrape_tournament(client, tournament_url):
     )
     if sel is None:
         return []
-    return _parse_category(client, tournament_url, sel)
+    return _parse_category(client, tournament_url, sel, claude_keys=claude_keys)
 
 
 def run(run_obj, log):
@@ -756,6 +785,21 @@ def run(run_obj, log):
     )
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = build_proxies(scraper, log)
+
+    # Gender is inferred from player names via Claude, with no fallback: without
+    # a key, fail the run and ask for one rather than emitting genderless rows.
+    claude_keys = resolve_claude_keys(scraper)
+    if not claude_keys:
+        msg = (
+            "Anthropic API key required \u2014 Brazil Results infers player "
+            "gender from names via Claude and has no fallback. Add a key on the "
+            "Settings page (workspace-wide) or this scraper's Settings tab, then "
+            "re-run."
+        )
+        tele.record_error(msg)
+        log("ERROR", "\U0001f6d1 " + msg)
+        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+    log("INFO", "\U0001f9e0 Gender: Claude name inference enabled (cached)")
 
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
@@ -775,7 +819,7 @@ def run(run_obj, log):
     def process(tournament_url):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
         try:
-            rows = _scrape_tournament(client, tournament_url)
+            rows = _scrape_tournament(client, tournament_url, claude_keys=claude_keys)
             for row in rows:
                 # Source-identified key: dedupes only true duplicates within a
                 # tournament, without collapsing genuine rematches (same
