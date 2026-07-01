@@ -58,7 +58,12 @@ Engines (all over the shared `_http.ScraperClient` + `telemetry.py`):
 Source quirks worth remembering:
 - **estonia_tournament**: its source uses a *dual parser* that doesn't fit the shared
   TS-tournament engine, so it's a bespoke standalone module (see above) and keeps a
-  deterministic sha256 id fallback.
+  deterministic sha256 id fallback. **Exception to the AI-free rule:** per explicit
+  user instruction it infers player gender from names via Claude
+  (`_claude_gender.resolve_gender`) **only, with NO fallback**, and **honest-fails the
+  whole run** (FAILED, 0 rows, error asks for the key) before any scraping if no
+  Anthropic key resolves (per-scraper → Settings/workspace → env). Don't "helpfully"
+  add a draw-name/heuristic gender fallback or re-drop the Claude call.
 - Asset hosts like `objects.fi` / `objs.fi` in league sources are CDNs — ignore for
   data crawling. `scripts.fi` in finland_league is only a python import path, not a host.
 

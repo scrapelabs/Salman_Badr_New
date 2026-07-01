@@ -30,14 +30,17 @@ scrapes that one tournament. The flow mirrors the source's three stages:
    each side back onto the player table for name/DOB, and emit one CSV row per
    played match.
 
-**Deterministic / AI-free port.** The source fed every player name through a
-Claude "format name + guess gender" call (``helper.format_name_gender_claude``);
-that LLM call is **dropped**. The scraped name is reordered to
+**Name handling & gender.** The scraped name is reordered to
 ``"Lastname, Firstname"`` via :func:`accounts.live_scrapers._names.last_first`
-(matching the format the Claude call produced) and player gender
-(its only source was the model) is left ``""`` — so ``draw_gender`` (derived from
-the winner's gender) is likewise blank. The deterministic ``sha256_id`` fallback
-is **kept** (reproduced locally with :mod:`hashlib`). One source inconsistency is
+(matching the format the source's Claude call produced). Player **gender is
+inferred from the name via Claude** (:func:`accounts.live_scrapers._claude_gender.
+resolve_gender`, cached per distinct name), faithfully restoring the source's
+``helper.format_name_gender_claude`` behaviour — the winner's gender in turn
+drives ``draw_gender``. This is **Claude-only with no fallback**: if no Anthropic
+key is configured (per-scraper → workspace/Settings → env), the run **fails
+immediately** and asks for the key rather than emitting genderless rows. The
+deterministic ``sha256_id`` fallback for the licence id is **kept** (reproduced
+locally with :mod:`hashlib`). One source inconsistency is
 corrected so the player join actually works: the licence id is derived the same
 way wherever a player page is read (the original derived the fallback id from an
 always-empty local in one branch, which broke the join).
@@ -61,6 +64,7 @@ from parsel import Selector
 
 from accounts.models import Run
 
+from ._claude_gender import resolve_claude_keys, resolve_gender
 from ._http import ScraperClient, build_proxies
 from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -800,7 +804,7 @@ def _build_row(client, tournament, match, players_db, url_to_id, page_cache):
 # ---------------------------------------------------------------------------
 # Per-tournament orchestration
 # ---------------------------------------------------------------------------
-def _scrape_tournament(client, tournament):
+def _scrape_tournament(client, tournament, claude_keys):
     """Build the players table then emit one row per played match."""
     tid = tournament.get("tournament_id", "")
     if not tid:
@@ -831,7 +835,9 @@ def _scrape_tournament(client, tournament):
             players_db[tpid] = {
                 "name": listing_name,
                 "dob": _player_dob(client, sel, page_cache),
-                "gender": "",  # source's only gender source was an LLM (dropped)
+                # Claude-only gender (no fallback), faithfully restoring the
+                # source's name→gender LLM call; cached per distinct name.
+                "gender": resolve_gender(client, claude_keys, listing_name),
             }
 
     # Stage C: matches -> rows.
@@ -854,6 +860,22 @@ def run(run_obj, log):
     scraper = run_obj.scraper
     workers = scraper.worker_count
     params = run_obj.params or {}
+
+    # Gender is inferred from player names via Claude with NO fallback, so a
+    # Claude key is mandatory. Without one, fail before any scraping and ask for
+    # the key rather than emitting genderless rows.
+    claude_keys = resolve_claude_keys(scraper)
+    if not claude_keys:
+        msg = (
+            "Anthropic API key required \u2014 the Estonia scraper infers player "
+            "gender from names via Claude and has no fallback. Add a key on the "
+            "Settings page (workspace-wide) or this scraper's Settings tab, then "
+            "re-run."
+        )
+        tele.record_error(msg)
+        log("ERROR", "\U0001f6d1 " + msg)
+        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+
     tournament_url = (params.get("tournament_url") or "").strip()
 
     if tournament_url:
@@ -895,7 +917,7 @@ def run(run_obj, log):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
         try:
             _warm_up(client)
-            rows = _scrape_tournament(client, tournament)
+            rows = _scrape_tournament(client, tournament, claude_keys)
             for row in rows:
                 # The source dedups on the player names + score within a run.
                 key = (
