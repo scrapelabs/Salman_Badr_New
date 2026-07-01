@@ -51,6 +51,7 @@ from . import college_store, scheduling
 from .live_scrapers import _ssrf, registry
 from .models import (
     CollegeMatch,
+    GeneralConfig,
     Proxy,
     QueueState,
     Run,
@@ -2768,14 +2769,74 @@ def settings_view(request):
             messages.success(request, f"Password updated for “{target.username}”.")
             return redirect("settings")
 
+        if action == "add_proxy":
+            name = (request.POST.get("name") or "").strip()
+            kind = request.POST.get("kind", Proxy.Kind.RESIDENTIAL)
+            address = (request.POST.get("address") or "").strip()
+            if not name:
+                messages.error(request, "Give the proxy a name.")
+            elif kind not in Proxy.Kind.values:
+                messages.error(request, "Pick a valid proxy type.")
+            else:
+                Proxy.objects.create(name=name, kind=kind, address=address)
+                messages.success(request, f"Added proxy “{name}”.")
+            return redirect("settings")
+
+        if action == "delete_proxy":
+            proxy_id = (request.POST.get("proxy_id") or "").strip()
+            if proxy_id.isdigit():
+                Proxy.objects.filter(pk=int(proxy_id)).delete()
+                messages.success(request, "Proxy removed.")
+            return redirect("settings")
+
+        if action == "save_anthropic_key":
+            # The key is a secret: it is stored as-is but never logged or echoed
+            # back to the page (only a masked form is ever rendered).
+            key = (request.POST.get("anthropic_api_key") or "").strip()
+            if not key:
+                messages.error(
+                    request,
+                    "Enter an Anthropic API key, or use “Clear stored key” to remove it.",
+                )
+                return redirect("settings")
+            cfg = GeneralConfig.get_solo()
+            cfg.anthropic_api_key = key
+            cfg.save()
+            messages.success(request, "Anthropic API key saved.")
+            return redirect("settings")
+
+        if action == "clear_anthropic_key":
+            cfg = GeneralConfig.get_solo()
+            cfg.anthropic_api_key = ""
+            cfg.save()
+            messages.success(
+                request,
+                "Anthropic API key cleared — the AI scrapers fall back to the "
+                "server environment key if one is set.",
+            )
+            return redirect("settings")
+
         messages.error(request, "Unknown action.")
         return redirect("settings")
 
     users = User.objects.order_by("-is_active", "-is_superuser", "username")
+    proxies = Proxy.objects.annotate(used_by=Count("scrapers")).order_by("name")
+    by_kind = {k.value: 0 for k in Proxy.Kind}
+    for p in proxies:
+        by_kind[p.kind] = by_kind.get(p.kind, 0) + 1
+    cfg = GeneralConfig.get_solo()
+    env_keys = [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
     ctx = _app_ctx(
         "settings",
         users_list=users,
         total_users=users.count(),
+        proxies=proxies,
+        proxy_kinds=Proxy.Kind.choices,
+        total_proxies=len(proxies),
+        by_kind=by_kind,
+        anthropic_masked=cfg.masked_anthropic_key,
+        anthropic_configured=bool(cfg.masked_anthropic_key),
+        anthropic_env_present=bool(env_keys),
     )
     return render(request, "settings.html", ctx)
 
@@ -2921,42 +2982,9 @@ def users_view(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def proxies_view(request):
-    if not request.user.is_superuser:
-        messages.error(request, "Only administrators can manage proxies.")
-        return redirect("overview")
-    if request.method == "POST":
-        action = request.POST.get("action")
-        if action == "delete":
-            proxy_id = (request.POST.get("proxy_id") or "").strip()
-            if proxy_id.isdigit():
-                Proxy.objects.filter(pk=int(proxy_id)).delete()
-                messages.success(request, "Proxy removed.")
-            return redirect("proxies")
-
-        name = (request.POST.get("name") or "").strip()
-        kind = request.POST.get("kind", Proxy.Kind.RESIDENTIAL)
-        address = (request.POST.get("address") or "").strip()
-        if not name:
-            messages.error(request, "Give the proxy a name.")
-        elif kind not in Proxy.Kind.values:
-            messages.error(request, "Pick a valid proxy type.")
-        else:
-            Proxy.objects.create(name=name, kind=kind, address=address)
-            messages.success(request, f"Added proxy “{name}”.")
-        return redirect("proxies")
-
-    proxies = Proxy.objects.annotate(used_by=Count("scrapers")).order_by("name")
-    by_kind = {k.value: 0 for k in Proxy.Kind}
-    for p in proxies:
-        by_kind[p.kind] = by_kind.get(p.kind, 0) + 1
-    ctx = _app_ctx(
-        "proxies",
-        proxies=proxies,
-        proxy_kinds=Proxy.Kind.choices,
-        total_proxies=len(proxies),
-        by_kind=by_kind,
-    )
-    return render(request, "proxies.html", ctx)
+    """The standalone Proxies page was merged into the Settings page. Keep this
+    route as a permanent redirect so old links/bookmarks still resolve."""
+    return redirect("settings")
 
 
 @require_http_methods(["POST"])

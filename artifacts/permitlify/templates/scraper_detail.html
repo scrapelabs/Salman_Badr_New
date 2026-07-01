@@ -962,7 +962,7 @@
       <p class="rt-intro">
         Choose which proxy pool <strong>{{ s.code }}</strong> routes its traffic through,
         and how many worker threads it uses. Manage the list of pools on the
-        <a href="{% url 'proxies' %}">Proxies</a> page. With “Direct connection” — or a
+        <a href="{% url 'settings' %}">Settings</a> page. With “Direct connection” — or a
         pool that has no address set — the scraper connects without a proxy.
       </p>
 
@@ -1057,7 +1057,7 @@
       {% endif %}
 
       {% if not proxies %}
-      <p class="status-note settings-empty">No proxy pools yet — <a href="{% url 'proxies' %}">add one</a> to route this scraper through it.</p>
+      <p class="status-note settings-empty">No proxy pools yet — <a href="{% url 'settings' %}">add one</a> to route this scraper through it.</p>
       {% endif %}
     </div>
     <div class="panel-foot">

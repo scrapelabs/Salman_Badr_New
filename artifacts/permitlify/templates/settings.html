@@ -6,11 +6,11 @@
   <span class="crumb current">Settings</span>
 {% endblock %}
 {% block content %}
-<div class="content-narrow users-page">
+<div class="content-narrow">
   <div class="page-head">
-    <div class="kicker">System</div>
+    <div class="kicker">Workspace</div>
     <h1 class="h-title">Settings</h1>
-    <p class="h-sub">Workspace configuration and account security. Reset the password for any team member below.</p>
+    <p class="h-sub">Workspace configuration — AI integrations, proxy pools, and account security.</p>
   </div>
 
   {% if messages %}
@@ -20,6 +20,148 @@
     {% endfor %}
   </div>
   {% endif %}
+
+  <div class="calls-head">
+    <h2 class="section-title">General</h2>
+  </div>
+  <form class="panel" method="post" action="{% url 'settings' %}" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save_anthropic_key" />
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">AI integrations</div>
+          <div class="status-name">Anthropic API key</div>
+        </div>
+        <div>
+          {% if anthropic_configured %}
+          <span class="run-status success">Configured</span>
+          {% elif anthropic_env_present %}
+          <span class="run-status">Environment key</span>
+          {% else %}
+          <span class="run-status failed">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+      <p class="status-note">
+        Used by the AI scrapers — name-based gender inference and the college box-score parser.
+        {% if anthropic_configured %}
+        Current key <code class="proxy-addr">{{ anthropic_masked }}</code>. Enter a new key below to replace it.
+        {% elif anthropic_env_present %}
+        No key is stored here — the scrapers use the key from the server environment. Set one below to override it.
+        {% else %}
+        No key configured — the AI scrapers fail honestly until a key is set here or in the server environment.
+        {% endif %}
+      </p>
+      <div class="rt-field">
+        <label class="field-label" for="anthKey">Anthropic API key <span class="field-opt">optional · comma-separate several to rotate</span></label>
+        <input class="rt-input" id="anthKey" name="anthropic_api_key" type="password" placeholder="sk-ant-…" autocomplete="new-password" />
+      </div>
+    </div>
+    <div class="panel-foot">
+      <span class="status-note">Stored securely and never shown in full. Leave blank to keep the current key.</span>
+      <button class="btn btn-primary" type="submit">Save key</button>
+    </div>
+  </form>
+  {% if anthropic_configured %}
+  <form method="post" action="{% url 'settings' %}"
+        data-confirm="Remove the stored Anthropic key? The AI scrapers will fall back to the server environment key if one is set."
+        data-confirm-title="Clear Anthropic key"
+        data-confirm-ok="Clear key">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="clear_anthropic_key" />
+    <button type="submit" class="run-act proxy-del">Clear stored key</button>
+  </form>
+  {% endif %}
+
+  <div class="proxy-stats">
+    <div class="pstat"><span class="pstat-num">{{ total_proxies }}</span><span class="pstat-lbl">Total</span></div>
+    <div class="pstat"><span class="pstat-num">{{ by_kind.residential }}</span><span class="pstat-lbl">Residential</span></div>
+    <div class="pstat"><span class="pstat-num">{{ by_kind.datacenter }}</span><span class="pstat-lbl">Datacenter</span></div>
+    <div class="pstat"><span class="pstat-num">{{ by_kind.mobile }}</span><span class="pstat-lbl">Mobile</span></div>
+    <div class="pstat"><span class="pstat-num">{{ by_kind.isp }}</span><span class="pstat-lbl">ISP</span></div>
+  </div>
+
+  <form class="panel" method="post" action="{% url 'settings' %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add_proxy" />
+    <div class="panel-pad">
+      <div class="status-head">
+        <div>
+          <div class="status-eyebrow">Add a proxy</div>
+          <div class="status-name">New proxy pool</div>
+        </div>
+      </div>
+      <div class="rt-grid proxy-add-grid">
+        <div class="rt-field">
+          <label class="field-label" for="pName">Name</label>
+          <input class="rt-input" id="pName" name="name" placeholder="e.g. Residential EU pool" maxlength="80" required />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="pKind">Type</label>
+          <select class="rt-input" id="pKind" name="kind">
+            {% for value, label in proxy_kinds %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="rt-field proxy-add-addr">
+          <label class="field-label" for="pAddr">Address <span class="field-opt">optional · host:port or http://user:pass@host:port</span></label>
+          <input class="rt-input" id="pAddr" name="address" placeholder="proxy.example.com:8000" maxlength="255" />
+        </div>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <span class="status-note">Add as many as you need. With no address a proxy is a label only — scrapers run direct until you give it a real endpoint.</span>
+      <button class="btn btn-primary" type="submit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add proxy
+      </button>
+    </div>
+  </form>
+
+  <div class="calls-head">
+    <h2 class="section-title">Proxy pools</h2>
+    <span class="calls-count">{{ total_proxies }} configured</span>
+  </div>
+  <div class="tablewrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Address</th>
+          <th class="num">Used by</th>
+          <th>Status</th>
+          <th class="th-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in proxies %}
+        <tr>
+          <td><span class="tbl-name">{{ p.name }}</span></td>
+          <td><span class="ptype {{ p.kind }}">{{ p.get_kind_display }}</span></td>
+          <td>{% if p.address %}<code class="proxy-addr">{{ p.display_address }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num">{{ p.used_by }}</td>
+          <td>{% if p.is_active %}<span class="run-status success">Active</span>{% else %}<span class="run-status failed">Off</span>{% endif %}</td>
+          <td class="td-actions">
+            <form method="post" action="{% url 'settings' %}"
+                  data-confirm="Remove this proxy? Scrapers using it fall back to a direct connection."
+                  data-confirm-title="Remove proxy"
+                  data-confirm-ok="Delete">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_proxy" />
+              <input type="hidden" name="proxy_id" value="{{ p.pk }}" />
+              <button type="submit" class="run-act proxy-del">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="runs-empty">No proxies yet — add one above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <div class="calls-head">
     <h2 class="section-title">Passwords</h2>

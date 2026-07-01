@@ -120,7 +120,8 @@ class Scraper(models.Model):
     # API key(s) for AI-backed scrapers (e.g. college_dual_match Claude extraction).
     # Comma-separate to provide several keys the worker rotates across. Treat as a
     # secret: rendered in a password input with a reveal toggle, never logged. When
-    # blank the runner falls back to settings.CLAUDE_KEYS (env), else fails honestly.
+    # blank the runner falls back to the workspace GeneralConfig key (Settings page),
+    # then to settings.CLAUDE_KEYS (env), else fails honestly.
     claude_api_key = models.CharField(max_length=1024, blank=True, default="")
     # Login credentials for scrapers that authenticate to an upstream portal
     # (e.g. usta_team_captains -> USTA TennisLink). Stored per scraper; treated as
@@ -867,3 +868,61 @@ class PlayerGenderCache(models.Model):
 
     def __str__(self):
         return f"PlayerGenderCache({self.name_key!r} -> {self.gender})"
+
+
+class GeneralConfig(models.Model):
+    """Singleton, workspace-wide configuration edited from the Settings page.
+
+    Currently stores the Anthropic (Claude) API key used by the AI scrapers
+    (name-based gender inference and the college box-score parser). When it is
+    blank the code falls back to the environment-sourced
+    ``settings.CLAUDE_KEYS`` (``CLAUDE_KEYS`` / ``ANTHROPIC_API_KEY``), so the
+    hosted secret keeps working until an admin overrides it here.
+
+    The key is a secret: never log it and never render the raw value — use
+    :attr:`masked_anthropic_key` for display, mirroring the proxy-address rule.
+    """
+
+    SINGLETON_PK = 1
+
+    anthropic_api_key = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "general configuration"
+        verbose_name_plural = "general configuration"
+
+    def __str__(self):
+        return "GeneralConfig"
+
+    def save(self, *args, **kwargs):
+        self.pk = self.SINGLETON_PK
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return obj
+
+    @classmethod
+    def claude_keys(cls):
+        """Workspace Anthropic keys as a list: the UI-configured value if set,
+        else the env-sourced ``settings.CLAUDE_KEYS``. Comma-separate to rotate.
+        """
+        try:
+            configured = (cls.get_solo().anthropic_api_key or "").strip()
+        except Exception:
+            configured = ""
+        if configured:
+            return [k.strip() for k in configured.split(",") if k.strip()]
+        return [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
+
+    @property
+    def masked_anthropic_key(self):
+        """Masked form of the stored key for display; ``""`` when unset."""
+        key = (self.anthropic_api_key or "").strip()
+        if not key:
+            return ""
+        if len(key) <= 10:
+            return "•" * len(key)
+        return key[:6] + "…" + key[-4:]

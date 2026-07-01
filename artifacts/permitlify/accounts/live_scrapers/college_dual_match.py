@@ -24,10 +24,12 @@ Claude is the only parser.
 
 Credentials:
 
-- ``settings.CLAUDE_KEYS`` (a list, sourced from ``CLAUDE_KEYS`` /
-  ``ANTHROPIC_API_KEY``). **Required** — the run fails honestly up front when no
-  key (or no prompt) is configured. A key is chosen with ``random.choice`` per
-  worker (mirrors the source's rotation) and is **never** logged.
+- The Anthropic key (**required**), resolved in order: the per-scraper key
+  (Lab -> Settings tab) -> the workspace ``GeneralConfig`` key (Settings page)
+  -> the env-sourced ``settings.CLAUDE_KEYS`` (``CLAUDE_KEYS`` /
+  ``ANTHROPIC_API_KEY``). The run fails honestly up front when no key (or no
+  prompt) is configured. A key is chosen with ``random.choice`` per worker
+  (mirrors the source's rotation) and is **never** logged.
 - ``settings.OPENAI_API_KEY`` — **optional**. Used only to recover a missing
   ``tournament_date``. When unset that step is skipped gracefully and the field
   is left as-is.
@@ -688,14 +690,17 @@ def run(run_obj, log):
 
     # ---- extraction mode (Claude REQUIRED) -------------------------------
     # Prefer the per-scraper key saved in the Lab → Settings tab; fall back to
-    # the env-sourced settings.CLAUDE_KEYS. Comma-separate to rotate several.
+    # the workspace GeneralConfig key (Settings page), then env settings.CLAUDE_KEYS.
+    # Comma-separate to rotate several.
     # Claude is the ONLY parser — the run fails honestly here when no key (or no
     # prompt) is configured. OpenAI stays optional (tournament_date recovery).
     scraper_key = (getattr(scraper, "claude_api_key", "") or "").strip()
     if scraper_key:
         claude_keys = [k.strip() for k in scraper_key.split(",") if k.strip()]
     else:
-        claude_keys = [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
+        from accounts.models import GeneralConfig
+
+        claude_keys = GeneralConfig.claude_keys()
 
     if not claude_keys:
         msg = (

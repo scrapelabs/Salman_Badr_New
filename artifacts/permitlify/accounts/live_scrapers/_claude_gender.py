@@ -52,11 +52,17 @@ _OUT = {"M": "M", "F": "F", "U": ""}
 
 
 def resolve_claude_keys(scraper):
-    """Per-scraper key (Lab -> Settings), else the env-sourced settings list."""
+    """Per-scraper key (Lab -> Settings), else the workspace/env key list.
+
+    The fallback is the workspace-wide Anthropic key configured on the Settings
+    page, which itself falls back to the env-sourced ``settings.CLAUDE_KEYS``.
+    """
     scraper_key = (getattr(scraper, "claude_api_key", "") or "").strip()
     if scraper_key:
         return [k.strip() for k in scraper_key.split(",") if k.strip()]
-    return [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
+    from accounts.models import GeneralConfig
+
+    return GeneralConfig.claude_keys()
 
 
 def _norm_key(name):
