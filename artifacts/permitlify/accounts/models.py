@@ -879,8 +879,11 @@ class GeneralConfig(models.Model):
     ``settings.CLAUDE_KEYS`` (``CLAUDE_KEYS`` / ``ANTHROPIC_API_KEY``), so the
     hosted secret keeps working until an admin overrides it here.
 
-    The key is a secret: never log it and never render the raw value — use
-    :attr:`masked_anthropic_key` for display, mirroring the proxy-address rule.
+    The key is a secret: never log it. Status text and summaries use
+    :attr:`masked_anthropic_key`; the one exception is the superuser-only
+    Settings key input, which prefills the raw value behind a Reveal/Hide
+    toggle so an admin can view and edit it (mirroring the per-scraper Claude
+    key field in the Lab).
     """
 
     SINGLETON_PK = 1

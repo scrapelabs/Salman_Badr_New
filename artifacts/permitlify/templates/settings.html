@@ -46,7 +46,7 @@
       <p class="status-note">
         Used by the AI scrapers — name-based gender inference and the college box-score parser.
         {% if anthropic_configured %}
-        Current key <code class="proxy-addr">{{ anthropic_masked }}</code>. Enter a new key below to replace it.
+        Current key <code class="proxy-addr">{{ anthropic_masked }}</code>. It's filled in below — Reveal to view it, then edit and Save to replace it.
         {% elif anthropic_env_present %}
         No key is stored here — the scrapers use the key from the server environment. Set one below to override it.
         {% else %}
@@ -56,13 +56,13 @@
       <div class="rt-field settings-keyfield">
         <label class="field-label" for="anthKey">Anthropic API key <span class="field-opt">optional · comma-separate several to rotate</span></label>
         <div class="sch-copyrow">
-          <input class="rt-input sch-secret" id="anthKey" name="anthropic_api_key" type="password" placeholder="sk-ant-…" autocomplete="new-password" spellcheck="false" />
+          <input class="rt-input sch-secret" id="anthKey" name="anthropic_api_key" type="password" value="{{ anthropic_key }}" placeholder="sk-ant-…" autocomplete="new-password" spellcheck="false" />
           <button class="btn btn-ghost btn-sm settings-reveal" type="button" data-target="#anthKey" aria-pressed="false">Reveal</button>
         </div>
       </div>
     </div>
     <div class="panel-foot">
-      <span class="status-note">Stored securely and never shown in full. Leave blank to keep the current key.</span>
+      <span class="status-note">Reveal to view the current key. Edit and Save to replace it, or use Clear stored key to remove it.</span>
       <button class="btn btn-primary" type="submit">Save key</button>
     </div>
   </form>

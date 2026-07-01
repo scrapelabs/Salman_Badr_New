@@ -2861,6 +2861,7 @@ def settings_view(request):
         total_proxies=len(proxies),
         by_kind=by_kind,
         anthropic_masked=cfg.masked_anthropic_key,
+        anthropic_key=cfg.anthropic_api_key,
         anthropic_configured=bool(cfg.masked_anthropic_key),
         anthropic_env_present=bool(env_keys),
     )
