@@ -14,6 +14,9 @@ CONFIG = _ts_league.TSLeagueConfig(
     country="Croatia",
     country_code="CRO",
     sanction_body="Croatian Tennis Association",
+    # League names often carry no gender word ("Prva liga"), so infer each
+    # player's gender from their name via Claude (cached). Needs a Claude key.
+    claude_gender=True,
 )
 
 

@@ -27,8 +27,12 @@ Matching notes:
 import re
 import unicodedata
 
-# Mixed draws can't be assigned a single gender → "".
-_MIXED_TOKENS = ("mixed", "mjesovit", "mixto", "mixta", "mista", "mistas")
+# Mixed draws can't be assigned a single gender → "". Croatian inflects the
+# adjective ("mješoviti / mješovita / mješovito parovi", "miješani"), so the
+# stem is matched with any suffix (``\w*``); the rest are whole words. Accent
+# stripping first maps "mješovit" → "mjesovit", "miješan" → "mijesan".
+_MIXED_EXACT = ("mixed", "mixto", "mixta", "mista", "mistas")
+_MIXED_STEMS = ("mjesovit", "mijesan", "mjesan")
 
 _FEMALE_TOKENS = (
     # English
@@ -54,7 +58,11 @@ def _compile(tokens):
     return re.compile(r"\b(?:" + "|".join(tokens) + r")\b")
 
 
-_MIXED_RE = _compile(_MIXED_TOKENS)
+_MIXED_RE = re.compile(
+    r"\b(?:"
+    + "|".join(list(_MIXED_EXACT) + [s + r"\w*" for s in _MIXED_STEMS])
+    + r")\b"
+)
 _FEMALE_RE = _compile(_FEMALE_TOKENS)
 _MALE_RE = _compile(_MALE_TOKENS)
 
@@ -78,3 +86,14 @@ def draw_gender_code(name):
     if _MALE_RE.search(low):
         return "M"
     return ""
+
+
+def is_mixed_draw(name):
+    """True when a draw / competition ``name`` explicitly denotes a mixed event.
+
+    Lets callers distinguish a genuinely mixed draw (keep the draw-level gender
+    blank — the two sides differ) from a name that simply carries no gender word
+    (where a per-player fallback is appropriate).
+    """
+    low = _normalize(name)
+    return bool(low and _MIXED_RE.search(low))

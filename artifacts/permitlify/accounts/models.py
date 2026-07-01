@@ -839,3 +839,31 @@ class ScheduleEvent(models.Model):
 
     def __str__(self):
         return f"ScheduleEvent({self.scraper_id}, {self.outcome})"
+
+
+class PlayerGenderCache(models.Model):
+    """Cached name -> gender inference for tournamentsoftware scrapers.
+
+    The tournamentsoftware player profile carries no gender field, so gender is
+    inferred from the player's *name* by Claude (see
+    :mod:`accounts.live_scrapers._claude_gender`). Because that inference is a
+    pure function of the name, the result is cached here by a normalised name
+    key so each distinct player is looked up at most once, ever.
+
+    ``gender`` stores the raw inference code: ``"M"`` / ``"F"`` / ``"U"`` (U =
+    ambiguous / unknown). Ambiguous answers are cached too so they are never
+    re-asked; callers map ``"U"`` to an empty output gender.
+    """
+
+    class Code(models.TextChoices):
+        MALE = "M", "Male"
+        FEMALE = "F", "Female"
+        UNKNOWN = "U", "Unknown"
+
+    name_key = models.CharField(max_length=255, unique=True)
+    gender = models.CharField(max_length=1, choices=Code.choices)
+    display_name = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"PlayerGenderCache({self.name_key!r} -> {self.gender})"

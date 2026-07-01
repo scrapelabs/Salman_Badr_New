@@ -15,6 +15,9 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     country="Croatia",
     country_code="CRO",
     sanction_body="Croatian Tennis Association",
+    # Croatian draw names don't reliably carry a gender word, so infer each
+    # player's gender from their name via Claude (cached). Needs a Claude key.
+    claude_gender=True,
 )
 
 

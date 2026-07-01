@@ -49,7 +49,8 @@ from parsel import Selector
 
 from accounts.models import Run
 
-from ._gender import draw_gender_code
+from ._gender import draw_gender_code, is_mixed_draw
+from ._claude_gender import resolve_gender, resolve_claude_keys
 from ._http import ScraperClient, build_proxies
 from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -90,6 +91,13 @@ class TSTournamentConfig:
     dynamic_country: bool = False
     id_type_label: str = ""
     org_label: str = ""
+    # --- Claude name->gender mode ----------------------------------------
+    # The page markup has no gender field. By default gender is inferred from
+    # the draw name (:func:`_gender.draw_gender_code`). For sites whose draw
+    # names don't reliably carry a gender word (Croatia), set ``claude_gender``
+    # to infer each player's gender from their name via Claude instead (cached;
+    # requires a Claude key, else gender degrades to empty).
+    claude_gender: bool = False
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -509,12 +517,13 @@ def _parse_birth_year(sel):
 def _parse_player(client, cfg, name, url):
     """Resolve a player's ``(name, third_party_id, dob, gender, country)``.
 
-    Gender is always empty (the production pipeline derived it via Claude, which
-    this deterministic port drops); the name is cleaned of seedings then
-    reordered to ``"Lastname, Firstname"`` via :func:`._names.last_first`.
-    ``country`` is the player's nationality (from the profile flag) for
-    dynamic-country sites, else ``""`` — fixed-country sites fill the per-player
-    country from the federation constant in :func:`_build_row`.
+    Gender is left empty here and filled in by :func:`_build_row` — from the
+    draw name by default, or (when ``cfg.claude_gender`` is set) inferred from
+    the player's name via Claude. The name is cleaned of seedings then reordered
+    to ``"Lastname, Firstname"`` via :func:`._names.last_first`. ``country`` is
+    the player's nationality (from the profile flag) for dynamic-country sites,
+    else ``""`` — fixed-country sites fill the per-player country from the
+    federation constant in :func:`_build_row`.
     """
     name = last_first(name)
     if not (name and url):
@@ -566,14 +575,32 @@ def _build_row(client, cfg, ctx, match_data):
     l1_name, l1_id, l1_dob, l1_g, l1_c = _parse_player(client, cfg, l1.get("name", ""), l1.get("profile_url", ""))
     l2_name, l2_id, l2_dob, l2_g, l2_c = _parse_player(client, cfg, l2.get("name", ""), l2.get("profile_url", ""))
 
-    # Gender is carried by the draw name (e.g. "Boys Singles" / "Juniorke
-    # pojedinačno"); every player in the match inherits it.
-    gcode = draw_gender_code(ctx.get("draw_name", ""))
-    w1_g = gcode if w1_name else ""
-    w2_g = gcode if w2_name else ""
-    l1_g = gcode if l1_name else ""
-    l2_g = gcode if l2_name else ""
-    draw_gender = "Male" if gcode == "M" else ("Female" if gcode == "F" else "")
+    draw_name = ctx.get("draw_name", "")
+    gcode = draw_gender_code(draw_name)
+    claude_keys = ctx.get("claude_keys")
+    if cfg.claude_gender and claude_keys:
+        # The draw name here doesn't reliably carry a gender word, so infer each
+        # player's gender from their name via Claude (cached per distinct name).
+        w1_g = resolve_gender(client, claude_keys, w1_name) if w1_name else ""
+        w2_g = resolve_gender(client, claude_keys, w2_name) if w2_name else ""
+        l1_g = resolve_gender(client, claude_keys, l1_name) if l1_name else ""
+        l2_g = resolve_gender(client, claude_keys, l2_name) if l2_name else ""
+        # Draw-level gender: an explicit draw-name gender wins; a genuinely mixed
+        # draw stays blank; otherwise fall back to the winner's inferred gender.
+        if gcode:
+            draw_gender = "Male" if gcode == "M" else "Female"
+        elif is_mixed_draw(draw_name):
+            draw_gender = ""
+        else:
+            draw_gender = "Male" if w1_g == "M" else ("Female" if w1_g == "F" else "")
+    else:
+        # Default: gender is carried by the draw name (e.g. "Boys Singles" /
+        # "Juniorke pojedinačno"); every player in the match inherits it.
+        w1_g = gcode if w1_name else ""
+        w2_g = gcode if w2_name else ""
+        l1_g = gcode if l1_name else ""
+        l2_g = gcode if l2_name else ""
+        draw_gender = "Male" if gcode == "M" else ("Female" if gcode == "F" else "")
     date = ctx.get("match_date", "") or ctx.get("tournament_start_date", "")
 
     if cfg.dynamic_country:
@@ -763,6 +790,17 @@ def run(cfg, run_obj, log):
         log("INFO", f"\U0001f3be {cfg.label} starting \u2014 {start_date} \u2192 {end_date}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = build_proxies(scraper, log)
+    claude_keys = resolve_claude_keys(scraper) if cfg.claude_gender else []
+    if cfg.claude_gender:
+        if claude_keys:
+            log("INFO", "\U0001f9e0 Gender: Claude name inference enabled (cached)")
+        else:
+            log(
+                "WARN",
+                "\u26a0\ufe0f claude_gender set but no Claude key configured "
+                "\u2014 falling back to draw-name gender only "
+                "(per-player gender will be blank for genderless draws)",
+            )
 
     # ---- phase 1 · discovery ------------------------------------------
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
@@ -810,6 +848,8 @@ def run(cfg, run_obj, log):
 
     def crawl_one(item):
         player_url, ctx = item
+        if claude_keys:
+            ctx = {**ctx, "claude_keys": claude_keys}
         try:
             rows = _parse_player_matches(client_for(), cfg, ctx, player_url)
             for row in rows:
