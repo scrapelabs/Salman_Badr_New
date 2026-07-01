@@ -64,6 +64,16 @@ Source quirks worth remembering:
   whole run** (FAILED, 0 rows, error asks for the key) before any scraping if no
   Anthropic key resolves (per-scraper → Settings/workspace → env). Don't "helpfully"
   add a draw-name/heuristic gender fallback or re-drop the Claude call.
+- **Shared TS engines gender modes** (`_ts_tournament`/`_ts_league`): both support
+  Claude name→gender via two config flags. `claude_gender` alone = **SOFT** (if no
+  key: WARN + fall back to draw-name gender; used by **Croatia**). `claude_gender` +
+  `claude_gender_required` = **HARD** (if no key: honest-fail the run + ask for the
+  key before any network; used by **Finland** tournament & league, matching Estonia's
+  Claude-only contract). In the Claude branch per-player gender is **always
+  Claude-only**; only the draw-level `draw_gender` may use an explicit draw-name word.
+  **Why:** the source inferred gender from names via an LLM; Croatia can tolerate
+  blanks but Finland/Estonia must not silently emit genderless rows. Don't flip
+  Croatia to `required` or Finland to soft.
 - Asset hosts like `objects.fi` / `objs.fi` in league sources are CDNs — ignore for
   data crawling. `scripts.fi` in finland_league is only a python import path, not a host.
 

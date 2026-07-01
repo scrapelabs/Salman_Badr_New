@@ -85,6 +85,11 @@ class TSLeagueConfig:
     # name via Claude instead (cached; requires a Claude key, else gender
     # degrades to empty).
     claude_gender: bool = False
+    # When ``claude_gender`` is on, ``claude_gender_required`` makes a Claude key
+    # mandatory (Claude-only, no fallback): if none is configured the run fails
+    # immediately and asks for the key rather than degrading to draw-name gender.
+    # Used by Finland, matching the Estonia scraper's contract.
+    claude_gender_required: bool = False
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -659,6 +664,18 @@ def run(cfg, run_obj, log):
     if cfg.claude_gender:
         if claude_keys:
             log("INFO", "\U0001f9e0 Gender: Claude name inference enabled (cached)")
+        elif cfg.claude_gender_required:
+            # Claude-only gender with no fallback: without a key, fail the run
+            # and ask for one rather than emitting genderless rows.
+            msg = (
+                f"Anthropic API key required \u2014 {cfg.label} infers player "
+                "gender from names via Claude and has no fallback. Add a key on "
+                "the Settings page (workspace-wide) or this scraper's Settings "
+                "tab, then re-run."
+            )
+            tele.record_error(msg)
+            log("ERROR", "\U0001f6d1 " + msg)
+            return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
         else:
             log(
                 "WARN",
