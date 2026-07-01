@@ -2789,6 +2789,32 @@ def settings_view(request):
                 messages.success(request, "Proxy removed.")
             return redirect("settings")
 
+        if action == "edit_proxy":
+            # The posted address may carry credentials — it is stored as-is and
+            # never logged (only display_address is ever rendered in listings).
+            proxy_id = (request.POST.get("proxy_id") or "").strip()
+            if not proxy_id.isdigit():
+                messages.error(request, "Invalid proxy.")
+                return redirect("settings")
+            proxy = Proxy.objects.filter(pk=int(proxy_id)).first()
+            if proxy is None:
+                messages.error(request, "That proxy no longer exists.")
+                return redirect("settings")
+            name = (request.POST.get("name") or "").strip()
+            kind = request.POST.get("kind", proxy.kind)
+            address = (request.POST.get("address") or "").strip()
+            if not name:
+                messages.error(request, "Give the proxy a name.")
+            elif kind not in Proxy.Kind.values:
+                messages.error(request, "Pick a valid proxy type.")
+            else:
+                proxy.name = name
+                proxy.kind = kind
+                proxy.address = address
+                proxy.save()
+                messages.success(request, f"Updated proxy “{name}”.")
+            return redirect("settings")
+
         if action == "save_anthropic_key":
             # The key is a secret: it is stored as-is but never logged or echoed
             # back to the page (only a masked form is ever rendered).
@@ -2985,6 +3011,29 @@ def proxies_view(request):
     """The standalone Proxies page was merged into the Settings page. Keep this
     route as a permanent redirect so old links/bookmarks still resolve."""
     return redirect("settings")
+
+
+@login_required
+@require_http_methods(["GET"])
+def proxy_detail(request, proxy_id):
+    """Superuser-only JSON backing the Settings proxy-edit modal. Returns the
+    RAW ``address`` (credentials included) on demand so an admin can fix it —
+    the one intentional place the raw value is exposed, and only to a superuser
+    over the authenticated session. It is never logged and never appears in any
+    listing (those always use ``display_address``)."""
+    if not request.user.is_superuser:
+        return JsonResponse({"error": "forbidden"}, status=403)
+    proxy = Proxy.objects.filter(pk=proxy_id).first()
+    if proxy is None:
+        return JsonResponse({"error": "not found"}, status=404)
+    return JsonResponse(
+        {
+            "id": proxy.pk,
+            "name": proxy.name,
+            "kind": proxy.kind,
+            "address": proxy.address,
+        }
+    )
 
 
 @require_http_methods(["POST"])

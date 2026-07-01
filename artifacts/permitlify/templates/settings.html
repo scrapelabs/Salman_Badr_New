@@ -53,9 +53,12 @@
         No key configured — the AI scrapers fail honestly until a key is set here or in the server environment.
         {% endif %}
       </p>
-      <div class="rt-field">
+      <div class="rt-field settings-keyfield">
         <label class="field-label" for="anthKey">Anthropic API key <span class="field-opt">optional · comma-separate several to rotate</span></label>
-        <input class="rt-input" id="anthKey" name="anthropic_api_key" type="password" placeholder="sk-ant-…" autocomplete="new-password" />
+        <div class="sch-copyrow">
+          <input class="rt-input sch-secret" id="anthKey" name="anthropic_api_key" type="password" placeholder="sk-ant-…" autocomplete="new-password" spellcheck="false" />
+          <button class="btn btn-ghost btn-sm settings-reveal" type="button" data-target="#anthKey" aria-pressed="false">Reveal</button>
+        </div>
       </div>
     </div>
     <div class="panel-foot">
@@ -145,15 +148,21 @@
           <td class="num">{{ p.used_by }}</td>
           <td>{% if p.is_active %}<span class="run-status success">Active</span>{% else %}<span class="run-status failed">Off</span>{% endif %}</td>
           <td class="td-actions">
-            <form method="post" action="{% url 'settings' %}"
-                  data-confirm="Remove this proxy? Scrapers using it fall back to a direct connection."
-                  data-confirm-title="Remove proxy"
-                  data-confirm-ok="Delete">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="delete_proxy" />
-              <input type="hidden" name="proxy_id" value="{{ p.pk }}" />
-              <button type="submit" class="run-act proxy-del">Delete</button>
-            </form>
+            <div class="u-actions">
+              <button type="button" class="run-act proxy-edit"
+                      data-id="{{ p.pk }}"
+                      data-name="{{ p.name }}"
+                      data-kind="{{ p.kind }}">Edit</button>
+              <form method="post" action="{% url 'settings' %}"
+                    data-confirm="Remove this proxy? Scrapers using it fall back to a direct connection."
+                    data-confirm-title="Remove proxy"
+                    data-confirm-ok="Delete">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_proxy" />
+                <input type="hidden" name="proxy_id" value="{{ p.pk }}" />
+                <button type="submit" class="run-act proxy-del">Delete</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% empty %}
@@ -239,31 +248,138 @@
   </div>
 </div>
 
+<div class="qa-modal" id="proxyEditModal" hidden>
+  <div class="qa-modal-backdrop" data-close></div>
+  <div class="qa-modal-card" role="dialog" aria-modal="true" aria-labelledby="peTitle">
+    <form method="post" action="{% url 'settings' %}" autocomplete="off">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_proxy" />
+      <input type="hidden" name="proxy_id" id="peId" />
+      <div class="qa-modal-head">
+        <span class="qa-modal-title" id="peTitle">Edit proxy</span>
+        <button type="button" class="qa-modal-x" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="qa-modal-body">
+        <div class="rt-field">
+          <label class="field-label" for="peName">Name</label>
+          <input class="rt-input" id="peName" name="name" maxlength="80" required />
+        </div>
+        <div class="rt-field">
+          <label class="field-label" for="peKind">Type</label>
+          <select class="rt-input" id="peKind" name="kind">
+            {% for value, label in proxy_kinds %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="rt-field settings-keyfield">
+          <label class="field-label" for="peAddr">Address <span class="field-opt">host:port or http://user:pass@host:port</span></label>
+          <div class="sch-copyrow">
+            <input class="rt-input sch-secret" id="peAddr" name="address" type="password" placeholder="proxy.example.com:8000" maxlength="255" autocomplete="off" spellcheck="false" />
+            <button class="btn btn-ghost btn-sm settings-reveal" type="button" data-target="#peAddr" aria-pressed="false">Reveal</button>
+          </div>
+          <p class="status-note settings-empty">Includes any embedded credentials. Leave blank to run this pool direct (no proxy).</p>
+        </div>
+        <p class="status-note settings-empty" id="peErr" role="alert" hidden>Couldn’t load this proxy’s current address — saving is disabled so the stored credentials aren’t accidentally cleared. Close and reopen to retry.</p>
+      </div>
+      <div class="qa-modal-foot">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="peSave">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 (function () {
-  var modal = document.getElementById("passUserModal");
-  if (!modal) return;
-  function open(d) {
-    document.getElementById("puId").value = d.id;
-    document.getElementById("puUsername").value = d.username;
-    document.getElementById("puPass").value = "";
-    document.getElementById("puPass2").value = "";
-    document.getElementById("puTitle").textContent = "Change password · " + d.username;
-    modal.hidden = false;
-    document.body.classList.add("qa-modal-open");
-    document.getElementById("puPass").focus();
+  // Password change modal
+  var passModal = document.getElementById("passUserModal");
+  if (passModal) {
+    var openPass = function (d) {
+      document.getElementById("puId").value = d.id;
+      document.getElementById("puUsername").value = d.username;
+      document.getElementById("puPass").value = "";
+      document.getElementById("puPass2").value = "";
+      document.getElementById("puTitle").textContent = "Change password · " + d.username;
+      passModal.hidden = false;
+      document.body.classList.add("qa-modal-open");
+      document.getElementById("puPass").focus();
+    };
+    document.querySelectorAll(".u-pass").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openPass({ id: btn.dataset.id, username: btn.dataset.username });
+      });
+    });
   }
-  function close() { modal.hidden = true; document.body.classList.remove("qa-modal-open"); }
-  document.querySelectorAll(".u-pass").forEach(function (btn) {
+
+  // Proxy edit modal — fetches the raw address on demand (superuser-only).
+  var proxyModal = document.getElementById("proxyEditModal");
+  if (proxyModal) {
+    var peId = document.getElementById("peId");
+    var peName = document.getElementById("peName");
+    var peKind = document.getElementById("peKind");
+    var peAddr = document.getElementById("peAddr");
+    var peTitle = document.getElementById("peTitle");
+    var peSave = document.getElementById("peSave");
+    var peErr = document.getElementById("peErr");
+    var openProxy = function (btn) {
+      peId.value = btn.dataset.id;
+      peName.value = btn.dataset.name || "";
+      peKind.value = btn.dataset.kind || "";
+      peAddr.value = "";
+      peAddr.type = "password";
+      var rb = proxyModal.querySelector(".settings-reveal");
+      if (rb) { rb.textContent = "Reveal"; rb.setAttribute("aria-pressed", "false"); }
+      peTitle.textContent = "Edit proxy · " + (btn.dataset.name || "");
+      // Block Save until the current address loads — a failed fetch must not let
+      // a blank field silently wipe the stored credentials.
+      if (peErr) peErr.hidden = true;
+      if (peSave) peSave.disabled = true;
+      proxyModal.hidden = false;
+      document.body.classList.add("qa-modal-open");
+      peName.focus();
+      var url = "{% url 'proxy_detail' 999999999 %}".replace("999999999", encodeURIComponent(btn.dataset.id));
+      fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (d) {
+          peAddr.value = d.address || "";
+          if (d.name) peName.value = d.name;
+          if (d.kind) peKind.value = d.kind;
+          if (peSave) peSave.disabled = false;
+        })
+        .catch(function () {
+          if (peErr) peErr.hidden = false;
+        });
+    };
+    document.querySelectorAll(".proxy-edit").forEach(function (btn) {
+      btn.addEventListener("click", function () { openProxy(btn); });
+    });
+  }
+
+  // Reveal / hide secret inputs (Anthropic key + proxy address).
+  document.querySelectorAll(".settings-reveal").forEach(function (btn) {
     btn.addEventListener("click", function () {
-      open({ id: btn.dataset.id, username: btn.dataset.username });
+      var el = document.querySelector(btn.dataset.target);
+      if (!el) return;
+      var hidden = el.type === "password";
+      el.type = hidden ? "text" : "password";
+      btn.textContent = hidden ? "Hide" : "Reveal";
+      btn.setAttribute("aria-pressed", hidden ? "true" : "false");
     });
   });
-  modal.querySelectorAll("[data-close]").forEach(function (el) {
-    el.addEventListener("click", close);
+
+  // Shared close handling for every modal on the page.
+  function closeAll() {
+    document.querySelectorAll(".qa-modal").forEach(function (m) { m.hidden = true; });
+    document.body.classList.remove("qa-modal-open");
+  }
+  document.querySelectorAll(".qa-modal [data-close]").forEach(function (el) {
+    el.addEventListener("click", closeAll);
   });
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !modal.hidden) close();
+    if (e.key === "Escape") closeAll();
   });
 })();
 </script>

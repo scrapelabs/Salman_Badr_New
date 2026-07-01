@@ -86,6 +86,7 @@ urlpatterns = [
     path("requirements/", views.requirements_view, name="requirements"),
     path("companies/", views.companies_view, name="companies"),
     path("settings/", views.settings_view, name="settings"),
+    path("settings/proxy/<int:proxy_id>/", views.proxy_detail, name="proxy_detail"),
     path("users/", views.users_view, name="users"),
     # QA Team Tasks
     path("qa/", qa_views.board, name="qa_board"),
