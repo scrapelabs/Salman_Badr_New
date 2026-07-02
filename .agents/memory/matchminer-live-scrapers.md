@@ -159,3 +159,14 @@ Source quirks worth remembering:
   + **Claude** fallback (`_country_codes.py`, flag `claude_country=True`, key mandatory,
   no fallback). GLTA renders `"U.S.A."` which is NOT a table key (only `"usa"` is), so
   Claude is GLTA's common case — keep the table byte-identical to the source.
+- **A scraper's discovery-side and output-side date parsers must cover the SAME format
+  set.** Czech (`czech_scraper.py`) filtered discovery with the robust
+  `parse_european_range` but parsed the detail-page `Datum` output columns with naive
+  per-side regexes that couldn't handle a **cross-month** range (`"29. 6.-3. 7. 2026"` —
+  a month before the dash), so both start/end columns silently leaked the raw string.
+  Fix = delegate `_parse_start_date`/`_parse_end_date` to `parse_european_range` too
+  (it handles single-day/dotted/same-month/cross-month/cross-year), returning `""` (not
+  the raw string) on failure. Caveat: `parse_european_range` is anchored `^…$` (old
+  naive regexes were prefix `re.match`), so a **blank** czech date in a future run means
+  `Datum` carried trailing text — strip the suffix before delegating; never re-add a
+  raw-string fallback.

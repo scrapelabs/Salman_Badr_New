@@ -87,24 +87,27 @@ def _xp(sel, query):
 # Date / name helpers (verified against live cesky-tenis.cz markup)
 # ---------------------------------------------------------------------------
 def _parse_start_date(raw):
-    """'8.-9. 5. 2026' or '07.05.2026 …'  →  m/d/yyyy."""
-    raw = (raw or "").strip()
-    m = re.match(r"(\d+)\.\s*(?:-\s*\d+\.)?\s*(\d+)\.\s*(\d{4})", raw)
-    if m:
-        return f"{int(m.group(2))}/{int(m.group(1))}/{m.group(3)}"
-    m = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", raw)
-    if m:
-        return f"{int(m.group(2))}/{int(m.group(1))}/{m.group(3)}"
-    return raw
+    """Detail-page 'Datum' → tournament start as m/d/yyyy.
+
+    Delegates to the source's own :func:`parse_european_range` so single-day
+    ('18. 7. 2026' / '07.05.2026'), same-month shorthand ('8.-9. 5. 2026') and
+    cross-month ('29. 6.-3. 7. 2026') ranges all resolve to the correct start.
+    Returns '' when unparseable — never the raw string.
+    """
+    try:
+        start, _ = parse_european_range(raw)
+    except ValueError:
+        return ""
+    return f"{start.month}/{start.day}/{start.year}"
 
 
 def _parse_end_date(raw):
-    """'8.-9. 5. 2026'  →  end date as m/d/yyyy; single day → same as start."""
-    raw = (raw or "").strip()
-    m = re.match(r"\d+\.\s*-\s*(\d+)\.\s*(\d+)\.\s*(\d{4})", raw)
-    if m:
-        return f"{int(m.group(2))}/{int(m.group(1))}/{m.group(3)}"
-    return _parse_start_date(raw)
+    """Detail-page 'Datum' → tournament end as m/d/yyyy (single day → == start)."""
+    try:
+        _, end = parse_european_range(raw)
+    except ValueError:
+        return ""
+    return f"{end.month}/{end.day}/{end.year}"
 
 
 def _normalise_name(raw):
