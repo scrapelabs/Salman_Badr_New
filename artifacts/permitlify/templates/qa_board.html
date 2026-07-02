@@ -47,44 +47,20 @@
     <span class="qa-total">{{ total_tickets }} ticket{{ total_tickets|pluralize }}</span>
   </div>
 
-  <div class="qa-board">
+  <div class="qa-board" data-tickets-url="{% url 'qa_tickets' %}" data-scraper="{{ active_scraper }}">
     {% for col in columns %}
-    <section class="qa-col qa-col--{{ col.status }}">
+    <section class="qa-col qa-col--{{ col.status }}" data-status="{{ col.status }}">
       <header class="qa-col-head">
         <span class="qa-col-dot"></span>
         <span class="qa-col-title">{{ col.label }}</span>
         <span class="qa-col-count">{{ col.count }}</span>
       </header>
       <div class="qa-col-body">
-        {% for t in col.items %}
-        <a class="qa-card" href="{% url 'qa_ticket' t.uuid %}">
-          <div class="qa-card-top">
-            <span class="qa-pri qa-pri--{{ t.priority }}">{{ t.get_priority_display }}</span>
-            <span class="qa-card-id">#{{ t.short_id }}</span>
-          </div>
-          <h3 class="qa-card-title">{{ t.title }}</h3>
-          <div class="qa-card-meta">
-            <span class="qa-chip qa-chip--scraper">{{ t.scraper.name }}</span>
-          </div>
-          <div class="qa-card-foot">
-            <span class="qa-card-by">
-              <span class="qa-avatar qa-avatar--xs">{{ t.created_by.username|first|upper|default:"?" }}</span>
-              {{ t.created_by.username|default:"—" }}
-            </span>
-            <span class="qa-card-stats">
-              {% if t.n_comments %}
-              <span class="qa-card-comments" title="{{ t.n_comments }} comment{{ t.n_comments|pluralize }}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                {{ t.n_comments }}
-              </span>
-              {% endif %}
-              <span class="qa-card-ago">{{ t.created_at|timesince }} ago</span>
-            </span>
-          </div>
-        </a>
-        {% empty %}
-        <div class="qa-col-empty">No tickets here</div>
-        {% endfor %}
+        {% include "partials/qa_cards.html" with items=col.items %}
+        {% if not col.items %}<div class="qa-col-empty">No tickets here</div>{% endif %}
+      </div>
+      <div class="qa-col-more"{% if not col.has_more %} hidden{% endif %}>
+        <button type="button" class="qa-load-more" data-status="{{ col.status }}" data-next="{{ col.next_page }}">Load more</button>
       </div>
     </section>
     {% endfor %}
@@ -160,6 +136,70 @@
     modal.querySelectorAll("[data-close]").forEach(function (el) { el.addEventListener("click", close); });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !modal.hasAttribute("hidden")) close();
+    });
+  })();
+
+  // Card navigation + per-column "Load more" (AJAX pagination).
+  (function () {
+    var board = document.querySelector(".qa-board");
+    if (!board) return;
+    var ticketsUrl = board.getAttribute("data-tickets-url");
+    var scraper = board.getAttribute("data-scraper") || "";
+
+    function openCard(target) {
+      var card = target.closest(".qa-card[data-href]");
+      if (card) window.location.href = card.getAttribute("data-href");
+    }
+
+    // Whole card is a link, but ignore clicks on inner links/buttons
+    // (e.g. the "Go to scraper" chip and the "Load more" button).
+    board.addEventListener("click", function (e) {
+      if (e.target.closest("a, button")) return;
+      openCard(e.target);
+    });
+    board.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.target.classList.contains("qa-card")) {
+        e.preventDefault();
+        openCard(e.target);
+      }
+    });
+
+    board.addEventListener("click", function (e) {
+      var btn = e.target.closest(".qa-load-more");
+      if (!btn || btn.disabled) return;
+      var col = btn.closest(".qa-col");
+      var body = col && col.querySelector(".qa-col-body");
+      if (!body) return;
+      btn.disabled = true;
+      btn.textContent = "Loading…";
+      var url = ticketsUrl +
+        "?status=" + encodeURIComponent(btn.getAttribute("data-status")) +
+        "&page=" + encodeURIComponent(btn.getAttribute("data-next") || "2") +
+        "&scraper=" + encodeURIComponent(scraper);
+      fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (data) {
+          // Move new cards over, skipping any already on screen — a ticket
+          // created between page loads can otherwise re-appear as a duplicate.
+          var tmp = document.createElement("div");
+          tmp.innerHTML = data.html || "";
+          Array.prototype.forEach.call(tmp.querySelectorAll(".qa-card[data-href]"), function (card) {
+            var href = card.getAttribute("data-href");
+            if (!body.querySelector('.qa-card[data-href="' + href + '"]')) body.appendChild(card);
+          });
+          if (data.has_more) {
+            btn.setAttribute("data-next", data.next_page);
+            btn.disabled = false;
+            btn.textContent = "Load more";
+          } else {
+            var wrap = btn.closest(".qa-col-more");
+            (wrap || btn).remove();
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = "Retry";
+        });
     });
   })();
 </script>

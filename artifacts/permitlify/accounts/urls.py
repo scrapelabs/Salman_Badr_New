@@ -90,6 +90,7 @@ urlpatterns = [
     path("users/", views.users_view, name="users"),
     # QA Team Tasks
     path("qa/", qa_views.board, name="qa_board"),
+    path("qa/tickets/", qa_views.tickets_page, name="qa_tickets"),
     path("qa/new/", qa_views.ticket_create, name="qa_ticket_create"),
     path("qa/t/<uuid:uuid>/", qa_views.ticket_detail, name="qa_ticket"),
     path("qa/t/<uuid:uuid>/update/", qa_views.ticket_update, name="qa_ticket_update"),

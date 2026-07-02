@@ -17,6 +17,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.timesince import timesince
 from django.views.decorators.http import require_POST
@@ -158,35 +159,98 @@ def attachment_serve(request, uuid):
 # --------------------------------------------------------------------------- #
 # Board + tickets
 # --------------------------------------------------------------------------- #
-@login_required
-def board(request):
-    tickets = (
+# Each board column renders only its first page of cards; the rest stream in
+# via AJAX (``tickets_page``) as the user hits "Load more". Keeps the board
+# light when a column holds hundreds of tickets.
+PAGE_SIZE = 10
+
+
+def _ticket_qs(active_scraper):
+    """Base ticket queryset (newest first), optionally scoped to one scraper."""
+    qs = (
         Ticket.objects.select_related("scraper", "created_by", "assignee")
         .annotate(n_comments=Count("comments"))
-        .order_by("-created_at")
+        # -pk is a stable tiebreaker so paging can't shuffle rows that share a
+        # created_at (e.g. bulk-created tickets) between the board and AJAX pages.
+        .order_by("-created_at", "-pk")
     )
-    active_scraper = (request.GET.get("scraper") or "").strip()
     if active_scraper:
-        tickets = tickets.filter(scraper__slug=active_scraper)
+        qs = qs.filter(scraper__slug=active_scraper)
+    return qs
 
-    all_tickets = list(tickets)
+
+@login_required
+def board(request):
+    active_scraper = (request.GET.get("scraper") or "").strip()
+    base = _ticket_qs(active_scraper)
+
     columns = []
+    total_tickets = 0
     for status, label in STATUS_COLUMNS:
-        items = [t for t in all_tickets if t.status == status]
+        qs = base.filter(status=status)
+        count = qs.count()
+        total_tickets += count
         columns.append(
-            {"status": status, "label": label, "items": items, "count": len(items)}
+            {
+                "status": status,
+                "label": label,
+                "items": list(qs[:PAGE_SIZE]),
+                "count": count,
+                "has_more": count > PAGE_SIZE,
+                "next_page": 2,
+            }
         )
 
     ctx = _app_ctx(
         "qa",
         columns=columns,
-        total_tickets=len(all_tickets),
+        total_tickets=total_tickets,
         scrapers=Scraper.objects.order_by("name"),
         active_scraper=active_scraper,
         statuses=Ticket.Status.choices,
         priorities=Ticket.Priority.choices,
+        page_size=PAGE_SIZE,
     )
     return render(request, "qa_board.html", ctx)
+
+
+@login_required
+def tickets_page(request):
+    """AJAX: one page of ticket cards for a single board column.
+
+    Params: ``status`` (required, a valid Ticket status), ``scraper`` (optional
+    slug filter, mirrors the board dropdown) and ``page`` (1-based). Returns the
+    rendered cards plus whether another page follows, so a column's "Load more"
+    button can page through without reloading the whole board.
+    """
+    status = request.GET.get("status") or ""
+    if status not in Ticket.Status.values:
+        return JsonResponse({"error": "Unknown status."}, status=400)
+
+    active_scraper = (request.GET.get("scraper") or "").strip()
+    try:
+        page = int(request.GET.get("page") or "1")
+    except (TypeError, ValueError):
+        page = 1
+    page = max(page, 1)
+
+    qs = _ticket_qs(active_scraper).filter(status=status)
+    count = qs.count()
+    start = (page - 1) * PAGE_SIZE
+    end = start + PAGE_SIZE
+    items = list(qs[start:end])
+
+    html = render_to_string(
+        "partials/qa_cards.html", {"items": items}, request=request
+    )
+    return JsonResponse(
+        {
+            "html": html,
+            "has_more": count > end,
+            "next_page": page + 1,
+            "count": count,
+        }
+    )
 
 
 @login_required

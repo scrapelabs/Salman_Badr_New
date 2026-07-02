@@ -1,0 +1,38 @@
+{% comment %}
+One board column's ticket cards. Shared by the initial board render and the
+AJAX "Load more" endpoint (accounts.qa_views.tickets_page) so the markup stays
+in one place. Expects `items` — an iterable of Ticket rows annotated with
+`n_comments`. The card is a div (not an <a>) so the inner "Go to scraper" link
+can nest legally; qa_board.html wires the whole card up as a click target.
+{% endcomment %}
+{% for t in items %}
+<div class="qa-card" data-href="{% url 'qa_ticket' t.uuid %}" role="link" tabindex="0">
+  <div class="qa-card-top">
+    <span class="qa-pri qa-pri--{{ t.priority }}">{{ t.get_priority_display }}</span>
+    <span class="qa-card-id">#{{ t.short_id }}</span>
+  </div>
+  <h3 class="qa-card-title">{{ t.title }}</h3>
+  <div class="qa-card-meta">
+    <span class="qa-chip qa-chip--scraper">{{ t.scraper.name }}</span>
+    <a class="qa-goto" href="{% url 'scraper_detail' t.scraper.slug %}" title="Open the {{ t.scraper.name }} lab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      Go to scraper
+    </a>
+  </div>
+  <div class="qa-card-foot">
+    <span class="qa-card-by">
+      <span class="qa-avatar qa-avatar--xs">{{ t.created_by.username|first|upper|default:"?" }}</span>
+      {{ t.created_by.username|default:"—" }}
+    </span>
+    <span class="qa-card-stats">
+      {% if t.n_comments %}
+      <span class="qa-card-comments" title="{{ t.n_comments }} comment{{ t.n_comments|pluralize }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        {{ t.n_comments }}
+      </span>
+      {% endif %}
+      <span class="qa-card-ago">{{ t.created_at|timesince }} ago</span>
+    </span>
+  </div>
+</div>
+{% endfor %}
