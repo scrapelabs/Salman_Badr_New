@@ -130,6 +130,20 @@ def _strip_parens(value):
     return re.sub(r"\(|\)", "", value or "").strip()
 
 
+def _looks_like_licence(value):
+    """True only for a genuine Estonia licence id (an all-digit ~8-digit number).
+
+    Some player pages put a small parenthesised *index* (e.g. ``(8)``, ``(25)``)
+    next to the name instead of a licence — these belong to unlicensed/guest
+    entries that share a single synthetic profile, so the number is ambiguous
+    (the same ``(2)`` can resolve to different people) and must NOT be used as an
+    id. Real licences are all digits and far longer, so require >= 6 digits;
+    anything shorter is treated as "no licence" and blanked at export.
+    """
+    v = (value or "").strip()
+    return v.isdigit() and len(v) >= 6
+
+
 def _convert_date(date_str, in_format, out_format):
     """``fctcore.convert_string_to_date_format`` — reformat or ``""`` on failure."""
     try:
@@ -475,7 +489,9 @@ def _player_id(client, sel, fallback_name, cache):
     Legacy / team player pages don't show it there, so — like the source's
     ``DetailsSportParser.parse_page_profile`` — we follow the profile link and
     read it from the profile's ``page-head`` h2 aside before giving up to the
-    sha256 fallback (blanked at export).
+    sha256 fallback (blanked at export). Every extracted value is validated with
+    ``_looks_like_licence`` so a placeholder index (``(8)``, ``(25)``) shown next
+    to unlicensed/guest entries is rejected instead of stored as an id.
     """
     if sel is None:
         return sha256_id(fallback_name)
@@ -486,7 +502,7 @@ def _player_id(client, sel, fallback_name, cache):
         '//h4[contains(@class, "media__title")]/span[@class="media__title-aside"]',
     ))
     # 2. the page might itself be a profile page (page-head h2 aside).
-    if not tpid:
+    if not _looks_like_licence(tpid):
         tpid = _strip_parens(_pf(
             sel,
             '//*[contains(@class, "page-head")]//div[@class="media__content"]'
@@ -494,7 +510,7 @@ def _player_id(client, sel, fallback_name, cache):
         ))
     # 3. follow the profile link and read the id from the profile's page-head,
     #    the way the source's DetailsSportParser.parse_page_profile does.
-    if not tpid:
+    if not _looks_like_licence(tpid):
         href = _pf(
             sel,
             '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
@@ -513,8 +529,9 @@ def _player_id(client, sel, fallback_name, cache):
                     '//*[contains(@class, "page-head")]//div[@class="media__content"]'
                     '//h2[contains(@class, "media__title")]/span[@class="media__title-aside"]',
                 ))
-    # 4. sha256 fallback (blanked at export).
-    if not tpid:
+    # 4. sha256 fallback (blanked at export) — also catches placeholder indices
+    #    like ``(8)`` that aren't real licences.
+    if not _looks_like_licence(tpid):
         name = _pf(
             sel,
             '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'

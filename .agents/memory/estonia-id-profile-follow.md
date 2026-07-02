@@ -38,3 +38,18 @@ fetch happens (no regression).
 **Genuinely blank is faithful:** guest/unlicensed players have no profile link
 at all (`href` absent) and no id anywhere — the source sha256→blanks them too.
 A small residual of named-but-blank ids on a modern draw is expected, not a bug.
+
+**Placeholder-index trap (validate the value, don't trust the aside):** some
+draws (seen on "Liigatennis Tartu Goldtime") put a small parenthesised INDEX
+like `(8)`, `(13)`, `(25)` in the same `media__title-aside` slot instead of a
+licence. These belong to unlicensed entries that all share ONE synthetic profile
+UUID (`f336c5cc-…`), so the number is AMBIGUOUS — the same `(2)` resolves to
+different people (e.g. "Põldmaa, Koit (2)" 's profile renders "Veronika
+Krjutškova (2)"). The source's `DetailsTournamentParser` stores this junk
+verbatim (a source bug). Real Estonia licences are all-digit ~8-digit numbers
+(`10######`). So `_player_id` validates EVERY extracted aside (all 3 gates) with
+`_looks_like_licence` (`isdigit()` and `len >= 6`); anything shorter →
+sha256→blank. The real 2403-row CSV had id lengths of exactly {1,2,8}, so the
+threshold splits cleanly with a wide margin. **Bonus:** giving each placeholder a
+distinct `sha256_id(name)` key also fixes a latent `players_db` collision where
+two people sharing an index would merge onto one name/DOB.
