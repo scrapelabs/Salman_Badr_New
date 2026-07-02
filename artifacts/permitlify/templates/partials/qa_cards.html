@@ -1,7 +1,7 @@
 {% comment %}
-One board column's ticket cards. Shared by the initial board render and the
-AJAX "Load more" endpoint (accounts.qa_views.tickets_page) so the markup stays
-in one place. Expects `items` — an iterable of Ticket rows annotated with
+One board section's ticket cards. Shared by the initial board render and the
+AJAX pager endpoint (accounts.qa_views.tickets_page) so the markup stays in one
+place. Expects `items` — an iterable of Ticket rows annotated with
 `n_comments`. The card is a div (not an <a>) so the inner "Go to scraper" link
 can nest legally; qa_board.html wires the whole card up as a click target.
 {% endcomment %}

@@ -54,13 +54,21 @@
         <span class="qa-col-dot"></span>
         <span class="qa-col-title">{{ col.label }}</span>
         <span class="qa-col-count">{{ col.count }}</span>
+        {% if col.num_pages > 1 %}
+        <span class="qa-pager" data-status="{{ col.status }}" data-page="1" data-pages="{{ col.num_pages }}">
+          <button type="button" class="qa-pager-btn" data-dir="prev" disabled aria-label="Previous page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <span class="qa-pager-info"><span class="qa-pager-cur">1</span> / {{ col.num_pages }}</span>
+          <button type="button" class="qa-pager-btn" data-dir="next" aria-label="Next page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </span>
+        {% endif %}
       </header>
       <div class="qa-col-body">
         {% include "partials/qa_cards.html" with items=col.items %}
         {% if not col.items %}<div class="qa-col-empty">No tickets here</div>{% endif %}
-      </div>
-      <div class="qa-col-more"{% if not col.has_more %} hidden{% endif %}>
-        <button type="button" class="qa-load-more" data-status="{{ col.status }}" data-next="{{ col.next_page }}">Load more</button>
       </div>
     </section>
     {% endfor %}
@@ -139,7 +147,7 @@
     });
   })();
 
-  // Card navigation + per-column "Load more" (AJAX pagination).
+  // Card navigation + per-section Prev/Next pager (AJAX pagination).
   (function () {
     var board = document.querySelector(".qa-board");
     if (!board) return;
@@ -152,7 +160,7 @@
     }
 
     // Whole card is a link, but ignore clicks on inner links/buttons
-    // (e.g. the "Go to scraper" chip and the "Load more" button).
+    // (e.g. the "Go to scraper" chip and the pager buttons).
     board.addEventListener("click", function (e) {
       if (e.target.closest("a, button")) return;
       openCard(e.target);
@@ -164,41 +172,50 @@
       }
     });
 
+    // Per-section pager: replaces the section's cards with the requested page
+    // (only PAGE_SIZE cards are ever shown at once) and updates the "X / Y".
     board.addEventListener("click", function (e) {
-      var btn = e.target.closest(".qa-load-more");
+      var btn = e.target.closest(".qa-pager-btn");
       if (!btn || btn.disabled) return;
+      var pager = btn.closest(".qa-pager");
       var col = btn.closest(".qa-col");
       var body = col && col.querySelector(".qa-col-body");
-      if (!body) return;
-      btn.disabled = true;
-      btn.textContent = "Loading…";
+      if (!pager || !body) return;
+
+      var cur = parseInt(pager.getAttribute("data-page") || "1", 10) || 1;
+      var pages = parseInt(pager.getAttribute("data-pages") || "1", 10) || 1;
+      var target = btn.getAttribute("data-dir") === "next" ? cur + 1 : cur - 1;
+      if (target < 1 || target > pages) return;
+
+      var prevBtn = pager.querySelector('[data-dir="prev"]');
+      var nextBtn = pager.querySelector('[data-dir="next"]');
+      if (prevBtn) prevBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      body.classList.add("is-loading");
+
       var url = ticketsUrl +
-        "?status=" + encodeURIComponent(btn.getAttribute("data-status")) +
-        "&page=" + encodeURIComponent(btn.getAttribute("data-next") || "2") +
+        "?status=" + encodeURIComponent(pager.getAttribute("data-status")) +
+        "&page=" + encodeURIComponent(target) +
         "&scraper=" + encodeURIComponent(scraper);
       fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (data) {
-          // Move new cards over, skipping any already on screen — a ticket
-          // created between page loads can otherwise re-appear as a duplicate.
-          var tmp = document.createElement("div");
-          tmp.innerHTML = data.html || "";
-          Array.prototype.forEach.call(tmp.querySelectorAll(".qa-card[data-href]"), function (card) {
-            var href = card.getAttribute("data-href");
-            if (!body.querySelector('.qa-card[data-href="' + href + '"]')) body.appendChild(card);
-          });
-          if (data.has_more) {
-            btn.setAttribute("data-next", data.next_page);
-            btn.disabled = false;
-            btn.textContent = "Load more";
-          } else {
-            var wrap = btn.closest(".qa-col-more");
-            (wrap || btn).remove();
-          }
+          body.classList.remove("is-loading");
+          body.innerHTML = data.html || '<div class="qa-col-empty">No tickets here</div>';
+          var landed = data.page || target;
+          var total = data.num_pages || pages;
+          pager.setAttribute("data-page", String(landed));
+          pager.setAttribute("data-pages", String(total));
+          var curEl = pager.querySelector(".qa-pager-cur");
+          if (curEl) curEl.textContent = String(landed);
+          if (prevBtn) prevBtn.disabled = landed <= 1;
+          if (nextBtn) nextBtn.disabled = landed >= total;
         })
         .catch(function () {
-          btn.disabled = false;
-          btn.textContent = "Retry";
+          // Leave the current page in place; just restore the buttons.
+          body.classList.remove("is-loading");
+          if (prevBtn) prevBtn.disabled = cur <= 1;
+          if (nextBtn) nextBtn.disabled = cur >= pages;
         });
     });
   })();

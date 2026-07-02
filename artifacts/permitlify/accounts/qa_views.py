@@ -32,8 +32,8 @@ MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024  # 5 MB per screenshot.
 
 STATUS_COLUMNS = [
     (Ticket.Status.TODO, "To Do"),
-    (Ticket.Status.IN_PROGRESS, "In Progress"),
-    (Ticket.Status.QA_REVIEW, "QA Review"),
+    (Ticket.Status.IN_PROGRESS, "Processing"),
+    (Ticket.Status.QA_REVIEW, "QA"),
     (Ticket.Status.DONE, "Done"),
 ]
 
@@ -159,9 +159,9 @@ def attachment_serve(request, uuid):
 # --------------------------------------------------------------------------- #
 # Board + tickets
 # --------------------------------------------------------------------------- #
-# Each board column renders only its first page of cards; the rest stream in
-# via AJAX (``tickets_page``) as the user hits "Load more". Keeps the board
-# light when a column holds hundreds of tickets.
+# Each board lane shows at most one page of cards at a time; the Prev/Next
+# pager swaps in another page via AJAX (``tickets_page``). Keeps a lane light
+# when it holds hundreds of tickets and caps how many are ever shown at once.
 PAGE_SIZE = 10
 
 
@@ -196,8 +196,9 @@ def board(request):
                 "label": label,
                 "items": list(qs[:PAGE_SIZE]),
                 "count": count,
-                "has_more": count > PAGE_SIZE,
-                "next_page": 2,
+                # 1-based page count; always at least one page so the empty
+                # state renders and the pager only appears when it's needed.
+                "num_pages": max(1, (count + PAGE_SIZE - 1) // PAGE_SIZE),
             }
         )
 
@@ -220,8 +221,8 @@ def tickets_page(request):
 
     Params: ``status`` (required, a valid Ticket status), ``scraper`` (optional
     slug filter, mirrors the board dropdown) and ``page`` (1-based). Returns the
-    rendered cards plus whether another page follows, so a column's "Load more"
-    button can page through without reloading the whole board.
+    rendered cards plus the landed ``page`` and total ``num_pages`` so a lane's
+    Prev/Next pager can move through pages without reloading the whole board.
     """
     status = request.GET.get("status") or ""
     if status not in Ticket.Status.values:
@@ -236,6 +237,10 @@ def tickets_page(request):
 
     qs = _ticket_qs(active_scraper).filter(status=status)
     count = qs.count()
+    num_pages = max(1, (count + PAGE_SIZE - 1) // PAGE_SIZE)
+    # Clamp so an out-of-range page (e.g. tickets moved away since load) still
+    # returns the last valid page rather than an empty body.
+    page = min(page, num_pages)
     start = (page - 1) * PAGE_SIZE
     end = start + PAGE_SIZE
     items = list(qs[start:end])
@@ -246,8 +251,8 @@ def tickets_page(request):
     return JsonResponse(
         {
             "html": html,
-            "has_more": count > end,
-            "next_page": page + 1,
+            "page": page,
+            "num_pages": num_pages,
             "count": count,
         }
     )

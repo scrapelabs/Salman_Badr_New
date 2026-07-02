@@ -2889,10 +2889,13 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 .qa-total { font: 500 9.4px "JetBrains Mono", monospace; color: var(--app-text-3); text-transform: uppercase; letter-spacing: 0.8px; }
 
 /* --- kanban board --- */
-.qa-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: start; }
+/* Horizontal swimlanes: one full-width band per status, stacked top to bottom,
+   each with its label at the start (top-left) and cards flowing in a
+   left-to-right wrapping grid. */
+.qa-board { display: flex; flex-direction: column; gap: 16px; }
 .qa-col {
   background: var(--app-surface-2); border: 1px solid var(--app-border);
-  border-radius: 14px; display: flex; flex-direction: column; min-height: 120px;
+  border-radius: 14px; display: flex; flex-direction: column;
 }
 .qa-col-head { display: flex; align-items: center; gap: 9px; padding: 14px 16px 10px; }
 .qa-col-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
@@ -2906,8 +2909,12 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
   background: var(--app-surface); border: 1px solid var(--app-border);
   border-radius: 7px; padding: 2px 7px;
 }
-.qa-col-body { display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 14px; }
-.qa-col-empty { text-align: center; padding: 22px 10px; font-size: 10px; color: var(--app-text-3); border: 1px dashed var(--app-border-2); border-radius: 10px; }
+.qa-col-body {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 10px; padding: 4px 16px 16px; align-items: start;
+}
+.qa-col-body.is-loading { opacity: 0.5; pointer-events: none; }
+.qa-col-empty { grid-column: 1 / -1; text-align: center; padding: 20px 10px; font-size: 10px; color: var(--app-text-3); border: 1px dashed var(--app-border-2); border-radius: 10px; }
 .qa-card {
   display: block; text-decoration: none; background: var(--app-surface); cursor: pointer;
   border: 1px solid var(--app-border); border-radius: 12px; padding: 13px 14px;
@@ -2927,16 +2934,18 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 }
 .qa-goto:hover { color: var(--app-brand); background: var(--app-accent-bg); border-color: transparent; }
 .qa-goto svg { width: 11px; height: 11px; flex: none; }
-.qa-col-more { padding: 2px 12px 14px; }
-.qa-col-more[hidden] { display: none; }
-.qa-load-more {
-  width: 100%; text-align: center; cursor: pointer;
-  font: 700 10px "Plus Jakarta Sans", sans-serif; letter-spacing: 0.3px;
-  color: var(--app-text-2); background: var(--app-surface);
-  border: 1px solid var(--app-border-2); border-radius: 9px; padding: 8px 10px; transition: 0.15s;
+/* per-section pager (sits at the end of the lane header) */
+.qa-pager { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.qa-pager-info { font: 600 9.4px "JetBrains Mono", monospace; color: var(--app-text-2); min-width: 34px; text-align: center; }
+.qa-pager-btn {
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  width: 24px; height: 24px; padding: 0; color: var(--app-text-2);
+  background: var(--app-surface); border: 1px solid var(--app-border-2);
+  border-radius: 7px; transition: 0.15s;
 }
-.qa-load-more:hover { color: var(--app-brand); border-color: var(--app-brand); background: var(--app-accent-bg); }
-.qa-load-more:disabled { opacity: 0.6; cursor: default; }
+.qa-pager-btn svg { width: 13px; height: 13px; }
+.qa-pager-btn:hover:not(:disabled) { color: var(--app-brand); border-color: var(--app-brand); background: var(--app-accent-bg); }
+.qa-pager-btn:disabled { opacity: 0.4; cursor: default; }
 .qa-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .qa-card-by { display: inline-flex; align-items: center; gap: 6px; font-size: 9.6px; color: var(--app-text-2); }
 .qa-card-stats { display: inline-flex; align-items: center; gap: 10px; }
@@ -3124,10 +3133,8 @@ body.mm-modal-open { overflow: hidden; }
 /* --- responsive --- */
 @media (max-width: 1080px) {
   .qa-detail-grid { grid-template-columns: 1fr; }
-  .qa-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
-  .qa-board { grid-template-columns: 1fr; }
   .qa-head { flex-direction: column; align-items: stretch; gap: 14px; }
   .qa-head .qa-new-btn { width: 100%; justify-content: center; }
   .qa-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }

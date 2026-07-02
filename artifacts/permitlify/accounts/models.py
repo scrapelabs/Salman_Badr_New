@@ -461,8 +461,8 @@ class Ticket(models.Model):
 
     class Status(models.TextChoices):
         TODO = "todo", "To Do"
-        IN_PROGRESS = "in_progress", "In Progress"
-        QA_REVIEW = "qa_review", "QA Review"
+        IN_PROGRESS = "in_progress", "Processing"
+        QA_REVIEW = "qa_review", "QA"
         DONE = "done", "Done"
 
     class Priority(models.TextChoices):
