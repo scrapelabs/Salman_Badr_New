@@ -88,7 +88,7 @@ class TSLeagueConfig:
     # When ``claude_gender`` is on, ``claude_gender_required`` makes a Claude key
     # mandatory (Claude-only, no fallback): if none is configured the run fails
     # immediately and asks for the key rather than degrading to draw-name gender.
-    # Used by Finland, matching the Estonia scraper's contract.
+    # Used by Finland and Croatia, matching Estonia's contract.
     claude_gender_required: bool = False
 
 

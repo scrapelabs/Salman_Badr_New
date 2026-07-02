@@ -11,8 +11,12 @@ deterministic draw-name heuristic (`_gender.draw_gender_code`) can't label them.
 For those, gender is inferred from **player names** via Claude.
 
 **Opt-in, not global.** The shared TS engines gate this behind a `claude_gender`
-config flag (default `False`); only scrapers that set it True (Croatia) call Claude.
-Other TS scrapers are unaffected.
+config flag (default `False`); only scrapers that set it True call Claude. Other TS
+scrapers are unaffected. As of July 2026 every opted-in TS scraper (Croatia
+tournament & league, Finland tournament & league, Tennis Europe) also sets
+`claude_gender_required=True` — **HARD** mode: no key → honest-fail before any
+network, never fall back to draw-name gender for players (user directive; soft
+mode remains only as an unused engine capability).
 
 **Rule — draw_gender precedence in `_build_row`:**
 1. explicit gender token in the draw name wins;

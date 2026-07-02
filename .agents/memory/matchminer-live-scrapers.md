@@ -76,15 +76,16 @@ Source quirks worth remembering:
   Don't re-add a draw-name per-player fallback or restore Claude name pretty-formatting.
 - **Shared TS engines gender modes** (`_ts_tournament`/`_ts_league`): both support
   Claude name→gender via two config flags. `claude_gender` alone = **SOFT** (if no
-  key: WARN + fall back to draw-name gender; used by **Croatia**). `claude_gender` +
+  key: WARN + fall back to draw-name gender; currently unused). `claude_gender` +
   `claude_gender_required` = **HARD** (if no key: honest-fail the run + ask for the
-  key before any network; used by **Finland** tournament & league and **Tennis
-  Europe**, matching Estonia's Claude-only contract). In the Claude branch per-player
-  gender is **always Claude-only**; only the draw-level `draw_gender` may use an
-  explicit draw-name word.
-  **Why:** the source inferred gender from names via an LLM; Croatia can tolerate
-  blanks but Finland/Estonia/Tennis Europe must not silently emit genderless rows.
-  Don't flip Croatia to `required` or Finland/TE to soft.
+  key before any network; used by **Finland** tournament & league, **Croatia**
+  tournament & league, and **Tennis Europe**, matching Estonia's Claude-only
+  contract). In the Claude branch per-player gender is **always Claude-only**; only
+  the draw-level `draw_gender` may use an explicit draw-name word.
+  **Why:** the sources inferred per-player gender from names via an LLM with no
+  fallback; the user explicitly directed Croatia onto the same no-fallback contract
+  (July 2026) after its soft mode masked missing genders. Don't flip any of them
+  back to soft; keep SOFT only as an engine capability.
 - **Tennis Europe ranking-tab DOB** (`_ts_tournament` `ranking_dob` flag): TE junior
   profiles hide DOB/YOB from both the profile head and Biography tab, so the source
   walked the site-wide ranking (`/ranking/` → first ranking → every "More" category
