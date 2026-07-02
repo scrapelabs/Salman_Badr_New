@@ -792,6 +792,16 @@ def run(run_obj, log):
         tele.record_error(msg)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
+    # How the run was invoked decides what the items CSV contains (phase 3):
+    #   * Google Sheet input  → CSV holds only the NEW matches. The production
+    #     Sheets pipeline appends this CSV back to the sheet, so re-emitting
+    #     already-stored matches would duplicate rows there.
+    #   * single link(s) / schedule input → CSV holds EVERY extracted match,
+    #     regardless of whether it is already in the database. A manual re-extract
+    #     of a link must hand back the whole box score; the DB is used only to add
+    #     the genuinely-new matches, never to filter the CSV.
+    is_sheet_run = any("docs.google.com" in _host(u) for u in urls)
+
     proxies = build_proxies(scraper, log)
 
     # Anti-bot fallback: a few athletics hosts answer the curl_cffi client with a
@@ -890,13 +900,26 @@ def run(run_obj, log):
     new_rows, skipped = college_store.ingest(
         mapped, run=run_obj, source=college_store.SOURCE_SCRAPE
     )
-    row_count = len(new_rows)
+    new_count = len(new_rows)
+
+    # Items CSV per the invocation mode (see ``is_sheet_run`` above): a Google
+    # Sheet run emits only the new matches (the Sheets pipeline appends them);
+    # a single-link/schedule run emits every extracted match (a full re-extract),
+    # while still persisting only the new ones to the DB. ``mapped`` is already
+    # in-run de-duplicated (phase 2), so single-link CSVs never repeat a match.
+    csv_rows = new_rows if is_sheet_run else mapped
+    row_count = len(csv_rows)
 
     log("INFO", "\u2500\u2500\u2500\u2500 summary \u2500\u2500\u2500\u2500")
     log(
         "INFO",
-        f"\U0001f9ee {extracted} match(es) extracted \u2014 {row_count} new, "
+        f"\U0001f9ee {extracted} match(es) extracted \u2014 {new_count} new, "
         f"{skipped} already in the database",
+    )
+    log(
+        "INFO",
+        f"\U0001f4c4 CSV mode: {'Google Sheet (new only)' if is_sheet_run else 'single link(s) (all matches)'} "
+        f"\u2014 {row_count} row(s) written",
     )
     log(
         "INFO",
@@ -907,6 +930,6 @@ def run(run_obj, log):
     # extracted from the discovered box scores.
     status = Run.Status.SUCCESS if extracted else Run.Status.FAILED
     icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
-    log("INFO", f"{icon} Run finished \u2014 status={status}, new_rows={row_count}")
-    items_csv = college_store.to_csv(new_rows) if new_rows else ""
+    log("INFO", f"{icon} Run finished \u2014 status={status}, new_rows={new_count}")
+    items_csv = college_store.to_csv(csv_rows) if csv_rows else ""
     return items_csv, tele.requests_csv(), tele.errors_csv(), row_count, status

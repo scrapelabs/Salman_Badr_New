@@ -25,8 +25,17 @@ intentional and was surfaced to the user. If they ever want to keep one row
 dedup keys that are *too* loose dropping legitimately-distinct rematches.
 
 **How to apply:** any change to what counts as "the same match" lives in
-`match_hash()` only. A run's items CSV / `row_count` report **only that run's
-newly-inserted rows** (not everything scraped) — keep that contract. The
+`match_hash()` only. The DB always persists **only newly-inserted rows** (dedup
+via `match_hash`). The run's **items CSV / `row_count` are mode-dependent** on
+how the run was invoked (`is_sheet_run` = any input URL on `docs.google.com`):
+a **Google Sheet** input emits only the new rows (the production Sheets pipeline
+appends the CSV, so re-emitting stored matches would duplicate the sheet); a
+**single link / schedule** input emits **every extracted match** (`mapped`,
+already in-run de-duplicated) regardless of DB state — a manual re-extract must
+hand back the whole box score; the DB is used only to add new matches, never to
+filter that CSV. **Why:** the user needs single-link re-extracts to return the
+full box score even when all 9 matches are already stored (the "0 new" run that
+used to yield an empty CSV). The
 prefilter-then-`bulk_create(ignore_conflicts=True)` attribution is exact because
 scrapes are single-in-flight per scraper and imports are a manual CLI step (no
 concurrent ingest); if that ever changes, switch to `ON CONFLICT ... RETURNING`.

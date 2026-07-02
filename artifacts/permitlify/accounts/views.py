@@ -1188,8 +1188,13 @@ def scraper_detail_view(request, slug):
         ctx["match_scraped"] = qs.filter(
             source=CollegeMatch.SOURCE_SCRAPE
         ).count()
-        # Most recent successful run's row_count == matches it newly inserted.
-        ctx["match_last_new"] = last_run.row_count if last_run else None
+        # Matches the most recent successful run actually inserted. Count by the
+        # first_seen_run FK rather than run.row_count: row_count now tracks the
+        # run's items-CSV size, which for single-link runs is EVERY extracted
+        # match (not just the new ones), so it would overstate "new" here.
+        ctx["match_last_new"] = (
+            qs.filter(first_seen_run=last_run).count() if last_run else None
+        )
         ctx["match_last_run"] = last_run
         ctx["match_last_added"] = last_match.created_at if last_match else None
         # Defaults + presets for the "Download by date" panel (match date, not
