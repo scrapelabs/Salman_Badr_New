@@ -53,6 +53,7 @@ from accounts.models import Run
 
 from ._gender import draw_gender_code, is_mixed_draw
 from ._claude_gender import resolve_gender, resolve_claude_keys
+from ._country_codes import resolve_country_code
 from ._http import ScraperClient, build_proxies
 from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -105,6 +106,17 @@ class TSTournamentConfig:
     # immediately and asks for the key rather than degrading to draw-name gender.
     # Used by Finland, Croatia and Tennis Europe, matching Estonia's contract.
     claude_gender_required: bool = False
+    # --- Claude country-code mode (dynamic-country sites) ------------------
+    # How ``tournament_country_code`` is derived from the per-tournament
+    # country name differs between the dynamic-country sources: COSAT's took
+    # ``country[0:3].upper()`` (the engine default), while GLTA's looked the
+    # name up in a fixed known-codes table and asked **Claude** for anything
+    # not in it (``Utils.convert_full_country``) — and since GLTA renders
+    # ``"U.S.A."`` (not a table key), Claude is its common case. Setting
+    # ``claude_country`` reproduces that: table first, Claude for the rest,
+    # cached per run, no other fallback. A Claude key is mandatory (the run
+    # fails up front without one, like ``claude_gender_required``).
+    claude_country: bool = False
     # --- ranking-tab DOB mode ---------------------------------------------
     # Junior sites (Tennis Europe) hide DOB/YOB from both the profile head and
     # the Biography tab, so per-profile DOB lookups come back empty. The
@@ -295,7 +307,12 @@ def _discover_one(client, cfg, tournament_url, log):
                 if len(parts) > 1
                 else start_date
             ) or start_date
-        text = _field(d1, "./text()")
+        # Full string of the span, not just its first text node: the location
+        # value is ``Org | <flag img> City, Country`` — the flag ``<img>``
+        # splits the text into two nodes, so ``./text()`` alone would stop at
+        # ``"Org | "`` and lose the city/country (the source's parse_field
+        # read the node's full text: ``parse_field('./.', d1)``).
+        text = _field(d1, "normalize-space(.)")
         if "|" in text:
             city, country = _split_location(text)
 
@@ -397,11 +414,17 @@ def _discover_range(client, cfg, start_date, end_date, log):
                 t_formats,
             ) or t_start
 
+            # normalize-space of the whole span (XPath takes the first matched
+            # node), not ``/text()``: the location renders as
+            # ``Org | <flag img> City, Country`` and the flag ``<img>`` splits
+            # the text into two nodes — the first alone is just ``"Org | "``,
+            # which silently blanked city/country on every dynamic-country
+            # site. The source's parse_field read the full node text.
             city, country = _split_location(
                 _field(
                     d1,
-                    './/small[@class="media__subheading"]//span[@class="nav-link"]'
-                    '/span[@class="nav-link__value"]/text()',
+                    'normalize-space(.//small[@class="media__subheading"]'
+                    '//span[@class="nav-link"]/span[@class="nav-link__value"])',
                 )
             )
 
@@ -755,7 +778,17 @@ def _build_row(client, cfg, ctx, match_data):
         # Country is per-tournament (from the search location) and per-player
         # (from the profile flag); the org labels are fixed.
         t_country = ctx.get("tournament_country", "")
-        t_country_code = t_country[0:3].upper() if t_country else ""
+        if cfg.claude_country:
+            # GLTA's source: known-codes table first, Claude for the rest
+            # (cached per run) — see _country_codes.resolve_country_code.
+            t_country_code = (
+                resolve_country_code(client, ctx.get("claude_keys") or [], t_country)
+                if t_country
+                else ""
+            )
+        else:
+            # COSAT's source: the first three letters of the country name.
+            t_country_code = t_country[0:3].upper() if t_country else ""
         id_type = cfg.id_type_label
         import_source = cfg.org_label
         sanction = cfg.org_label
@@ -938,7 +971,11 @@ def run(cfg, run_obj, log):
         log("INFO", f"\U0001f3be {cfg.label} starting \u2014 {start_date} \u2192 {end_date}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = build_proxies(scraper, log)
-    claude_keys = resolve_claude_keys(scraper) if cfg.claude_gender else []
+    claude_keys = (
+        resolve_claude_keys(scraper)
+        if (cfg.claude_gender or cfg.claude_country)
+        else []
+    )
     if cfg.claude_gender:
         if claude_keys:
             log("INFO", "\U0001f9e0 Gender: Claude name inference enabled (cached)")
@@ -961,6 +998,26 @@ def run(cfg, run_obj, log):
                 "\u2014 falling back to draw-name gender only "
                 "(per-player gender will be blank for genderless draws)",
             )
+    if cfg.claude_country:
+        if claude_keys:
+            log(
+                "INFO",
+                "\U0001f30d Country codes: known-codes table + Claude for "
+                "unlisted countries (cached per run)",
+            )
+        else:
+            # Claude-backed country codes with no fallback: without a key,
+            # fail the run and ask for one rather than emitting blank codes.
+            msg = (
+                f"Anthropic API key required \u2014 {cfg.label} resolves "
+                "tournament country codes via Claude for countries not in "
+                "its known-codes table and has no fallback. Add a key on "
+                "the Settings page (workspace-wide) or this scraper's "
+                "Settings tab, then re-run."
+            )
+            tele.record_error(msg)
+            log("ERROR", "\U0001f6d1 " + msg)
+            return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
 
     # ---- phase 1 · discovery ------------------------------------------
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")

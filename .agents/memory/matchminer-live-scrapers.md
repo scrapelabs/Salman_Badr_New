@@ -142,3 +142,20 @@ Source quirks worth remembering:
   `artifacts/permitlify: web` workflow (`--noreload`).
 - Per-run telemetry (requests/errors CSVs) must stay byte-compatible with the
   production framework; see `telemetry.py`.
+- **tournamentsoftware date locale ≠ lcid**: some TS sites render `m/d/Y` (non-padded)
+  regardless of the cookiewall locale (GLTA does under both 2057 and 1033). The engine's
+  en-GB default `%d/%m/%Y` then **silently blanks or swaps** every tournament start/end
+  date. Match the config's `lcid` + parse formats to what the site actually renders
+  (probe live), not to what the locale implies. COSAT and GLTA both need `lcid="1033"`
+  with `%m/%d/%Y`-first parsing.
+- **TS search-result location span is split by the flag `<img>`**: the location value
+  renders as `Org | <flag img> City, Country`, so the flag image splits the span text
+  into TWO nodes. Reading `./text()` (first node only) yields just `"Org | "` and
+  silently blanks tournament city/country on every dynamic-country site (GLTA, COSAT,
+  TE). Always read the **full span string** (`normalize-space(span)`), which is what
+  the production sources' `parse_field` did.
+- **Country-code derivation differs per dynamic-country source** — don't unify: COSAT's
+  source used `country[0:3].upper()` (engine default), GLTA's used a known-codes table
+  + **Claude** fallback (`_country_codes.py`, flag `claude_country=True`, key mandatory,
+  no fallback). GLTA renders `"U.S.A."` which is NOT a table key (only `"usa"` is), so
+  Claude is GLTA's common case — keep the table byte-identical to the source.
