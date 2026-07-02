@@ -117,6 +117,16 @@ class TSTournamentConfig:
     # profile/Biography fallback — unranked players keep a blank DOB, exactly
     # like the source's registry miss).
     ranking_dob: bool = False
+    # COSAT's ranking lists a **full DOB**, not a YOB: its More links sit on
+    # the ``/ranking/`` index itself, the profile link is in ``td[5]``
+    # (``/player-profile/<GUID>``) and ``td[6]`` carries a complete date.
+    # COSAT ignores the default en-GB cookiewall locale (2057) and stays
+    # Spanish, so the config also sets ``lcid="1033"`` (en-US) exactly like
+    # the source did — English "More" labels, ``m/d/Y`` dates parsed with the
+    # source's ``%m/%d/%Y``. Setting ``ranking_dob_full_date`` switches
+    # :func:`_ranking_rows` to that layout, normalising to ``MM/DD/YYYY`` —
+    # the exact value the source's registry stored.
+    ranking_dob_full_date: bool = False
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -364,13 +374,19 @@ def _discover_range(client, cfg, start_date, end_date, log):
             found = True
             seen.add(tournament_id)
 
+            # Search-result <time> dates render in the cookiewall locale:
+            # d/m/Y under the default en-GB (2057); m/d/Y under en-US (1033,
+            # COSAT) — whose source parsed exactly ['%m/%d/%Y', '%d/%m/%Y'].
+            t_formats = (
+                ("%m/%d/%Y", "%d/%m/%Y") if cfg.lcid == "1033" else ("%d/%m/%Y",)
+            )
             t_start = _to_mdy(
                 _field(
                     d1,
                     './/small[contains(@class, "media__subheading")]'
                     '//span[@class="nav-link"]//span[@class="nav-link__value"]/time[1]/text()',
                 ),
-                ("%d/%m/%Y",),
+                t_formats,
             )
             t_end = _to_mdy(
                 _field(
@@ -378,7 +394,7 @@ def _discover_range(client, cfg, start_date, end_date, log):
                     './/small[contains(@class, "media__subheading")]'
                     '//span[@class="nav-link"]//span[@class="nav-link__value"]/time[2]/text()',
                 ),
-                ("%d/%m/%Y",),
+                t_formats,
             ) or t_start
 
             city, country = _split_location(
@@ -537,16 +553,32 @@ def _parse_birth_year(sel):
     return f"1/1/{match.group()}" if match else ""
 
 
-def _ranking_rows(sel):
-    """Yield ``(profile_guid, "1/1/YOB")`` pairs from one ranking listing page.
+def _ranking_rows(sel, cfg):
+    """Yield ``(profile_guid, dob)`` pairs from one ranking listing page.
 
-    Mirrors the source's ranking parser: player link in ``td[4]`` (href
+    Default (Tennis Europe): player link in ``td[4]`` (href
     ``../profile/default.aspx?id=<GUID>``, split on ``?id=`` and lowercased),
-    year of birth in ``td[5]``.
+    year of birth in ``td[5]`` → ``"1/1/YOB"``. With
+    ``cfg.ranking_dob_full_date`` (COSAT): profile link in ``td[5]``
+    (``/player-profile/<GUID>`` tail, lowercased) and a full DOB in ``td[6]``
+    → ``MM/DD/YYYY``.
     """
     for row in sel.xpath(
         '//div[@id="content"]//table[@class="ruler"]//tr[td[@class="rank"]]'
     ):
+        if cfg.ranking_dob_full_date:
+            href = row.xpath(".//td[5]/a/@href").get() or ""
+            if "/player-profile/" not in href:
+                continue
+            guid = href.rstrip("/").split("/")[-1].strip().lower()
+            raw = (row.xpath("string(.//td[6])").get() or "")
+            raw = raw.replace("\xa0", " ").strip()
+            # Rendered m/d/Y under the en-US cookiewall locale (lcid 1033) —
+            # the source's exact ``in_format='%m/%d/%Y'`` registry parse.
+            dob = _to_mdy(raw, ("%m/%d/%Y",))
+            if guid and dob:
+                yield guid, dob
+            continue
         href = row.xpath(".//td[4]/a/@href").get() or ""
         yob = (row.xpath("normalize-space(.//td[5])").get() or "")
         yob = yob.replace("\xa0", " ").strip()
@@ -560,35 +592,41 @@ def _ranking_rows(sel):
 def _ranking_dob_seed(client, cfg, log):
     """Walk the ranking tab and seed the DOB registry (``ranking_dob`` mode).
 
-    Follows the source's traversal exactly: ``{base}/ranking/`` → the **first**
-    ranking's category page → every ``More`` category list with ``&ps=100``.
+    Follows the source's traversal exactly: ``{base}/ranking/`` → every
+    ``More`` category list with ``&ps=100``. On COSAT the More links sit on
+    the index itself; on Tennis Europe the index only lists rankings, so when
+    none are found the seed hops to the **first** ranking's category page and
+    collects the More links there — each source's exact walk.
     Parses each list's first page here and returns ``(dob_map, page_urls)``
     where ``page_urls`` are the remaining paginated pages (``&p=2..N``, from
     the ``page_caption`` result count / 100) still to fetch — the caller
     fetches those concurrently and merges their rows into ``dob_map``.
     """
     index = cfg.base + "/ranking/"
+    more_xpath = (
+        '//div[@id="content"]//table[@class="ruler"]//tr/th/a[text()="More"]/@href'
+    )
     dob_map, page_urls = {}, []
     sel = client.get_selector(index)
     if sel is None:
         return dob_map, page_urls
-    cat_href = _field(
-        sel, '//div[@id="content"]//table[@class="ruler"]//tr[1]/td/h5/a/@href'
-    )
-    if not cat_href:
-        return dob_map, page_urls
-    cat_sel = client.get_selector(urljoin(index, cat_href))
-    if cat_sel is None:
-        return dob_map, page_urls
-    mores = cat_sel.xpath(
-        '//div[@id="content"]//table[@class="ruler"]//tr/th/a[text()="More"]/@href'
-    ).getall()
+    mores = sel.xpath(more_xpath).getall()
+    if not mores:
+        cat_href = _field(
+            sel, '//div[@id="content"]//table[@class="ruler"]//tr[1]/td/h5/a/@href'
+        )
+        if not cat_href:
+            return dob_map, page_urls
+        cat_sel = client.get_selector(urljoin(index, cat_href))
+        if cat_sel is None:
+            return dob_map, page_urls
+        mores = cat_sel.xpath(more_xpath).getall()
     for more in mores:
         page_url = urljoin(index, more.strip() + "&ps=100")
         first = client.get_selector(page_url)
         if first is None:
             continue
-        dob_map.update(_ranking_rows(first))
+        dob_map.update(_ranking_rows(first, cfg))
         caption = _field(
             first,
             'normalize-space(//div[@class="pagenumbers"]'
@@ -984,7 +1022,7 @@ def run(cfg, run_obj, log):
             sel = client_for().get_selector(url)
             if sel is None:
                 return
-            pairs = list(_ranking_rows(sel))
+            pairs = list(_ranking_rows(sel, cfg))
             with rank_lock:
                 dob_map.update(pairs)
         except Exception as exc:  # noqa: BLE001 - a bad page can't kill the run

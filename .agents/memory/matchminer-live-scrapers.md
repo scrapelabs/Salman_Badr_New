@@ -79,21 +79,29 @@ Source quirks worth remembering:
   key: WARN + fall back to draw-name gender; currently unused). `claude_gender` +
   `claude_gender_required` = **HARD** (if no key: honest-fail the run + ask for the
   key before any network; used by **Finland** tournament & league, **Croatia**
-  tournament & league, and **Tennis Europe**, matching Estonia's Claude-only
-  contract). In the Claude branch per-player gender is **always Claude-only**; only
+  tournament & league, **Tennis Europe**, and **COSAT**, matching Estonia's
+  Claude-only contract). In the Claude branch per-player gender is **always Claude-only**; only
   the draw-level `draw_gender` may use an explicit draw-name word.
   **Why:** the sources inferred per-player gender from names via an LLM with no
   fallback; the user explicitly directed Croatia onto the same no-fallback contract
   (July 2026) after its soft mode masked missing genders. Don't flip any of them
   back to soft; keep SOFT only as an engine capability.
-- **Tennis Europe ranking-tab DOB** (`_ts_tournament` `ranking_dob` flag): TE junior
-  profiles hide DOB/YOB from both the profile head and Biography tab, so the source
-  walked the site-wide ranking (`/ranking/` → first ranking → every "More" category
-  list, `&ps=100`, pages via `page_caption` count/100) and recorded `1/1/<YOB>` keyed
-  by **profile GUID** (ranking href `?id=<GUID>` ↔ player page `/player-profile/<guid>`,
-  lowercase both sides). With the flag on, DOB comes from that registry **only** —
+- **Ranking-tab DOB registries** (`_ts_tournament` `ranking_dob` flag): TE/COSAT
+  junior profiles hide DOB from the profile head and Biography tab, so the sources
+  walked the site-wide ranking (`/ranking/` → every "More" category list, `&ps=100`,
+  pages via `page_caption` count/100) and joined match players by **profile GUID**
+  (lowercase both sides). With the flag on, DOB comes from that registry **only** —
   unranked players stay blank (registry miss = blank, NO profile/Biography fallback,
-  per user directive). Don't re-add per-profile DOB lookups for TE.
+  per user directive). Don't re-add per-profile DOB lookups.
+  Two site layouts: **TE** (default) — index has no More links (hop via the first
+  ranking's `h5` link), GUID from `td[4]` `?id=`, YOB `td[5]` → `1/1/<YOB>`.
+  **COSAT** (`ranking_dob_full_date`) — More links sit ON the `/ranking/` index,
+  profile link `td[5]` (`/player-profile/<GUID>` tail), **full DOB** `td[6]` parsed
+  `%m/%d/%Y` → padded `MM/DD/YYYY`. COSAT **ignores the default en-GB cookiewall
+  locale (2057)** and stays Spanish ("Más"/d-m-Y) — its config sets `lcid="1033"`
+  (en-US) exactly like the old source; the engine's search-`<time>` date formats are
+  locale-aware (`m/d/Y` first under 1033), while **match-footer dates stay d/m/Y
+  even under 1033** (verified live + in the old source — don't "fix" that parse).
 - **parsel `@xlink:href` trap**: an xpath using the `xlink:` prefix raises
   `ValueError: Undefined namespace prefix` on any page that doesn't declare the
   namespace (evaluated per-document, so it "works" on some pages and blows up runs
