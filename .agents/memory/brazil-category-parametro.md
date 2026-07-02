@@ -18,16 +18,23 @@ Per category, `POST getGruposJogos {id_categoria, id_torneio}` -> JSON
 category-specific `id_parametro` in the panel POST. Verified live: each category
 then returns its own, **zero-overlap** game set.
 
-**Dedup:** key on the site's own game id + player names + score (NOT
-`draw_name`/`round`/`date`). The round walk re-serves the same game across round
-views, so match-id-based dedup is required to collapse them; a genuine rematch
-carries a *different* game id so it is not wrongly merged. The game id is parsed
-for the dedup key only — it is deliberately NOT an output column (user asked to
-remove the "Match ID" column).
+**Dedup:** key on the *physical* match — tournament + date + (order-independent,
+so partner/serving order can't matter) player names + normalized score —
+excluding BOTH `draw_name` and the site game id (`_dedup_key` in
+`brazil_results.py`). Do NOT key on the game id: it is **sometimes blank**, and a
+blank/mismatched id let the same-match-under-a-*wrong*-draw duplicate leak
+through. The physical key collapses every re-serving (category-heading leak +
+round-walk) regardless of the id. Verified on a live 10,973-row run: unique keys
+== row count (no over-collapse; a genuine rematch of the same two players in the
+same event/day with an identical score doesn't happen). The game id is still
+parsed but is neither a dedup input nor an output column (user wants "Match ID"
+kept out of the CSV, and explicitly did NOT want a DB store for it either).
 
 **Why:** user reported "all data is wrong" — rows duplicated across ages/genders
 with mismatched winners. Root cause was the missing `getGruposJogos` step (this
 affects the original production spider too, which reused the page's initial
 parametro), compounded by an over-strict port dedup key that had added
-`draw_name`/`round`/`date`/`tournament_url` and so failed to collapse the leaked
-duplicates.
+`draw_name`/`round`/`date`/`tournament_url`. A later fix keyed on the game id +
+players + score, but the game id is intermittently blank, so wrong-draw dups
+still slipped through whenever it was missing — hence the move to the id-free
+physical-identity key above.

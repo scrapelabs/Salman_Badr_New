@@ -820,6 +820,38 @@ def _scrape_tournament(client, tournament_url, claude_keys=None):
     return _parse_category(client, tournament_url, sel, claude_keys=claude_keys)
 
 
+def _dedup_key(row):
+    """Order-independent identity key for de-duplicating parsed matches.
+
+    Keys on the physical match — tournament, date, the winner and loser sides
+    (each sorted so partner/serving order never matters), and the normalized
+    score — and excludes both ``draw_name`` and the site ``match_id``. That way
+    the same match re-served under several category headings (the stateful CBT
+    panel does this, sometimes under a *wrong* draw/gender) collapses to one
+    row, regardless of whether the site emitted a ``match_id`` for it.
+
+    Accepted residual: two *genuinely different* matches between the same pair,
+    in the same event and on the same date, with an identical *trivial* score
+    (e.g. both walkovers) would merge. This is vanishingly rare, and re-adding
+    ``draw_name`` to distinguish them would reopen the wrong-draw leak this key
+    exists to close.
+    """
+    def _norm(value):
+        return " ".join(str(value or "").split()).lower()
+
+    winners = tuple(
+        sorted(n for n in (_norm(row.get("winner_1_name")),
+                           _norm(row.get("winner_2_name"))) if n)
+    )
+    losers = tuple(
+        sorted(n for n in (_norm(row.get("loser_1_name")),
+                           _norm(row.get("loser_2_name"))) if n)
+    )
+    score = "".join(str(row.get("score") or "").split()).rstrip(";").lower()
+    return (_norm(row.get("tournament_name")), _norm(row.get("date")),
+            winners, losers, score)
+
+
 def run(run_obj, log):
     """Execute the Brazil Results scrape. Returns the standard 5-tuple."""
     tele = Telemetry()
@@ -869,23 +901,18 @@ def run(run_obj, log):
         try:
             rows = _scrape_tournament(client, tournament_url, claude_keys=claude_keys)
             for row in rows:
-                # Dedup on the site's own game id + players + score (mirrors the
-                # production spider). The stateful category panel re-serves the
-                # same ``div.game`` under several category headings, so the same
-                # physical match (same ``match_id``) can be parsed under two
-                # different ``draw_name``/gender contexts; keying on ``match_id``
-                # collapses those to one row. A genuine rematch carries a
-                # *different* ``match_id``, so it is not wrongly collapsed.
-                # ``match_id`` is parsed for this key only — it is no longer an
-                # output column.
-                key = (
-                    row.get("match_id", ""),
-                    row.get("winner_1_name", ""),
-                    row.get("loser_1_name", ""),
-                    row.get("winner_2_name", ""),
-                    row.get("loser_2_name", ""),
-                    row.get("score", ""),
-                )
+                # Dedup on the *physical* match, computed by ``_dedup_key``:
+                # tournament + date + (order-independent) players + score,
+                # deliberately excluding both ``draw_name`` and the site
+                # ``match_id``. The stateful CBT category panel re-serves the
+                # same ``div.game`` under several category headings, so one
+                # physical match can be parsed under two different (one *wrong*)
+                # ``draw_name``/gender contexts; keying on the players collapses
+                # those to a single first-seen row even when the site omits a
+                # ``match_id`` (it is sometimes blank — the old id-based key let
+                # such duplicates leak through). ``match_id`` is still parsed but
+                # is neither a dedup input nor an output column.
+                key = _dedup_key(row)
                 with lock:
                     if key in seen:
                         continue
