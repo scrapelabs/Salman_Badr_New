@@ -49,12 +49,15 @@ from .telemetry import Telemetry, redact_secrets, sanitize_cell
 BASE = "https://www.tenisintegrado.com.br"
 INDEX2_URL = f"{BASE}/new_torneio/index2"
 PAINEL_URL = f"{BASE}/torneio_painel_jogo"
+# Ajax endpoint the panel's category <select> (a ``form-ajax-select``) calls on
+# change to repopulate the ``id_parametro`` list for the chosen category.
+GRUPOS_URL = f"{PAINEL_URL}/getGruposJogos"
 
 # Items CSV columns — the production Brazil items schema (model field order,
 # minus the internal spider_id / job_id). Title-cased header to match the
 # framework's downloadable files (e.g. "Tournament Url").
 COLUMNS = [
-    "match_id", "ball_type", "id_type", "draw_bracket_value", "draw_name",
+    "ball_type", "id_type", "draw_bracket_value", "draw_name",
     "draw_team_type", "tournament_name", "date", "round", "score",
     "winner_1_name", "winner_1_gender", "winner_1_dob", "winner_1_third_party_id",
     "winner_1_city", "winner_1_state", "winner_1_country",
@@ -684,19 +687,64 @@ def _parse_games(tournament_url, sel, client=None, claude_keys=None):
     return out
 
 
+def _grupos_jogos(client, id_categoria, id_torneio, headers):
+    """Return a category's own ``id_parametro`` value(s).
+
+    Mirrors the ajax call the panel's category ``<select>`` fires on change
+    (``getGruposJogos``): ``POST {id_categoria, id_torneio}`` -> a JSON map of
+    ``{parametro_id: label}`` (a leading ``{"": "Selecionar"}`` placeholder is
+    dropped). This is the *only* way to get the parametro that actually selects a
+    category's games; without it the panel serves the default category for all.
+    """
+    resp = client.post(
+        GRUPOS_URL,
+        data={"id_categoria": id_categoria, "id_torneio": id_torneio},
+        headers=headers,
+    )
+    # A transient failure here silently skips a whole category, so surface it
+    # (an empty-but-valid response is a category with no draw/games — normal, so
+    # that path stays quiet and returns []).
+    if resp is None or not (200 <= resp.status_code < 300):
+        status = "no response" if resp is None else f"HTTP {resp.status_code}"
+        msg = f"getGruposJogos failed for id_categoria={id_categoria} ({status}); category skipped"
+        client.tele.record_error(msg)
+        client.log("WARNING", "\u26a0\ufe0f " + msg)
+        return []
+    try:
+        mapping = resp.json()
+    except Exception:
+        msg = f"getGruposJogos returned non-JSON for id_categoria={id_categoria}; category skipped"
+        client.tele.record_error(msg)
+        client.log("WARNING", "\u26a0\ufe0f " + msg)
+        return []
+    if not isinstance(mapping, dict):
+        return []
+    return [key for key in mapping.keys() if key]
+
+
 def _parse_category(client, tournament_url, sel, claude_keys=None):
-    """Walk every category / parameter / round panel; return match rows."""
+    """Walk every category / parameter / round panel; return match rows.
+
+    ``id_parametro`` is **category-specific**: the panel's category ``<select>``
+    is a ``form-ajax-select`` that repopulates ``id_parametro`` (via
+    :func:`_grupos_jogos`) whenever the category changes. Posting the panel with
+    the initial category's parametro makes the server return that default
+    category's games for *every* category (only the echoed heading changes), so
+    the same games leak under every draw name. We fetch each category's own
+    parametro first — then each category returns its own, non-overlapping games.
+    """
     out = []
     id_categorias = sel.xpath('//select[@id="id_categoria"]/option/@value').getall()
-    id_parametros = sel.xpath('//select[@id="id_parametro"]/option/@value').getall()
     id_periodo = _field(sel, '//select[@id="id_periodo"]/option[@selected="selected"]/@value')
     nr_rodada = _field(sel, '//select[@id="round-selector"]/option[1]/@value')
     id_torneio = _field(sel, '//input[@name="id_torneio"]/@value')
     id_categoria_ant = _field(sel, '//input[@name="id_categoria_ant"]/@value')
 
     headers = {"Referer": tournament_url}
+    ajax_headers = {"Referer": tournament_url, "X-Requested-With": "XMLHttpRequest"}
 
     for id_categoria in id_categorias:
+        id_parametros = _grupos_jogos(client, id_categoria, id_torneio, ajax_headers)
         for id_parametro in id_parametros:
             data = {
                 "id_categoria": id_categoria,
@@ -821,16 +869,17 @@ def run(run_obj, log):
         try:
             rows = _scrape_tournament(client, tournament_url, claude_keys=claude_keys)
             for row in rows:
-                # Source-identified key: dedupes only true duplicates within a
-                # tournament, without collapsing genuine rematches (same
-                # players/score in a different draw, round or date). ``match_id``
-                # is included when present but never relied on alone.
+                # Dedup on the site's own game id + players + score (mirrors the
+                # production spider). The stateful category panel re-serves the
+                # same ``div.game`` under several category headings, so the same
+                # physical match (same ``match_id``) can be parsed under two
+                # different ``draw_name``/gender contexts; keying on ``match_id``
+                # collapses those to one row. A genuine rematch carries a
+                # *different* ``match_id``, so it is not wrongly collapsed.
+                # ``match_id`` is parsed for this key only — it is no longer an
+                # output column.
                 key = (
-                    tournament_url,
                     row.get("match_id", ""),
-                    row.get("draw_name", ""),
-                    row.get("round", ""),
-                    row.get("date", ""),
                     row.get("winner_1_name", ""),
                     row.get("loser_1_name", ""),
                     row.get("winner_2_name", ""),
