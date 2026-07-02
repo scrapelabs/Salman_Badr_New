@@ -20,7 +20,9 @@ at the view layer); a URL skips discovery and scrapes that one tournament.
 
 **Deterministic port.** The source's AI name/gender guessing
 (``format_name_gender_claude``) and its ``PlayersBelgiumResultsModel`` cache are
-dropped: player gender falls back to the draw's gender, and the
+dropped: player gender falls back to the draw's gender as the ``"M"``/``"F"``
+schema code (while the ``draw_gender`` column keeps its ``"Male"``/``"Female"``
+label), and the
 ``third_party_id`` uses the profile-page id with a stable ``sha256_id(name)``
 fallback (verbatim from the production ``helper.sha256_id``). The emitted file
 uses the shared 61-column MatchMiner items schema (same as Brazil/Czech).
@@ -662,7 +664,9 @@ class Parser:
             at(losers, 1) if is_doubles else ("", "", False, "", "")
         )
 
-        g = self.draw_gender
+        # Player gender columns use the "M"/"F" schema code; ``draw_gender``
+        # keeps the "Male"/"Female" label (MatchMiner items-schema convention).
+        g = {"Male": "M", "Female": "F"}.get(self.draw_gender, "")
 
         return {
             "match_id": "",  # not exposed in this markup
