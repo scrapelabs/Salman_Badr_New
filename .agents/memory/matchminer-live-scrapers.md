@@ -79,8 +79,12 @@ Source quirks worth remembering:
   key: WARN + fall back to draw-name gender; currently unused). `claude_gender` +
   `claude_gender_required` = **HARD** (if no key: honest-fail the run + ask for the
   key before any network; used by **Finland** tournament & league, **Croatia**
-  tournament & league, **Tennis Europe**, and **COSAT**, matching Estonia's
-  Claude-only contract). In the Claude branch per-player gender is **always Claude-only**; only
+  tournament & league, **Sweden** tournament & league, **Tennis Europe**, and
+  **COSAT**, matching Estonia's Claude-only contract). The recurring "isn't picking
+  up gender" report on a wrapper scraper is almost always this: the original derived
+  gender via `format_name_gender_claude` name inference but the port's config didn't
+  set the flags — full trap + fix in `claude-gender-inference.md`. In the Claude
+  branch per-player gender is **always Claude-only**; only
   the draw-level `draw_gender` may use an explicit draw-name word.
   **Why:** the sources inferred per-player gender from names via an LLM with no
   fallback; the user explicitly directed Croatia onto the same no-fallback contract

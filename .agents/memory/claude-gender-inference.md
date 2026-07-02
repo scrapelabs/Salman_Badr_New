@@ -13,7 +13,8 @@ gender is inferred from **player names** via Claude.
 **Opt-in, not global.** The shared TS engines gate this behind a `claude_gender`
 config flag (default `False`); only scrapers that set it True call Claude. Other TS
 scrapers are unaffected. Every opted-in TS scraper (Croatia tournament & league,
-Finland tournament & league, Sweden league, Tennis Europe, COSAT, Estonia) also
+Finland tournament & league, Sweden tournament & league, Tennis Europe, COSAT,
+Estonia) also
 sets `claude_gender_required=True` — **HARD** mode: no key → honest-fail before any
 network, never fall back to draw-name gender for players (user directive; soft
 mode remains only as an unused engine capability).
