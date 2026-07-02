@@ -2445,6 +2445,55 @@ def run_cancel_view(request, slug, run_uuid):
 
 @login_required
 @require_http_methods(["POST"])
+def run_rerun_view(request, slug, run_uuid):
+    """Re-queue a fresh job that replays a past run's exact inputs ("Redo").
+
+    Backs the Redo button on both the Calls-history and Batch-jobs tabs. The
+    source run's persisted ``params`` and date window are replayed verbatim
+    through the normal queue admission point (:func:`_enqueue_run`), so the copy
+    honours maintenance and the same concurrency rules as any other job — it goes
+    live immediately when a slot is free, otherwise it waits in the queue. The
+    source run is left untouched; a brand-new QUEUED run is created.
+    """
+    s = get_object_or_404(Scraper, slug=slug)
+    src = _get_run(slug, run_uuid)
+    return_tab = "batch" if request.POST.get("return_tab") == "batch" else "calls"
+    back = f"{reverse('scraper_detail', args=[slug])}?tab={return_tab}"
+    if return_tab == "calls":
+        page = (request.POST.get("page") or "").strip()
+        if page.isdigit():
+            back = f"{back}&page={page}"
+
+    inputs = RunInputs(
+        params=dict(src.params or {}),
+        date_from=src.date_from,
+        date_to=src.date_to,
+        tournament=src.tournament,
+    )
+    try:
+        run = _enqueue_run(s, inputs=inputs, launched_by=request.user)
+    except RunStartError as exc:
+        messages.error(request, exc.message)
+        return redirect(back)
+
+    _dispatch_next()
+    run.refresh_from_db()
+    if run.status == Run.Status.RUNNING:
+        messages.success(
+            request,
+            f"Re-ran job #{src.short_id} as run #{run.short_id} — streaming live now.",
+        )
+    else:
+        messages.success(
+            request,
+            f"Re-queued job #{src.short_id} as run #{run.short_id} — it'll start "
+            "automatically when capacity frees up. Track it on the Batch jobs tab.",
+        )
+    return redirect(back)
+
+
+@login_required
+@require_http_methods(["POST"])
 def scraper_queue_view(request, slug):
     """Batch-tab submit: validate inputs, enqueue a job, then pump the dispatcher
     (it starts immediately when capacity allows, otherwise waits in the queue)."""

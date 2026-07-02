@@ -197,6 +197,14 @@
                 CSV
               </a>
               {% endif %}
+              <form class="run-rerun-form" method="post" action="{% url 'run_rerun' s.slug r.uuid %}">
+                {% csrf_token %}
+                <input type="hidden" name="return_tab" value="batch" />
+                <button type="submit" class="run-act" title="Re-run this job with the same inputs">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Redo
+                </button>
+              </form>
               {% endif %}
             </td>
           </tr>
@@ -670,6 +678,17 @@
               <svg class="ic-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
               Errors
             </a>
+            {% endif %}
+            {% if run.status != 'running' and run.status != 'queued' %}
+            <form class="run-rerun-form" method="post" action="{% url 'run_rerun' s.slug run.uuid %}">
+              {% csrf_token %}
+              <input type="hidden" name="return_tab" value="calls" />
+              <input type="hidden" name="page" value="{{ page_obj.number }}" />
+              <button type="submit" class="run-act" title="Re-run this job with the same inputs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Redo
+              </button>
+            </form>
             {% endif %}
             {% if not run.is_running %}
             <form class="run-del-form" method="post" action="{% url 'run_delete' s.slug run.uuid %}" data-confirm="Delete run #{{ run.short_id }}? Its log and CSV files will be permanently removed." data-confirm-title="Delete run?" data-confirm-ok="Delete" data-confirm-tone="danger">

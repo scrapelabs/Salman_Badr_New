@@ -71,6 +71,11 @@ urlpatterns = [
         name="run_cancel",
     ),
     path(
+        "scrapers/<slug:slug>/runs/<uuid:run_uuid>/rerun/",
+        views.run_rerun_view,
+        name="run_rerun",
+    ),
+    path(
         "scrapers/<slug:slug>/matches.csv",
         views.college_matches_export_view,
         name="college_matches_export",
