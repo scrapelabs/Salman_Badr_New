@@ -465,25 +465,55 @@ def _sport_player_links(client, tid):
 # ---------------------------------------------------------------------------
 # Player identity / DOB (from a player page + linked profile page)
 # ---------------------------------------------------------------------------
-def _player_id(sel, fallback_name):
+def _player_id(client, sel, fallback_name, cache):
     """Licence id from a player page (parenthesised aside), else ``sha256_id``.
 
     The id is derived the same way wherever a player page is read so the
     players-table key built in stage 2 matches the lookup key in stage 3.
+
+    Modern match pages carry the licence id in the ``page-subhead`` h4 aside.
+    Legacy / team player pages don't show it there, so — like the source's
+    ``DetailsSportParser.parse_page_profile`` — we follow the profile link and
+    read it from the profile's ``page-head`` h2 aside before giving up to the
+    sha256 fallback (blanked at export).
     """
     if sel is None:
         return sha256_id(fallback_name)
+    # 1. modern player/match page — parenthesised aside next to the h4 title.
     tpid = _strip_parens(_pf(
         sel,
         '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
         '//h4[contains(@class, "media__title")]/span[@class="media__title-aside"]',
     ))
+    # 2. the page might itself be a profile page (page-head h2 aside).
     if not tpid:
         tpid = _strip_parens(_pf(
             sel,
             '//*[contains(@class, "page-head")]//div[@class="media__content"]'
             '//h2[contains(@class, "media__title")]/span[@class="media__title-aside"]',
         ))
+    # 3. follow the profile link and read the id from the profile's page-head,
+    #    the way the source's DetailsSportParser.parse_page_profile does.
+    if not tpid:
+        href = _pf(
+            sel,
+            '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
+            '//h4[contains(@class, "media__title")]/a/@href',
+        )
+        if not href:
+            href = _pf(
+                sel,
+                '//div[@id="content"]//div[@class="subtitle"]//h2/a[@class="button"]/@href',
+            )
+        if href:
+            psel = _get_sel(client, urljoin(BASE, href), cache)
+            if psel is not None:
+                tpid = _strip_parens(_pf(
+                    psel,
+                    '//*[contains(@class, "page-head")]//div[@class="media__content"]'
+                    '//h2[contains(@class, "media__title")]/span[@class="media__title-aside"]',
+                ))
+    # 4. sha256 fallback (blanked at export).
     if not tpid:
         name = _pf(
             sel,
@@ -729,7 +759,7 @@ def _resolve(client, side, players_db, url_to_id, page_cache):
     tpid = url_to_id.get(url)
     if tpid is None:
         sel = _get_sel(client, url, page_cache)
-        tpid = _player_id(sel, name) if sel is not None else sha256_id(name)
+        tpid = _player_id(client, sel, name, page_cache)
         url_to_id[url] = tpid
     rec = players_db.get(tpid)
     if rec:
@@ -829,7 +859,7 @@ def _scrape_tournament(client, tournament, claude_keys):
         sel = _get_sel(client, purl, page_cache)
         if sel is None:
             continue
-        tpid = _player_id(sel, listing_name)
+        tpid = _player_id(client, sel, listing_name, page_cache)
         url_to_id[purl] = tpid
         if tpid not in players_db:
             players_db[tpid] = {
