@@ -24,18 +24,20 @@ For each tournament the crawl walks: tournament page → ``Players/GetPlayersCon
 third-party id and date of birth. Because each match is reachable from **both**
 players' pages, rows are de-duplicated by a content key.
 
-Unlike the production spider this port is **deterministic and AI-free**: the
-original used Claude to pretty-format new player names and infer gender. That is
-dropped — names are emitted in deterministic ``"Lastname, Firstname"`` order
-(cleaned of seedings, then reordered via :func:`accounts.live_scrapers._names.last_first`
-to match the Claude formatter the source applied) and gender is left
-empty (the markup carries no reliable gender signal), exactly mirroring the
-Croatia League / Brazil ports. ``run(config, run_obj, log)`` returns
+Names are emitted in deterministic ``"Lastname, Firstname"`` order (cleaned of
+seedings, then reordered via :func:`accounts.live_scrapers._names.last_first`
+to match the Claude formatter the source applied — the cosmetic pretty-formatting
+itself is dropped). Gender comes from the draw name by default, or from Claude
+name inference when the config sets ``claude_gender`` (see
+:class:`TSTournamentConfig`). DOB comes from the player profile / Biography tab
+by default, or from the site-wide ranking tab when the config sets
+``ranking_dob`` (Tennis Europe). ``run(config, run_obj, log)`` returns
 ``(items_csv, requests_csv, errors_csv, row_count, status)``.
 """
 
 import csv
 import io
+import math
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -103,6 +105,18 @@ class TSTournamentConfig:
     # immediately and asks for the key rather than degrading to draw-name gender.
     # Used by Finland, matching the Estonia scraper's contract.
     claude_gender_required: bool = False
+    # --- ranking-tab DOB mode ---------------------------------------------
+    # Junior sites (Tennis Europe) hide DOB/YOB from both the profile head and
+    # the Biography tab, so per-profile DOB lookups come back empty. The
+    # production source instead walked the site-wide **ranking tab** up front
+    # (first ranking on ``{base}/ranking/`` → every "More" category list,
+    # 100 rows/page) and recorded each ranked player's ``1/1/<YOB>`` keyed by
+    # their profile GUID; match players were then joined against that registry.
+    # Setting ``ranking_dob`` reproduces that exactly: a pre-phase builds the
+    # GUID → DOB map and ``_parse_player`` reads DOB from it **only** (no
+    # profile/Biography fallback — unranked players keep a blank DOB, exactly
+    # like the source's registry miss).
+    ranking_dob: bool = False
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -257,7 +271,11 @@ def _discover_one(client, cfg, tournament_url, log):
         '//div[@class="media__content"]//small[contains(@class, "media__subheading")]'
         '//span[@class="nav-link"]//span[@class="nav-link__value"]'
     ):
-        use = d1.xpath("./svg/use/@xlink:href").get() or d1.xpath("./svg/use/@href").get() or ""
+        # ``@xlink:href`` would raise "Undefined namespace prefix" on pages
+        # that don't declare the xlink namespace (parsel evaluates the prefix
+        # per-document); match the attribute by local name instead so both
+        # ``xlink:href`` and plain ``href`` resolve everywhere.
+        use = d1.xpath('./svg/use/@*[local-name()="href"]').get() or ""
         if "calendar" in use:
             range_text = _field(d1, "normalize-space(.)")
             parts = re.split(r"\s*-\s*", range_text, maxsplit=1)
@@ -519,7 +537,82 @@ def _parse_birth_year(sel):
     return f"1/1/{match.group()}" if match else ""
 
 
-def _parse_player(client, cfg, name, url):
+def _ranking_rows(sel):
+    """Yield ``(profile_guid, "1/1/YOB")`` pairs from one ranking listing page.
+
+    Mirrors the source's ranking parser: player link in ``td[4]`` (href
+    ``../profile/default.aspx?id=<GUID>``, split on ``?id=`` and lowercased),
+    year of birth in ``td[5]``.
+    """
+    for row in sel.xpath(
+        '//div[@id="content"]//table[@class="ruler"]//tr[td[@class="rank"]]'
+    ):
+        href = row.xpath(".//td[4]/a/@href").get() or ""
+        yob = (row.xpath("normalize-space(.//td[5])").get() or "")
+        yob = yob.replace("\xa0", " ").strip()
+        if "?id=" not in href or not yob.isdigit():
+            continue
+        guid = href.split("?id=")[-1].split("&")[0].strip().lower()
+        if guid:
+            yield guid, f"1/1/{yob}"
+
+
+def _ranking_dob_seed(client, cfg, log):
+    """Walk the ranking tab and seed the DOB registry (``ranking_dob`` mode).
+
+    Follows the source's traversal exactly: ``{base}/ranking/`` → the **first**
+    ranking's category page → every ``More`` category list with ``&ps=100``.
+    Parses each list's first page here and returns ``(dob_map, page_urls)``
+    where ``page_urls`` are the remaining paginated pages (``&p=2..N``, from
+    the ``page_caption`` result count / 100) still to fetch — the caller
+    fetches those concurrently and merges their rows into ``dob_map``.
+    """
+    index = cfg.base + "/ranking/"
+    dob_map, page_urls = {}, []
+    sel = client.get_selector(index)
+    if sel is None:
+        return dob_map, page_urls
+    cat_href = _field(
+        sel, '//div[@id="content"]//table[@class="ruler"]//tr[1]/td/h5/a/@href'
+    )
+    if not cat_href:
+        return dob_map, page_urls
+    cat_sel = client.get_selector(urljoin(index, cat_href))
+    if cat_sel is None:
+        return dob_map, page_urls
+    mores = cat_sel.xpath(
+        '//div[@id="content"]//table[@class="ruler"]//tr/th/a[text()="More"]/@href'
+    ).getall()
+    for more in mores:
+        page_url = urljoin(index, more.strip() + "&ps=100")
+        first = client.get_selector(page_url)
+        if first is None:
+            continue
+        dob_map.update(_ranking_rows(first))
+        caption = _field(
+            first,
+            'normalize-space(//div[@class="pagenumbers"]'
+            '//span[@class="page_caption"])',
+        )
+        pages = 0
+        try:
+            # e.g. "Page 1 of 35 - 3493 results" → 3493 → ceil(/100) pages.
+            # (comma-stripped in case the site ever thousands-separates counts)
+            count = caption.split(" - ")[-1].strip().split()[0].replace(",", "")
+            pages = math.ceil(int(count) / 100)
+        except (ValueError, IndexError):
+            pass
+        page_urls.extend(f"{page_url}&p={page}" for page in range(2, pages + 1))
+    log(
+        "INFO",
+        f"\U0001f4c7 Ranking tab: {len(mores)} categorie(s), "
+        f"{len(dob_map)} player(s) from first pages, "
+        f"{len(page_urls)} more page(s) to fetch",
+    )
+    return dob_map, page_urls
+
+
+def _parse_player(client, cfg, name, url, dob_map=None):
     """Resolve a player's ``(name, third_party_id, dob, gender, country)``.
 
     Gender is left empty here and filled in by :func:`_build_row` — from the
@@ -552,7 +645,18 @@ def _parse_player(client, cfg, name, url):
         '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
         '//h4[contains(@class, "media__title")]/a/@href',
     )
-    if profile_href:
+    if profile_href and cfg.ranking_dob:
+        # Ranking-tab DOB mode: join this player to the pre-built ranking
+        # registry by profile GUID (the ``/player-profile/<guid>`` tail) and
+        # take the ``1/1/YOB`` recorded there — the source's registry join,
+        # with no profile/Biography fallback. Unranked players stay blank.
+        guid = profile_href.rstrip("/").split("/")[-1].strip().lower()
+        dob = (dob_map or {}).get(guid, "")
+        if cfg.dynamic_country and not country:
+            profile_sel = client.get_selector(urljoin(cfg.base + "/", profile_href))
+            if profile_sel is not None:
+                country = _nat(profile_sel)
+    elif profile_href:
         profile_url = urljoin(cfg.base + "/", profile_href)
         profile_sel = client.get_selector(profile_url)
         if profile_sel is not None:
@@ -575,10 +679,11 @@ def _build_row(client, cfg, ctx, match_data):
     l1 = match_data.get("loser_1", {})
     l2 = match_data.get("loser_2", {})
 
-    w1_name, w1_id, w1_dob, w1_g, w1_c = _parse_player(client, cfg, w1.get("name", ""), w1.get("profile_url", ""))
-    w2_name, w2_id, w2_dob, w2_g, w2_c = _parse_player(client, cfg, w2.get("name", ""), w2.get("profile_url", ""))
-    l1_name, l1_id, l1_dob, l1_g, l1_c = _parse_player(client, cfg, l1.get("name", ""), l1.get("profile_url", ""))
-    l2_name, l2_id, l2_dob, l2_g, l2_c = _parse_player(client, cfg, l2.get("name", ""), l2.get("profile_url", ""))
+    dob_map = ctx.get("dob_map")
+    w1_name, w1_id, w1_dob, w1_g, w1_c = _parse_player(client, cfg, w1.get("name", ""), w1.get("profile_url", ""), dob_map)
+    w2_name, w2_id, w2_dob, w2_g, w2_c = _parse_player(client, cfg, w2.get("name", ""), w2.get("profile_url", ""), dob_map)
+    l1_name, l1_id, l1_dob, l1_g, l1_c = _parse_player(client, cfg, l1.get("name", ""), l1.get("profile_url", ""), dob_map)
+    l2_name, l2_id, l2_dob, l2_g, l2_c = _parse_player(client, cfg, l2.get("name", ""), l2.get("profile_url", ""), dob_map)
 
     draw_name = ctx.get("draw_name", "")
     gcode = draw_gender_code(draw_name)
@@ -821,12 +926,21 @@ def run(cfg, run_obj, log):
 
     # ---- phase 1 · discovery ------------------------------------------
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
+    dob_map, ranking_pages = {}, []
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
         _warmup(discovery, cfg)
         if tournament_url:
             tournaments = _discover_one(discovery, cfg, tournament_url, log)
         else:
             tournaments = _discover_range(discovery, cfg, start_date, end_date, log)
+        if cfg.ranking_dob and tournaments:
+            # ---- phase 1b · ranking-tab DOB registry (see TSTournamentConfig)
+            log(
+                "INFO",
+                "\u2500\u2500\u2500\u2500 phase 1b \u00b7 ranking-tab DOB registry "
+                "\u2500\u2500\u2500\u2500",
+            )
+            dob_map, ranking_pages = _ranking_dob_seed(discovery, cfg, log)
     log("INFO", f"\U0001f4cb {len(tournaments)} tournament(s) discovered")
 
     # Per-thread warmed clients, tracked so we can close them all at the end.
@@ -863,10 +977,27 @@ def run(cfg, run_obj, log):
             )
             return []
 
+    rank_lock = threading.Lock()
+
+    def rank_one(url):
+        try:
+            sel = client_for().get_selector(url)
+            if sel is None:
+                return
+            pairs = list(_ranking_rows(sel))
+            with rank_lock:
+                dob_map.update(pairs)
+        except Exception as exc:  # noqa: BLE001 - a bad page can't kill the run
+            tele.record_error(
+                redact_secrets(f"Ranking page {url} failed: {exc}"), exc=exc
+            )
+
     def crawl_one(item):
         player_url, ctx = item
         if claude_keys:
             ctx = {**ctx, "claude_keys": claude_keys}
+        if cfg.ranking_dob:
+            ctx = {**ctx, "dob_map": dob_map}
         try:
             rows = _parse_player_matches(client_for(), cfg, ctx, player_url)
             for row in rows:
@@ -915,6 +1046,23 @@ def run(cfg, run_obj, log):
     try:
         if tournaments:
             with ThreadPoolExecutor(max_workers=workers) as executor:
+                # ---- phase 1b (cont.) · fetch remaining ranking pages ----
+                if ranking_pages:
+                    list(executor.map(rank_one, ranking_pages))
+                if cfg.ranking_dob:
+                    if dob_map:
+                        log(
+                            "INFO",
+                            f"\U0001f4c7 Ranking DOB registry ready \u2014 "
+                            f"{len(dob_map)} ranked player(s)",
+                        )
+                    else:
+                        log(
+                            "WARN",
+                            "\u26a0\ufe0f Ranking DOB registry is empty \u2014 "
+                            "DOBs will be blank this run",
+                        )
+
                 # ---- phase 2 · list every entrant (light) ----
                 log(
                     "INFO",

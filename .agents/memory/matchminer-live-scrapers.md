@@ -78,12 +78,26 @@ Source quirks worth remembering:
   Claude name→gender via two config flags. `claude_gender` alone = **SOFT** (if no
   key: WARN + fall back to draw-name gender; used by **Croatia**). `claude_gender` +
   `claude_gender_required` = **HARD** (if no key: honest-fail the run + ask for the
-  key before any network; used by **Finland** tournament & league, matching Estonia's
-  Claude-only contract). In the Claude branch per-player gender is **always
-  Claude-only**; only the draw-level `draw_gender` may use an explicit draw-name word.
+  key before any network; used by **Finland** tournament & league and **Tennis
+  Europe**, matching Estonia's Claude-only contract). In the Claude branch per-player
+  gender is **always Claude-only**; only the draw-level `draw_gender` may use an
+  explicit draw-name word.
   **Why:** the source inferred gender from names via an LLM; Croatia can tolerate
-  blanks but Finland/Estonia must not silently emit genderless rows. Don't flip
-  Croatia to `required` or Finland to soft.
+  blanks but Finland/Estonia/Tennis Europe must not silently emit genderless rows.
+  Don't flip Croatia to `required` or Finland/TE to soft.
+- **Tennis Europe ranking-tab DOB** (`_ts_tournament` `ranking_dob` flag): TE junior
+  profiles hide DOB/YOB from both the profile head and Biography tab, so the source
+  walked the site-wide ranking (`/ranking/` → first ranking → every "More" category
+  list, `&ps=100`, pages via `page_caption` count/100) and recorded `1/1/<YOB>` keyed
+  by **profile GUID** (ranking href `?id=<GUID>` ↔ player page `/player-profile/<guid>`,
+  lowercase both sides). With the flag on, DOB comes from that registry **only** —
+  unranked players stay blank (registry miss = blank, NO profile/Biography fallback,
+  per user directive). Don't re-add per-profile DOB lookups for TE.
+- **parsel `@xlink:href` trap**: an xpath using the `xlink:` prefix raises
+  `ValueError: Undefined namespace prefix` on any page that doesn't declare the
+  namespace (evaluated per-document, so it "works" on some pages and blows up runs
+  on others — it broke single-URL discovery). Always use
+  `@*[local-name()="href"]` for svg `<use>` hrefs.
 - Asset hosts like `objects.fi` / `objs.fi` in league sources are CDNs — ignore for
   data crawling. `scripts.fi` in finland_league is only a python import path, not a host.
 

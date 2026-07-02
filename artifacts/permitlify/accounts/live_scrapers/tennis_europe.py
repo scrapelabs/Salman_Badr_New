@@ -6,6 +6,16 @@ tournaments from across Europe on one host, so the country is read per-tournamen
 being a federation constant. Its ``id_type`` is ``Europe`` while its
 import-source / sanction body is ``Tennis Europe``. Thin wrapper over the shared
 :mod:`accounts.live_scrapers._ts_tournament` engine in ``dynamic_country`` mode.
+
+Like the production source, this scraper is **Claude-dependent for gender**
+(``claude_gender`` + ``claude_gender_required``): junior draw names ("BS14",
+"GS16") carry no reliable gender word, so each player's gender is inferred from
+their name via Claude — no key means the run fails honestly and asks for one,
+matching the Finland / Estonia contract. DOB comes from the site-wide **ranking
+tab** (``ranking_dob``): junior profiles hide DOB/YOB, so a pre-phase walks the
+Tennis Europe Ranking's category lists and joins each match player to the
+recorded ``1/1/<YOB>`` by profile GUID, exactly like the source's player
+registry (unranked players keep a blank DOB — no fallback).
 ``run(run_obj, log)`` returns
 ``(items_csv, requests_csv, errors_csv, row_count, status)``.
 """
@@ -21,6 +31,9 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     dynamic_country=True,
     id_type_label="Europe",
     org_label="Tennis Europe",
+    claude_gender=True,
+    claude_gender_required=True,
+    ranking_dob=True,
 )
 
 
