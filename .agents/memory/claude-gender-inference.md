@@ -1,22 +1,33 @@
 ---
 name: Claude name→gender inference (TS engines)
-description: How the Croatia tournament/league scrapers infer player + draw gender via cached Claude calls, and the mixed-draw / genderless-name rules that must hold.
+description: How TS tournament/league scrapers infer player + draw gender via cached Claude calls, when a port must opt in, and the mixed-draw / genderless-name rules that must hold.
 ---
 
 # Claude name→gender inference
 
-Some tournamentsoftware (TS) sources — notably the **Croatia** tournament & league
-scrapers — have draw names that carry **no gender word** (e.g. "Prva liga"), so the
-deterministic draw-name heuristic (`_gender.draw_gender_code`) can't label them.
-For those, gender is inferred from **player names** via Claude.
+Some tournamentsoftware (TS) sources have draw names that carry **no gender word**
+(e.g. Croatian "Prva liga", Swedish "Svenska Tennisligan"), so the deterministic
+draw-name heuristic (`_gender.draw_gender_code`) can't label them. For those,
+gender is inferred from **player names** via Claude.
 
 **Opt-in, not global.** The shared TS engines gate this behind a `claude_gender`
 config flag (default `False`); only scrapers that set it True call Claude. Other TS
-scrapers are unaffected. As of July 2026 every opted-in TS scraper (Croatia
-tournament & league, Finland tournament & league, Tennis Europe) also sets
-`claude_gender_required=True` — **HARD** mode: no key → honest-fail before any
+scrapers are unaffected. Every opted-in TS scraper (Croatia tournament & league,
+Finland tournament & league, Sweden league, Tennis Europe, COSAT, Estonia) also
+sets `claude_gender_required=True` — **HARD** mode: no key → honest-fail before any
 network, never fall back to draw-name gender for players (user directive; soft
 mode remains only as an unused engine capability).
+
+**Trap — a port can silently ship gender-disabled.** If the ORIGINAL source
+derived gender in a SEPARATE pass the detail parser doesn't reveal (e.g. Sweden's
+`RankingParser` crawled ranking pages and stored `format_name_gender_claude`
+results in a players-DB keyed by third_party_id, which `details.py` then looked
+up), an AI-free port that only mirrors the detail parser will emit **blank
+gender** with no error. **Fix = set `claude_gender=True` + `_required=True`** (the
+inline `resolve_gender` covers *every* player, strictly better than the original's
+ranking pass which blanked players absent from the rankings). Always check the
+source's ranking/players-DB pass, not just its detail parser. **Don't** re-port
+the ranking crawl.
 
 **Rule — draw_gender precedence in `_build_row`:**
 1. explicit gender token in the draw name wins;
