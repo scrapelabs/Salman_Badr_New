@@ -17,10 +17,14 @@ URL is classified the way the source does:
 
 Each discovered **box score** is fed to Claude (``POST
 https://api.anthropic.com/v1/messages``): PDFs go up as base64 with media type
-``application/pdf``; HTML is sent **as-is** (the raw page, no cleaning or
-chunking). Claude returns a JSON array of match objects which map 1:1 onto this
-scraper's bespoke output columns. There is **no deterministic fallback** —
-Claude is the only parser.
+``application/pdf``; HTML is first **cleaned** (scripts/styles/nav chrome
+stripped) and **chunked** at :data:`CLAUDE_HTML_CHUNK` chars, then each chunk is
+sent and the per-chunk match lists merged — exactly like the source's
+``claude_extractor._extract_text``. A raw box-score page is ~490 KB of ~96 %
+noise; cleaning reduces it to ~17 KB of pure match markup so Claude stops losing
+score lines in the clutter. Claude returns a JSON array of match objects which
+map 1:1 onto this scraper's bespoke output columns. There is **no deterministic
+fallback** — Claude is the only parser.
 
 Credentials:
 
@@ -64,7 +68,17 @@ from .telemetry import Telemetry, redact_secrets, sanitize_cell
 # ---------------------------------------------------------------------------
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
-CLAUDE_MAX_TOKENS = 4096
+# A standard 9-line dual already uses ~3.1k output tokens, so the source's 4096
+# leaves almost no headroom — an exhibition line or a combined men+women page
+# would truncate the JSON array (silently dropping matches). 8192 gives ample
+# room; ``_claude_request`` also flags any ``max_tokens`` stop so a truncation is
+# never silent (correct-data-trumps-source-parity, per the user's preference).
+CLAUDE_MAX_TOKENS = 8192
+# Cleaned box-score HTML is split into chunks of this many chars before Claude
+# (source parity with ``claude_extractor``); a single dual match cleans to
+# ~17 KB so it is normally one chunk, but oversized pages split instead of being
+# silently truncated at the context window.
+CLAUDE_HTML_CHUNK = 160_000
 # Anthropic returns 529 ("overloaded") under load; retry it alongside the usual
 # transient/rate-limit statuses.
 CLAUDE_RETRY_STATUSES = frozenset(RETRY_STATUSES | {529})
@@ -174,9 +188,9 @@ def _clean_html(content):
     The source uses BeautifulSoup; that dependency is absent here, so parsel's
     ``.drop()`` removes the same noise tags. Attribute pruning (a size
     optimization in the source) is skipped — the surviving
-    ``href``/``class``/``id`` attributes actually help the model. Only the
-    optional OpenAI tournament-date recovery uses this; the Claude box-score
-    path sends the page raw.
+    ``href``/``class``/``id`` attributes actually help the model. Both the Claude
+    box-score path (:func:`_claude_extract_html`) and the optional OpenAI
+    tournament-date recovery clean the page this way before sending it.
     """
     try:
         sel = Selector(text=content)
@@ -380,6 +394,19 @@ def _claude_request(client, key, system, log, tele, *, content=None, text=None):
         )
     except Exception:  # noqa: BLE001 - usage logging is best-effort
         pass
+    # A ``max_tokens`` stop means the JSON array was cut off mid-flight, so
+    # ``_parse_json`` will fail and this chunk yields zero matches. Surface it
+    # loudly (error + WARN) instead of silently dropping scores.
+    if data.get("stop_reason") == "max_tokens":
+        tele.record_error(
+            "Claude output truncated at max_tokens \u2014 some matches may be "
+            "missing from this box score."
+        )
+        log(
+            "WARN",
+            "\u26a0\ufe0f Claude output hit max_tokens \u2014 response truncated "
+            "(some matches may be missing)",
+        )
     blocks = data.get("content") or []
     raw_text = blocks[0].get("text", "") if blocks else ""
     return _parse_json(raw_text)
@@ -407,11 +434,33 @@ def _claude_extract_pdf(client, key, system, pdf_bytes, log, tele):
 
 
 def _claude_extract_html(client, key, system, content, log, tele):
-    """Send the page HTML to Claude **as-is** (raw, no cleaning or chunking)."""
-    content = content or ""
-    log("INFO", f"   \U0001f4c4 Sending raw HTML to Claude ({len(content):,} chars)")
-    parsed = _claude_request(client, key, system, log, tele, text=content)
-    return _as_list_of_dicts(parsed)
+    """Clean the page HTML, chunk it, extract with Claude and merge (source parity).
+
+    Mirrors the source's ``claude_extractor._extract_text``: the raw box-score
+    page (~490 KB, ~96 % scripts/styles/nav chrome) is first reduced to the match
+    markup via :func:`_clean_html` (~17 KB, every Singles/Doubles row preserved),
+    then split into :data:`CLAUDE_HTML_CHUNK`-char chunks. Each chunk is sent to
+    Claude separately and the per-chunk match lists are concatenated. Sending the
+    raw page whole instead lets Claude lose match lines in the noise (the "not
+    picking up all the scores" regression).
+    """
+    cleaned = _clean_html(content or "")
+    chunks = [
+        cleaned[i : i + CLAUDE_HTML_CHUNK]
+        for i in range(0, len(cleaned), CLAUDE_HTML_CHUNK)
+    ] or [""]
+    log(
+        "INFO",
+        f"   \U0001f9f9 HTML cleaned to {len(cleaned):,} chars \u2192 "
+        f"{len(chunks)} chunk(s) for Claude",
+    )
+    matches = []
+    for idx, chunk in enumerate(chunks, 1):
+        log("INFO", f"   \u23f3 Claude chunk {idx}/{len(chunks)}\u2026")
+        text = f"Part {idx}/{len(chunks)}:\n\n{chunk}" if len(chunks) > 1 else chunk
+        parsed = _claude_request(client, key, system, log, tele, text=text)
+        matches.extend(_as_list_of_dicts(parsed))
+    return matches
 
 
 # ---------------------------------------------------------------------------

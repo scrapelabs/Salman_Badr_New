@@ -42,14 +42,20 @@ accepts a *direct* match-page URL (a Sidearm boxscore, e.g. cmsathletics.org), n
 just a Google Sheet / `/schedule` page — `_discover` classifies a single boxscore
 as one recap. Extraction is **Claude-only**: every box score (HTML or PDF) goes to
 Claude. **There is NO deterministic fallback** — the old auburn stats-XML and
-Sidearm-HTML parsers were deleted at the user's request. HTML is sent **raw / as-is**
-(no `_clean_html`, no chunking; a ~490k-char page ≈ ~155k input tokens, inside the
-200k context). **Claude is REQUIRED:** `run()` fails up front with an error 5-tuple
-when no key (`ANTHROPIC_API_KEY`/per-scraper) OR no prompt is present — by design,
-"no big deal" per the user. **Why:** the user wanted the pipeline dead-simple (raw
-page → Claude → done) over best-effort coverage. OpenAI stays optional (only
-`_recover_tournament_date`, which is why `_clean_html` survives — it cleans HTML
-before the OpenAI date call, gated on `openai_key`). The browser anti-bot fallback
+Sidearm-HTML parsers were deleted at the user's request. HTML is **cleaned then
+chunked** before Claude: `_clean_html` strips scripts/styles/nav chrome (a ~490k-char
+page → ~17k, every Singles/Doubles row preserved), then it is split at
+`CLAUDE_HTML_CHUNK` (160k) chars and each chunk's match list is merged — mirroring the
+source's `_extract_text`. **Claude is REQUIRED:** `run()` fails up front with an error
+5-tuple when no key (`ANTHROPIC_API_KEY`/per-scraper) OR no prompt is present — by
+design, "no big deal" per the user. **Why:** an earlier "send it raw, no cleaning"
+request regressed extraction ("not picking up all the scores" — Claude lost score
+lines in ~96% noise), so the user reversed it ("check old code, it has everything");
+correct data trumps source/instruction literalism here. `CLAUDE_MAX_TOKENS` is 8192
+(the source's 4096 barely fit a 9-line dual ≈3.1k out tokens) and `_claude_request`
+flags any `max_tokens` stop so a truncated JSON array is never a silent score drop.
+OpenAI stays optional (only `_recover_tournament_date`, also via `_clean_html`, gated
+on `openai_key`). The browser anti-bot fallback
 (`college-browser-fallback` memory) is unrelated and still in place.
 
 **Download-by-date export keys off `date_norm`.** The Match-database tab's
