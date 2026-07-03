@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone as dt_timezone
+from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -2533,18 +2533,20 @@ def run_log_view(request, slug, run_uuid):
 
 
 def _download_filename(slug, run, kind):
-    """Standard download name shared by every scraper:
-
-    ``<scraper slug>__<UTC start timestamp>_<kind>.csv`` where ``kind`` is one of
-    ``log`` / ``item`` / ``request`` / ``error``. Keeping one convention across
-    all scrapers makes the files predictable and chronologically sortable.
+    """Standard download name shared by every scraper: ``<scraper slug>_<job id>``
+    where the job id is the run's ``short_id`` (the ``Run #<id>`` shown throughout
+    the UI). The primary items export is exactly ``<slug>_<job id>.csv``; the
+    auxiliary request/error CSVs and the plain-text log keep a short suffix so the
+    files stay distinct when several are downloaded for the same job. ``kind`` is
+    one of ``log`` / ``item`` / ``request`` / ``error``.
     """
-    ts = run.started_at
-    if timezone.is_naive(ts):
-        stamp = ts.strftime("%Y%m%d-%H%M%S")
-    else:
-        stamp = ts.astimezone(dt_timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return f"{slug}__{stamp}_{kind}.csv"
+    base = f"{slug}_{run.short_id}"
+    if kind == "log":
+        return f"{base}.log"
+    if kind == "item":
+        return f"{base}.csv"
+    # request / error → pluralized suffix keeps them distinct from the items CSV.
+    return f"{base}_{kind}s.csv"
 
 
 # Large runs (e.g. the queue-driven south_africa job — 230k rows / 100 MB+)
@@ -2568,10 +2570,11 @@ def _iter_text_chunks(text, size=_DOWNLOAD_CHUNK):
 
 
 def _run_for_download(slug, run_uuid, *fields):
-    """Fetch a run loading only ``started_at`` (for the filename) plus the
-    requested payload column(s) — never all four giant TextFields at once."""
+    """Fetch a run loading only ``started_at`` + ``uuid`` (the latter drives the
+    ``<slug>_<job id>`` download name) plus the requested payload column(s) —
+    never all four giant TextFields at once."""
     return get_object_or_404(
-        Run.objects.only("started_at", *fields),
+        Run.objects.only("started_at", "uuid", *fields),
         uuid=run_uuid,
         scraper__slug=slug,
     )
