@@ -181,6 +181,7 @@ def map_extracted(extracted):
         "loser_team": g("loser_team"),
         "team_score": g("team_score"),
         "outcome": g("outcome"),
+        "tournament_url": g("tournament_url"),
         "ball_type": "Yellow",
         "tournament_event_type": "Dual Match",
         "winner_team_type": "College",

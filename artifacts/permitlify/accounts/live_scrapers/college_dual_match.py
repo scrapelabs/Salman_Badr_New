@@ -983,6 +983,11 @@ def run(run_obj, log):
                     renderer=renderer,
                 )
                 for row in rows:
+                    # Stamp the source box-score URL onto every match extracted
+                    # from this page so the canonical ``tournament_url`` column is
+                    # the exact recap link the row came from (identity/dedup is
+                    # URL-independent — see ``college_store.match_hash``).
+                    row["tournament_url"] = box_url
                     ident = college_store.match_hash(college_store.map_extracted(row))
                     with lock:
                         if ident in seen_ids:

@@ -67,6 +67,16 @@ OpenAI stays optional (only `_recover_tournament_date`, also via `_clean_html`, 
 on `openai_key`). The browser anti-bot fallback
 (`college-browser-fallback` memory) is unrelated and still in place.
 
+**`tournament_url` is stamped, not parsed — easy to lose in a refactor.** The
+output column `tournament_url` (col 53) is the source box-score URL, but Claude
+never emits it (not in the bespoke 23-key `COLUMNS`, no url mention in the
+prompt) and `match_hash` deliberately excludes it. It is populated ONLY by
+stamping `row["tournament_url"] = box_url` in `run()`'s `process(box_url)` worker
+before mapping, plus `map_extracted()` emitting `g("tournament_url")`. **Why:**
+this regressed to a silently-blank column once when a fetch/extraction refactor
+dropped the stamp — nothing else fills it, so any rework of the extraction path
+must re-stamp the source URL onto each row or col 53 goes blank again.
+
 **Download-by-date export keys off `date_norm`.** The Match-database tab's
 "Download by date" panel filters the export by `CollegeMatch.date_norm` (the
 indexed normalized ISO `YYYY-MM-DD` *match* date — not `created_at`/scrape time)
