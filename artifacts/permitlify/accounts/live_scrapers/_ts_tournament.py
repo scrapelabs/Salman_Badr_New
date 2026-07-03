@@ -139,6 +139,14 @@ class TSTournamentConfig:
     # :func:`_ranking_rows` to that layout, normalising to ``MM/DD/YYYY`` —
     # the exact value the source's registry stored.
     ranking_dob_full_date: bool = False
+    # --- GUID third-party id ---------------------------------------------
+    # On some sites (juniors, e.g. Tennis Europe) the player subhead shows a
+    # member-id ``media__title-aside`` (a national-federation id) rather than the
+    # tournamentsoftware player id the framework wants. Setting
+    # ``guid_third_party_id`` takes the id from the subhead's player-profile link
+    # (``/player-profile/<GUID>``) instead — the genuine source-platform id,
+    # emitted upper-cased to match the site's canonical profile URLs.
+    guid_third_party_id: bool = False
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -673,6 +681,26 @@ def _ranking_dob_seed(client, cfg, log):
     return dob_map, page_urls
 
 
+def _guid_from_profile_url(url):
+    """The tournamentsoftware player GUID embedded in a profile URL, or ``""``.
+
+    Handles the ``/player-profile/<GUID>`` path form and the legacy
+    ``.../profile/default.aspx?id=<GUID>`` query form. The ``id`` query is only
+    honoured on a *profile* path, so a tournament-scoped
+    ``/sport/player.aspx?id=<TOURNAMENT_GUID>`` URL can never leak the tournament
+    id through here. GUID case is preserved as passed.
+    """
+    if not url:
+        return ""
+    parts = urlparse(url)
+    path = parts.path.rstrip("/")
+    if "/player-profile/" in path:
+        return path.rsplit("/player-profile/", 1)[-1].split("/")[0].strip()
+    if "profile" in path.lower():
+        return parse_qs(parts.query).get("id", [""])[0].strip()
+    return ""
+
+
 def _parse_player(client, cfg, name, url, dob_map=None):
     """Resolve a player's ``(name, third_party_id, dob, gender, country)``.
 
@@ -691,21 +719,33 @@ def _parse_player(client, cfg, name, url, dob_map=None):
     if sel is None:
         return name, "", "", "", ""
 
-    third_party_id = _field(
-        sel,
-        '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
-        '//h4[contains(@class, "media__title")]/span[@class="media__title-aside"]/text()',
-    )
-    third_party_id = _RE_PARENS.sub("", third_party_id).strip()
-
     country = _nat(sel) if cfg.dynamic_country else ""
 
-    dob = ""
+    # The subhead's player-profile link (``/player-profile/<GUID>``) is the
+    # genuine tournamentsoftware player id and the same href the ranking_dob
+    # join reads below. The crawl reaches players via tournament-scoped
+    # ``/sport/player.aspx?id=<TOURNAMENT_GUID>`` URLs, so the id must come from
+    # this href, never from the requested ``url``.
     profile_href = _field(
         sel,
         '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
         '//h4[contains(@class, "media__title")]/a/@href',
     )
+
+    if cfg.guid_third_party_id:
+        # Junior sites (Tennis Europe) show a member-id ``media__title-aside``
+        # (a federation id, not this id); use the profile GUID instead, in the
+        # canonical upper-case form the site's profile URLs use.
+        third_party_id = _guid_from_profile_url(profile_href).upper()
+    else:
+        third_party_id = _field(
+            sel,
+            '//div[contains(@class, "page-subhead")]//div[@class="media__content"]'
+            '//h4[contains(@class, "media__title")]/span[@class="media__title-aside"]/text()',
+        )
+        third_party_id = _RE_PARENS.sub("", third_party_id).strip()
+
+    dob = ""
     if profile_href and cfg.ranking_dob:
         # Ranking-tab DOB mode: join this player to the pre-built ranking
         # registry by profile GUID (the ``/player-profile/<guid>`` tail) and

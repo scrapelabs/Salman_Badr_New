@@ -34,6 +34,7 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     claude_gender=True,
     claude_gender_required=True,
     ranking_dob=True,
+    guid_third_party_id=True,
 )
 
 
