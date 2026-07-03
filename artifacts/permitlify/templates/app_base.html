@@ -54,6 +54,19 @@
         {% block breadcrumb %}<span class="crumb current">MatchMiner</span>{% endblock %}
       </nav>
       <div class="topbar-right">
+        {% if nav_scrapers %}
+        <div class="scraper-jump">
+          <svg class="scraper-jump-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <label class="sr-only" for="scraperJump">Jump to scraper</label>
+          <select id="scraperJump" class="scraper-jump-select">
+            <option value="" selected>Jump to scraper…</option>
+            {% for s in nav_scrapers %}
+            <option value="{% url 'scraper_detail' s.slug %}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+          <svg class="scraper-jump-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        {% endif %}
         <div class="server-clock" id="serverClock" data-epoch="{% now 'U' %}" title="Current server time (UTC)">
           <span class="server-clock-dot" aria-hidden="true"></span>
           <svg class="server-clock-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg>
@@ -136,6 +149,12 @@
         window.location.href = row.getAttribute("data-href");
       });
     });
+    var jump = document.getElementById("scraperJump");
+    if (jump) {
+      jump.addEventListener("change", function () {
+        if (this.value) window.location.href = this.value;
+      });
+    }
   })();
 
   (function () {
