@@ -74,7 +74,6 @@
           </tbody>
         </table>
       </div>
-      {% if col.num_pages > 1 %}
       <div class="tbl-pager qa-section-pager" data-status="{{ col.status }}" data-page="1" data-pages="{{ col.num_pages }}">
         <span class="qa-pager-total">{{ col.count }} ticket{{ col.count|pluralize }}</span>
         <div class="tbl-pager-nav">
@@ -83,13 +82,12 @@
             Prev
           </button>
           <span class="tbl-pager-info">Page <span class="qa-pager-cur">1</span> of {{ col.num_pages }}</span>
-          <button type="button" class="btn btn-ghost btn-sm" data-dir="next" aria-label="Next page">
+          <button type="button" class="btn btn-ghost btn-sm" data-dir="next" {% if col.num_pages <= 1 %}disabled{% endif %} aria-label="Next page">
             Next
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
           </button>
         </div>
       </div>
-      {% endif %}
     </section>
     {% endfor %}
   </div>

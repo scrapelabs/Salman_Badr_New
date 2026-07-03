@@ -162,7 +162,7 @@ def attachment_serve(request, uuid):
 # Each board lane shows at most one page of cards at a time; the Prev/Next
 # pager swaps in another page via AJAX (``tickets_page``). Keeps a lane light
 # when it holds hundreds of tickets and caps how many are ever shown at once.
-PAGE_SIZE = 10
+PAGE_SIZE = 5
 
 
 def _ticket_qs(active_scraper):

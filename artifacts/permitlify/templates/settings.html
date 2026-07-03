@@ -171,6 +171,7 @@
       </tbody>
     </table>
   </div>
+  {% include "partials/pagination.html" with page_obj=proxies_page base_query=proxies_base page_param="ppage" always_show=True %}
 
   <div class="calls-head">
     <h2 class="section-title">Passwords</h2>
@@ -211,6 +212,7 @@
       </tbody>
     </table>
   </div>
+  {% include "partials/pagination.html" with page_obj=users_page base_query=users_base page_param="upage" always_show=True %}
 </div>
 
 <div class="qa-modal" id="passUserModal" hidden>

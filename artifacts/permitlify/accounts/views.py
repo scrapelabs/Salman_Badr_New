@@ -280,23 +280,18 @@ def _threads_running():
     return sum(s.worker_count for s in running), len(running)
 
 
-def _recent_runs(finished_limit=5):
-    """All in-flight runs, then the latest N finished runs (newest first)."""
-    running = list(
-        Run.objects.filter(status=Run.Status.RUNNING)
+def _recent_runs():
+    """Every run job (queued jobs excluded — they have their own panel),
+    newest first by start time. Powers the Overview "recently active" table,
+    which paginates client-side so page 1 always shows the latest runs."""
+    runs = list(
+        Run.objects.exclude(status=Run.Status.QUEUED)
         .select_related("scraper")
         .order_by("-started_at")
     )
-    finished = list(
-        Run.objects.exclude(
-            status__in=[Run.Status.RUNNING, Run.Status.QUEUED]
-        )
-        .select_related("scraper")
-        .order_by("-started_at")[:finished_limit]
-    )
-    for r in running + finished:
+    for r in runs:
         r.run_state = _run_status_state(r)
-    return running + finished
+    return runs
 
 
 def _run_brief(run):
@@ -2901,18 +2896,28 @@ def settings_view(request):
         messages.error(request, "Unknown action.")
         return redirect("settings")
 
-    users = User.objects.order_by("-is_active", "-is_superuser", "username")
-    proxies = Proxy.objects.annotate(used_by=Count("scrapers")).order_by("name")
+    users = list(User.objects.order_by("-is_active", "-is_superuser", "username"))
+    proxies = list(
+        Proxy.objects.annotate(used_by=Count("scrapers")).order_by("name")
+    )
     by_kind = {k.value: 0 for k in Proxy.Kind}
     for p in proxies:
         by_kind[p.kind] = by_kind.get(p.kind, 0) + 1
+    # Two independent lists on one page → distinct page params, and each pager
+    # carries the other's current page so moving one doesn't reset the other.
+    proxies_page = Paginator(proxies, 5).get_page(request.GET.get("ppage"))
+    users_page = Paginator(users, 5).get_page(request.GET.get("upage"))
     cfg = GeneralConfig.get_solo()
     env_keys = [k for k in (getattr(settings, "CLAUDE_KEYS", []) or []) if k]
     ctx = _app_ctx(
         "settings",
-        users_list=users,
-        total_users=users.count(),
-        proxies=proxies,
+        users_list=users_page,
+        users_page=users_page,
+        users_base=f"ppage={proxies_page.number}&",
+        total_users=len(users),
+        proxies=proxies_page,
+        proxies_page=proxies_page,
+        proxies_base=f"upage={users_page.number}&",
         proxy_kinds=Proxy.Kind.choices,
         total_proxies=len(proxies),
         by_kind=by_kind,

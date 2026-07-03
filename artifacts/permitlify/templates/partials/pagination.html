@@ -4,9 +4,10 @@ Numbered pager. Pass:
   base_query  - query prefix ending in '&' or empty (default empty)
   page_param  - GET param name for the page number (default 'page')
   variant     - optional modifier, e.g. 'mini' for the terminal titlebar
+  always_show - render even on a single page (controls stay disabled)
 {% endcomment %}
 {% load pager_tags %}
-{% if page_obj.paginator.num_pages > 1 %}
+{% if page_obj.paginator.num_pages > 1 or always_show %}
 {% with pp=page_param|default:"page" %}
 <nav class="pager{% if variant %} pager--{{ variant }}{% endif %}" aria-label="Pagination">
   {% if page_obj.has_previous %}
