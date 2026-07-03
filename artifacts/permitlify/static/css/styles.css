@@ -1401,6 +1401,9 @@ a.tbl-domain:hover svg {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.recent-pager {
+  justify-content: flex-end;
+}
 
 /* detail header */
 .detail-head {

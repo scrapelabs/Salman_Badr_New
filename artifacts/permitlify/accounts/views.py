@@ -656,6 +656,7 @@ def login_view(request):
 def overview_view(request):
     today = timezone.localdate()
     threads_running, running_scrapers = _threads_running()
+    recent = _recent_runs()
     ctx = _app_ctx(
         "overview",
         active_scrapers=Scraper.objects.filter(mode=Scraper.Mode.PRODUCTION).count(),
@@ -667,7 +668,8 @@ def overview_view(request):
         threads_running=threads_running,
         running_scrapers=running_scrapers,
         queued_jobs=_queued_jobs(),
-        recent_runs=_recent_runs(),
+        recent_runs=recent,
+        recent_runs_data=[_run_brief(r) for r in recent],
         live_stats_url=reverse("live_stats"),
     )
     return render(request, "overview.html", ctx)
@@ -3046,13 +3048,15 @@ def users_view(request):
         messages.error(request, "Unknown action.")
         return redirect("users")
 
-    users = User.objects.order_by("-is_active", "-is_superuser", "username")
-    total = users.count()
+    users = list(User.objects.order_by("-is_active", "-is_superuser", "username"))
+    total = len(users)
     admins = sum(1 for u in users if u.is_superuser)
     active = sum(1 for u in users if u.is_active)
+    page_obj = Paginator(users, 5).get_page(request.GET.get("page"))
     ctx = _app_ctx(
         "users",
-        users_list=users,
+        users_list=page_obj,
+        page_obj=page_obj,
         total_users=total,
         admin_count=admins,
         active_count=active,

@@ -106,14 +106,40 @@
       );
     }
 
-    function updateRuns(runs) {
+    var recentAll = [];
+    var recentPage = 1;
+    var RECENT_SIZE = 5;
+
+    function renderRecent() {
       var body = root.querySelector("#recentRunsBody");
+      var pager = root.querySelector("#recentPager");
       if (!body) return;
-      if (!runs || !runs.length) {
+      var runs = recentAll || [];
+      var total = runs.length;
+      if (!total) {
         body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="6">No runs yet — launch a scraper from its Lab.</td></tr>';
+        if (pager) pager.hidden = true;
         return;
       }
-      body.innerHTML = runs.map(rowHtml).join("");
+      var pages = Math.max(1, Math.ceil(total / RECENT_SIZE));
+      if (recentPage > pages) recentPage = pages;
+      if (recentPage < 1) recentPage = 1;
+      var start = (recentPage - 1) * RECENT_SIZE;
+      body.innerHTML = runs.slice(start, start + RECENT_SIZE).map(rowHtml).join("");
+      if (pager) {
+        pager.hidden = pages <= 1;
+        var info = pager.querySelector("[data-recent-info]");
+        if (info) info.textContent = "Page " + recentPage + " of " + pages;
+        var prev = pager.querySelector("[data-recent-prev]");
+        var next = pager.querySelector("[data-recent-next]");
+        if (prev) prev.disabled = recentPage <= 1;
+        if (next) next.disabled = recentPage >= pages;
+      }
+    }
+
+    function updateRuns(runs) {
+      recentAll = runs || [];
+      renderRecent();
     }
 
     function queuedRowHtml(r) {
@@ -165,6 +191,19 @@
         .finally(schedule);
     }
     function schedule() { setTimeout(tick, 3000); }
+
+    var recentPager = root.querySelector("#recentPager");
+    if (recentPager) {
+      var rprev = recentPager.querySelector("[data-recent-prev]");
+      var rnext = recentPager.querySelector("[data-recent-next]");
+      if (rprev) rprev.addEventListener("click", function () { recentPage -= 1; renderRecent(); });
+      if (rnext) rnext.addEventListener("click", function () { recentPage += 1; renderRecent(); });
+    }
+    var recentSeed = document.getElementById("recentRunsData");
+    if (recentSeed) {
+      try { updateRuns(JSON.parse(recentSeed.textContent)); } catch (e) {}
+    }
+
     schedule();
   })();
 </script>

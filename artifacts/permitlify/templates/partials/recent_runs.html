@@ -14,7 +14,7 @@ The tbody is refreshed live by the overview poller.{% endcomment %}
       </tr>
     </thead>
     <tbody id="recentRunsBody">
-      {% for r in recent_runs %}
+      {% for r in recent_runs|slice:":5" %}
       <tr data-href="{% url 'scraper_detail' r.scraper.slug %}?tab=batch">
         <td>
           <div class="tbl-name">
@@ -36,3 +36,17 @@ The tbody is refreshed live by the overview poller.{% endcomment %}
     </tbody>
   </table>
 </div>
+<div class="tbl-pager recent-pager" id="recentPager" hidden>
+  <div class="tbl-pager-nav">
+    <button type="button" class="btn btn-ghost btn-sm" data-recent-prev aria-label="Previous page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Prev
+    </button>
+    <span class="tbl-pager-info" data-recent-info></span>
+    <button type="button" class="btn btn-ghost btn-sm" data-recent-next aria-label="Next page">
+      Next
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </div>
+</div>
+{% if recent_runs_data is not None %}{{ recent_runs_data|json_script:"recentRunsData" }}{% endif %}
