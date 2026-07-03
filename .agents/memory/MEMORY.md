@@ -41,3 +41,4 @@
 - [Rankings scraper input modes](rankings-input-modes.md) — atptour=date-RANGE of weekly Mondays (snapshot_dates), wtatennis=single snapshot (ATP-only by request); input_kind is registry-driven so switching modes needs NO migration.
 - [Scanner-probe blocking](scanner-probe-blocking.md) — BlockProbesMiddleware drops bot .env/.php/wp-admin probes; returning a 404 still logs a django.request warning (BaseHandler logs ALL >=400) — set response._has_been_logged=True to silence; keep regex off /static/vendor/.
 - [Job queue & concurrency](job-queue-concurrency.md) — all run-creation goes through enqueue+_dispatch_next (advisory-locked); per-scraper/browser/request-load caps live in a DB singleton, not module globals.
+- [Django shell validation autocommit](django-shell-validation-autocommit.md) — seeding rows in `manage.py shell` COMMITS them (savepoint rollback is a no-op); clean up or wrap+raise in transaction.atomic().

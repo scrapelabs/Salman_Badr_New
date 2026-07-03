@@ -2917,6 +2917,8 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 /* per-section pager (sits at the end of the band; reuses .tbl-pager) */
 .qa-section-pager { margin-top: 0; }
 .qa-pager-total { font: 600 9.4px "JetBrains Mono", monospace; color: var(--app-text-3); letter-spacing: 0.3px; text-transform: uppercase; }
+/* ticket id badge — used on the ticket detail tags row */
+.qa-card-id { font: 500 8.8px "JetBrains Mono", monospace; color: var(--app-text-3); }
 
 /* --- avatars --- */
 .qa-avatar {
