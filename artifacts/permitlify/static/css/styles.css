@@ -2890,68 +2890,33 @@ html[data-theme="dark"] .term-stage::before { opacity: 0.95; }
 
 /* --- kanban board --- */
 /* Horizontal swimlanes: one full-width band per status, stacked top to bottom,
-   each with its label at the start (top-left) and cards flowing in a
-   left-to-right wrapping grid. */
-.qa-board { display: flex; flex-direction: column; gap: 16px; }
-.qa-col {
-  background: var(--app-surface-2); border: 1px solid var(--app-border);
-  border-radius: 14px; display: flex; flex-direction: column;
-}
-.qa-col-head { display: flex; align-items: center; gap: 9px; padding: 14px 16px 10px; }
+   each a label row above a columns table (the shared .tbl look) with a
+   Prev/Next pager at the end of the section. */
+.qa-board { display: flex; flex-direction: column; gap: 24px; }
+.qa-col { display: flex; flex-direction: column; gap: 10px; }
+.qa-col-head { display: flex; align-items: center; gap: 9px; padding: 0 2px; }
 .qa-col-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .qa-col--todo .qa-col-dot { background: var(--app-text-3); }
 .qa-col--in_progress .qa-col-dot { background: var(--app-accent); }
 .qa-col--qa_review .qa-col-dot { background: var(--app-amber); }
 .qa-col--done .qa-col-dot { background: var(--app-prod); }
-.qa-col-title { font: 700 11px "Plus Jakarta Sans", sans-serif; color: var(--app-text); flex: 1; }
+.qa-col-title { font: 700 13px "Plus Jakarta Sans", sans-serif; color: var(--app-text); }
 .qa-col-count {
   font: 600 9.4px "JetBrains Mono", monospace; color: var(--app-text-2);
   background: var(--app-surface); border: 1px solid var(--app-border);
   border-radius: 7px; padding: 2px 7px;
 }
-.qa-col-body {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
-  gap: 10px; padding: 4px 16px 16px; align-items: start;
-}
+/* The section table (.qa-tbl) reuses the shared .tbl / .tablewrap look. */
+.qa-tbl { min-width: 760px; }
 .qa-col-body.is-loading { opacity: 0.5; pointer-events: none; }
-.qa-col-empty { grid-column: 1 / -1; text-align: center; padding: 20px 10px; font-size: 10px; color: var(--app-text-3); border: 1px dashed var(--app-border-2); border-radius: 10px; }
-.qa-card {
-  display: block; text-decoration: none; background: var(--app-surface); cursor: pointer;
-  border: 1px solid var(--app-border); border-radius: 12px; padding: 13px 14px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); transition: 0.15s;
-}
-.qa-card:hover { transform: translateY(-2px); box-shadow: var(--app-elev); border-color: var(--app-border-2); }
-.qa-card:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
-.qa-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
-.qa-card-id { font: 500 8.8px "JetBrains Mono", monospace; color: var(--app-text-3); }
-.qa-card-title { font: 700 12px "Plus Jakarta Sans", sans-serif; color: var(--app-text); line-height: 1.4; margin-bottom: 10px; }
-.qa-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 11px; }
-.qa-goto {
-  display: inline-flex; align-items: center; gap: 4px; text-decoration: none;
-  font: 600 8.8px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: 0.5px;
-  color: var(--app-text-2); background: var(--app-surface-2);
-  border: 1px solid var(--app-border-2); border-radius: 7px; padding: 3px 8px; transition: 0.15s;
-}
-.qa-goto:hover { color: var(--app-brand); background: var(--app-accent-bg); border-color: transparent; }
-.qa-goto svg { width: 11px; height: 11px; flex: none; }
-/* per-section pager (sits at the end of the lane header) */
-.qa-pager { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
-.qa-pager-info { font: 600 9.4px "JetBrains Mono", monospace; color: var(--app-text-2); min-width: 34px; text-align: center; }
-.qa-pager-btn {
-  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-  width: 24px; height: 24px; padding: 0; color: var(--app-text-2);
-  background: var(--app-surface); border: 1px solid var(--app-border-2);
-  border-radius: 7px; transition: 0.15s;
-}
-.qa-pager-btn svg { width: 13px; height: 13px; }
-.qa-pager-btn:hover:not(:disabled) { color: var(--app-brand); border-color: var(--app-brand); background: var(--app-accent-bg); }
-.qa-pager-btn:disabled { opacity: 0.4; cursor: default; }
-.qa-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.qa-ago-cell { font: 500 9.2px "JetBrains Mono", monospace; color: var(--app-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
+/* reporter + comments cells (shared with the ticket detail) */
 .qa-card-by { display: inline-flex; align-items: center; gap: 6px; font-size: 9.6px; color: var(--app-text-2); }
-.qa-card-stats { display: inline-flex; align-items: center; gap: 10px; }
 .qa-card-comments { display: inline-flex; align-items: center; gap: 4px; font: 600 9.4px "DM Sans", sans-serif; color: var(--app-text-3); }
 .qa-card-comments svg { width: 12px; height: 12px; }
-.qa-card-ago { font: 500 8.4px "JetBrains Mono", monospace; color: var(--app-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
+/* per-section pager (sits at the end of the band; reuses .tbl-pager) */
+.qa-section-pager { margin-top: 0; }
+.qa-pager-total { font: 600 9.4px "JetBrains Mono", monospace; color: var(--app-text-3); letter-spacing: 0.3px; text-transform: uppercase; }
 
 /* --- avatars --- */
 .qa-avatar {

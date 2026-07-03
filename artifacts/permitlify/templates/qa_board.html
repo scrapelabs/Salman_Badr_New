@@ -54,22 +54,42 @@
         <span class="qa-col-dot"></span>
         <span class="qa-col-title">{{ col.label }}</span>
         <span class="qa-col-count">{{ col.count }}</span>
-        {% if col.num_pages > 1 %}
-        <span class="qa-pager" data-status="{{ col.status }}" data-page="1" data-pages="{{ col.num_pages }}">
-          <button type="button" class="qa-pager-btn" data-dir="prev" disabled aria-label="Previous page">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <span class="qa-pager-info"><span class="qa-pager-cur">1</span> / {{ col.num_pages }}</span>
-          <button type="button" class="qa-pager-btn" data-dir="next" aria-label="Next page">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
-        </span>
-        {% endif %}
       </header>
-      <div class="qa-col-body">
-        {% include "partials/qa_cards.html" with items=col.items %}
-        {% if not col.items %}<div class="qa-col-empty">No tickets here</div>{% endif %}
+      <div class="tablewrap qa-tablewrap">
+        <table class="tbl qa-tbl">
+          <thead>
+            <tr>
+              <th>Priority</th>
+              <th>Ticket</th>
+              <th>Scraper</th>
+              <th>Reporter</th>
+              <th>Comments</th>
+              <th>Created</th>
+              <th class="th-actions">Lab</th>
+            </tr>
+          </thead>
+          <tbody class="qa-col-body" data-status="{{ col.status }}">
+            {% include "partials/qa_cards.html" with items=col.items %}
+            {% if not col.items %}<tr class="tbl-empty-row"><td class="tbl-empty" colspan="7">No tickets here</td></tr>{% endif %}
+          </tbody>
+        </table>
       </div>
+      {% if col.num_pages > 1 %}
+      <div class="tbl-pager qa-section-pager" data-status="{{ col.status }}" data-page="1" data-pages="{{ col.num_pages }}">
+        <span class="qa-pager-total">{{ col.count }} ticket{{ col.count|pluralize }}</span>
+        <div class="tbl-pager-nav">
+          <button type="button" class="btn btn-ghost btn-sm" data-dir="prev" disabled aria-label="Previous page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Prev
+          </button>
+          <span class="tbl-pager-info">Page <span class="qa-pager-cur">1</span> of {{ col.num_pages }}</span>
+          <button type="button" class="btn btn-ghost btn-sm" data-dir="next" aria-label="Next page">
+            Next
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+      {% endif %}
     </section>
     {% endfor %}
   </div>
@@ -147,37 +167,30 @@
     });
   })();
 
-  // Card navigation + per-section Prev/Next pager (AJAX pagination).
+  // Row navigation + per-section Prev/Next pager (AJAX pagination).
   (function () {
     var board = document.querySelector(".qa-board");
     if (!board) return;
     var ticketsUrl = board.getAttribute("data-tickets-url");
     var scraper = board.getAttribute("data-scraper") || "";
+    var EMPTY_ROW =
+      '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="7">No tickets here</td></tr>';
 
-    function openCard(target) {
-      var card = target.closest(".qa-card[data-href]");
-      if (card) window.location.href = card.getAttribute("data-href");
-    }
-
-    // Whole card is a link, but ignore clicks on inner links/buttons
-    // (e.g. the "Go to scraper" chip and the pager buttons).
+    // Whole row opens the ticket, but ignore clicks on inner links/buttons
+    // (the title link, the "Go to scraper" action and the pager buttons).
+    // Delegated so AJAX-swapped rows stay clickable too.
     board.addEventListener("click", function (e) {
       if (e.target.closest("a, button")) return;
-      openCard(e.target);
-    });
-    board.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && e.target.classList.contains("qa-card")) {
-        e.preventDefault();
-        openCard(e.target);
-      }
+      var row = e.target.closest("tr.qa-row[data-href]");
+      if (row) window.location.href = row.getAttribute("data-href");
     });
 
-    // Per-section pager: replaces the section's cards with the requested page
-    // (only PAGE_SIZE cards are ever shown at once) and updates the "X / Y".
+    // Per-section pager: replaces the section's <tbody> rows with the requested
+    // page (only PAGE_SIZE rows are ever shown at once) and updates "Page X of Y".
     board.addEventListener("click", function (e) {
-      var btn = e.target.closest(".qa-pager-btn");
+      var btn = e.target.closest(".qa-section-pager [data-dir]");
       if (!btn || btn.disabled) return;
-      var pager = btn.closest(".qa-pager");
+      var pager = btn.closest(".qa-section-pager");
       var col = btn.closest(".qa-col");
       var body = col && col.querySelector(".qa-col-body");
       if (!pager || !body) return;
@@ -201,7 +214,7 @@
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (data) {
           body.classList.remove("is-loading");
-          body.innerHTML = data.html || '<div class="qa-col-empty">No tickets here</div>';
+          body.innerHTML = data.html || EMPTY_ROW;
           var landed = data.page || target;
           var total = data.num_pages || pages;
           pager.setAttribute("data-page", String(landed));
