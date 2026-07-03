@@ -404,6 +404,10 @@ SPECS = {
         url_required=True,
         accepts_sheet=True,
         has_match_store=True,
+        # Every page now renders through a headless Chromium that lives for the
+        # whole run (see college_dual_match._BrowserRenderer), so the run holds
+        # the host's browser slot — apply the browser-exclusivity guard.
+        uses_browser=True,
     ),
     # --- Tennis South Africa (SportyHQ) — queue-driven over keys ----------
     # Queue-driven instead of date/year: works through a list of SportyHQ

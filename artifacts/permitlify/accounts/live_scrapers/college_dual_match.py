@@ -47,10 +47,11 @@ import csv
 import io
 import json
 import os
+import queue
 import random
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse
 
 from django.conf import settings
@@ -230,12 +231,12 @@ def _as_list_of_dicts(value):
 
 
 # ---------------------------------------------------------------------------
-# Page fetch with a patchright (persistent-profile) anti-bot fallback
+# Page fetch via a headless browser (full JS render) with a curl fallback
 # ---------------------------------------------------------------------------
 class _HtmlResponse:
     """Adapt browser-rendered HTML to the curl client's read surface.
 
-    A page fetched through the browser fallback then slots transparently into
+    A page rendered through the browser renderer then slots transparently into
     the same callers that consume a ``curl_cffi`` ``Response`` (they read
     ``.status_code`` / ``.text`` / ``.content`` / ``.headers``).
     """
@@ -249,25 +250,38 @@ class _HtmlResponse:
         self.headers = {"Content-Type": "text/html; charset=utf-8"}
 
 
-class _BrowserFallback:
-    """Patchright + persistent-profile fallback for anti-bot-challenged pages.
+# Full render attempts per URL before an honest failure. The user asked for
+# "three retries in case a request failed" — three complete render attempts, the
+# last one on a freshly relaunched browser context.
+BROWSER_RENDER_TRIES = 3
 
-    The curl_cffi client handles the vast majority of college schedule / box-
-    score pages. A few athletics hosts sit behind a JavaScript anti-bot
-    interstitial (Cloudflare / Imperva) that answers a plain HTTP client with a
-    403 no matter how many times it retries (e.g. the ``sammieetc.com`` block
-    seen in the wild). For those a real patchright Chromium executes the
-    challenge JS, earns the clearance cookie and returns the rendered HTML.
+# Sentinel pushed on the render queue to tell the owner thread to shut down.
+_RENDER_STOP = object()
 
-    One **persistent** profile dir (``user_data_dir``) is reused for every
-    fallback fetch, so the clearance cookie survives across pages *and* across
-    runs — once a host is cleared, later pages on it skip the challenge. A
-    persistent Chrome profile can be opened by only one process at a time, and
-    one Chromium is about all the container's memory can spare, so every
-    fallback fetch is serialized behind a lock: phase-2 worker threads queue
-    for it. The primary curl path stays fully concurrent; only the genuinely
-    blocked pages pay the browser cost. Any error is an honest ``None`` (the
-    caller records the original failure) — never fabricated content.
+
+class _BrowserRenderer:
+    """Headless-browser page renderer driven by a single owner thread.
+
+    Every HTML page for this scraper is rendered by a real headless patchright
+    Chromium (full JavaScript executed, the scraper's proxy attached) before its
+    markup is handed to Claude — so Claude parses the fully-hydrated DOM, not a
+    bare server response.
+
+    Playwright's sync API is **bound to the thread that started it**, so the one
+    browser cannot be shared across the phase-2 worker threads behind a mere lock
+    (a ``goto`` from another thread crashes). Instead every render is marshaled
+    onto one dedicated owner thread through a queue: the owner lazily launches a
+    single :class:`BrowserClient` (persistent profile, so clearance cookies
+    survive across pages *and* runs) and drives all renders; :meth:`render`
+    blocks on a Future for the result.
+
+    Because one Chromium is about all the container's memory can spare, renders
+    serialize on the owner thread; the callers' Claude requests (the real
+    bottleneck) still run concurrently across the worker pool. Each render is
+    retried up to :data:`BROWSER_RENDER_TRIES` times — the final attempt on a
+    freshly ``relaunch()``-ed context — before an honest ``None`` (per-attempt
+    telemetry is recorded by ``get_selector``). Any launch/relaunch error is an
+    honest failure too; content is never fabricated.
     """
 
     def __init__(self, *, scraper, log, tele, allowed_hosts, profile_dir):
@@ -276,71 +290,169 @@ class _BrowserFallback:
         self._tele = tele
         self._allowed_hosts = allowed_hosts or None
         self._profile_dir = profile_dir
-        self._lock = threading.Lock()
+        self._queue = queue.Queue()
+        self._thread = threading.Thread(
+            target=self._serve, name="college-browser-renderer", daemon=True
+        )
+        self._started = False
+        self._start_lock = threading.Lock()
 
-    def fetch_html(self, url):
-        """Return cleared page HTML via patchright, or ``None`` (honest fail)."""
-        with self._lock:
-            try:
-                from ._browser import BrowserClient
-            except Exception as exc:  # noqa: BLE001 - patchright not importable
-                self._tele.record_error(
-                    redact_secrets(f"Browser fallback unavailable for {url}: {exc}")
-                )
-                return None
-            self._log(
-                "INFO",
-                f"\U0001f310 anti-bot challenge \u2014 retrying {url} via "
-                "patchright (persistent profile)",
+    def _ensure_started(self):
+        with self._start_lock:
+            if not self._started:
+                self._started = True
+                self._thread.start()
+
+    def render(self, url):
+        """Render ``url`` with full JS on the owner thread; HTML or ``None``."""
+        self._ensure_started()
+        fut = Future()
+        self._queue.put((url, fut))
+        return fut.result()
+
+    def close(self):
+        """Stop the owner thread and tear the browser down (idempotent)."""
+        if not self._started:
+            return
+        self._queue.put(_RENDER_STOP)
+        self._thread.join(timeout=30)
+
+    # -- owner-thread internals ------------------------------------------
+    def _serve(self):
+        """Owner-thread loop: own one BrowserClient, render queued URLs."""
+        try:
+            from ._browser import BrowserClient
+        except Exception as exc:  # noqa: BLE001 - patchright not importable
+            self._tele.record_error(
+                redact_secrets(f"Browser renderer unavailable: {exc}")
             )
-            try:
-                with BrowserClient(
-                    log=self._log,
-                    tele=self._tele,
-                    proxy=getattr(self._scraper, "proxy", None),
-                    allowed_hosts=self._allowed_hosts,
-                    headless=getattr(settings, "SCRAPER_BROWSER_HEADLESS", True),
-                    channel=getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or None,
-                    user_data_dir=self._profile_dir,
-                ) as browser:
-                    sel = browser.get_selector(url)
-                if sel is None:
+            BrowserClient = None
+
+        client = None
+        try:
+            while True:
+                item = self._queue.get()
+                if item is _RENDER_STOP:
+                    break
+                url, fut = item
+                try:
+                    if BrowserClient is None:
+                        fut.set_result(None)
+                        continue
+                    if client is None:
+                        client = self._launch(BrowserClient)
+                    if client is None:
+                        fut.set_result(None)
+                        continue
+                    fut.set_result(self._render(client, url))
+                except Exception as exc:  # noqa: BLE001 - honest fail per render
+                    # Complete the Future FIRST: render() blocks on fut.result()
+                    # with no timeout, so if record_error itself ever raised the
+                    # caller would hang until the inactivity reaper. Unblock, then
+                    # record telemetry.
+                    fut.set_result(None)
+                    self._tele.record_error(
+                        redact_secrets(f"Browser render error for {url}: {exc}"),
+                        exc=exc,
+                    )
+        finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:  # noqa: BLE001 - best-effort teardown
+                    pass
+
+    def _launch(self, browser_client_cls):
+        """Open the one persistent-profile headless browser (owner thread)."""
+        self._log(
+            "INFO",
+            "\U0001f310 launching headless browser (full JS render, "
+            "persistent profile)",
+        )
+        try:
+            client = browser_client_cls(
+                log=self._log,
+                tele=self._tele,
+                proxy=getattr(self._scraper, "proxy", None),
+                allowed_hosts=self._allowed_hosts,
+                headless=getattr(settings, "SCRAPER_BROWSER_HEADLESS", True),
+                channel=getattr(settings, "SCRAPER_BROWSER_CHANNEL", "") or None,
+                user_data_dir=self._profile_dir,
+            )
+            client.__enter__()
+            return client
+        except Exception as exc:  # noqa: BLE001 - honest fail, never fabricate
+            self._tele.record_error(
+                redact_secrets(f"Browser launch failed: {exc}"), exc=exc
+            )
+            self._log(
+                "WARN",
+                redact_secrets(
+                    f"\u26a0\ufe0f browser launch failed: "
+                    f"{exc.__class__.__name__}: {exc}"
+                ),
+            )
+            return None
+
+    def _render(self, client, url):
+        """Render ``url`` with up to :data:`BROWSER_RENDER_TRIES` attempts."""
+        for attempt in range(1, BROWSER_RENDER_TRIES + 1):
+            if attempt == BROWSER_RENDER_TRIES and attempt > 1:
+                # Final attempt on a fresh context. On the persistent profile
+                # relaunch() reuses the same dir (clearance cookies survive) and
+                # _launch clears any stale singleton locks; on failure the client
+                # is left browser-less and returns honest Nones.
+                try:
+                    client.relaunch()
+                except Exception as exc:  # noqa: BLE001 - honest None on failure
+                    self._tele.record_error(
+                        redact_secrets(
+                            f"Browser relaunch failed for {url}: {exc}"
+                        ),
+                        exc=exc,
+                    )
                     return None
-                return sel.get() or None
-            except Exception as exc:  # noqa: BLE001 - honest fail, never fabricate
-                self._tele.record_error(
-                    redact_secrets(f"Browser fallback failed for {url}: {exc}"),
-                    exc=exc,
-                )
+            sel = client.get_selector(url)
+            if sel is not None:
+                html = sel.get()
+                if html:
+                    if attempt > 1:
+                        self._log(
+                            "INFO",
+                            f"   \u2705 rendered {url} on attempt "
+                            f"{attempt}/{BROWSER_RENDER_TRIES}",
+                        )
+                    return html
+            if attempt < BROWSER_RENDER_TRIES:
                 self._log(
-                    "WARN",
-                    redact_secrets(
-                        f"\u26a0\ufe0f browser fallback failed for {url}: "
-                        f"{exc.__class__.__name__}: {exc}"
-                    ),
+                    "INFO",
+                    f"   \U0001f501 render attempt {attempt}/"
+                    f"{BROWSER_RENDER_TRIES} failed for {url} \u2014 retrying",
                 )
-                return None
+        return None
 
 
-def _get_page(client, url, log, tele, *, browser=None, headers=BROWSER_HEADERS):
-    """GET a page via curl_cffi; on an anti-bot challenge, fall back to a real
-    patchright browser (persistent profile).
+def _get_page(client, url, log, tele, *, renderer=None, headers=BROWSER_HEADERS):
+    """Fetch a page for extraction.
+
+    HTML pages are rendered by the headless browser (full JavaScript executed,
+    the scraper's proxy attached) so the fully-hydrated markup — not a bare
+    server response — is what reaches Claude. Direct ``.pdf`` URLs skip the
+    browser (a ``goto`` on a PDF aborts as a download); they and the
+    browser-unavailable / render-failed cases fall back to a single curl_cffi
+    GET, which also keeps the "response body is itself a PDF" path in
+    :func:`_core_extract` working and yields an honest status code.
 
     Returns a response-like object exposing ``.status_code`` / ``.text`` /
-    ``.content`` / ``.headers`` — the curl ``Response`` on success, or an
-    :class:`_HtmlResponse` wrapping the browser-rendered HTML — else the failing
-    curl response (or ``None``). The browser is launched **only** when curl
-    exhausts its retries on an anti-bot *challenge* (``client.last_challenge``),
-    so a 404 / timeout / transport failure never spins up Chromium.
+    ``.content`` / ``.headers`` — an :class:`_HtmlResponse` wrapping the rendered
+    HTML on success, else the curl ``Response`` (or ``None``).
     """
-    resp = client.get(url, headers=headers)
-    if resp is not None and 200 <= resp.status_code < 300:
-        return resp
-    if browser is not None and getattr(client, "last_challenge", False):
-        html = browser.fetch_html(url)
+    path = urlparse(url).path.lower()
+    if renderer is not None and not path.endswith(".pdf"):
+        html = renderer.render(url)
         if html:
             return _HtmlResponse(html)
-    return resp
+    return client.get(url, headers=headers)
 
 
 # ---------------------------------------------------------------------------
@@ -587,10 +699,10 @@ def _read_google_sheet(client, url, log, tele):
     return rows
 
 
-def _crawl_schedule(client, url, log, tele, *, browser=None):
+def _crawl_schedule(client, url, log, tele, *, renderer=None):
     """Crawl a schedule page for box-score links (HTML or PDF variants)."""
     url = _normalize_url(url)
-    resp = _get_page(client, url, log, tele, browser=browser)
+    resp = _get_page(client, url, log, tele, renderer=renderer)
     if resp is None or not (200 <= resp.status_code < 300):
         tele.record_error(
             f"Schedule page fetch failed for {url} "
@@ -617,7 +729,7 @@ def _crawl_schedule(client, url, log, tele, *, browser=None):
     return ordered
 
 
-def _discover(client, url, log, tele, *, browser=None):
+def _discover(client, url, log, tele, *, renderer=None):
     """Classify one input URL and return the box-score URLs it expands to."""
     url = (url or "").strip()
     if not url:
@@ -627,12 +739,12 @@ def _discover(client, url, log, tele, *, browser=None):
         box_scores = []
         for _team, link in _read_google_sheet(client, url, log, tele):
             if "/schedule" in link:
-                box_scores.extend(_crawl_schedule(client, link, log, tele, browser=browser))
+                box_scores.extend(_crawl_schedule(client, link, log, tele, renderer=renderer))
             else:
                 box_scores.append(_normalize_url(link))
         return box_scores
     if "/schedule" in url:
-        return _crawl_schedule(client, url, log, tele, browser=browser)
+        return _crawl_schedule(client, url, log, tele, renderer=renderer)
     return [_normalize_url(url)]
 
 
@@ -705,9 +817,9 @@ def _core_extract(client, claude_key, openai_key, system, url, content,
     return rows
 
 
-def _extract_box_score(client, claude_key, openai_key, system, url, log, tele, *, browser=None):
+def _extract_box_score(client, claude_key, openai_key, system, url, log, tele, *, renderer=None):
     """Fetch one box score and extract rows with Claude (no fallback)."""
-    resp = _get_page(client, url, log, tele, browser=browser)
+    resp = _get_page(client, url, log, tele, renderer=renderer)
     if resp is None or not (200 <= resp.status_code < 300):
         tele.record_error(
             f"Box score fetch failed for {url} "
@@ -804,132 +916,140 @@ def run(run_obj, log):
 
     proxies = build_proxies(scraper, log)
 
-    # Anti-bot fallback: a few athletics hosts answer the curl_cffi client with a
-    # 403 JS challenge it can't solve. For those a patchright Chromium with a
-    # PERSISTENT profile (clearance cookies survive across pages/runs) re-fetches
-    # the page. Serialized internally to one browser at a time; see
-    # _BrowserFallback. allowed_hosts=None mirrors the curl client (college
+    # Page fetch: every HTML page (schedule crawl + box-score recap) is rendered
+    # by a headless patchright Chromium (full JavaScript executed, the scraper's
+    # proxy attached) so the fully-hydrated markup reaches Claude. Renders run on
+    # one dedicated owner thread (Playwright's sync API is thread-bound) with a
+    # PERSISTENT profile (clearance cookies survive across pages/runs); see
+    # _BrowserRenderer. allowed_hosts=None mirrors the curl client (college
     # crawls arbitrary discovered athletics hosts); the SSRF public-IP guard
-    # still applies inside BrowserClient.
+    # still applies inside BrowserClient. curl_cffi stays for the Google-Sheet
+    # CSV export, PDF byte downloads, and as an honest fallback if a render fails.
     profile_root = getattr(settings, "SCRAPER_BROWSER_PROFILE_DIR", "")
     profile_dir = os.path.join(profile_root, scraper.slug) if profile_root else None
-    browser_fb = _BrowserFallback(
+    renderer = _BrowserRenderer(
         scraper=scraper, log=log, tele=tele, allowed_hosts=None, profile_dir=profile_dir,
     )
 
-    # ---- phase 1 · discover box-score URLs -------------------------------
-    log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering box scores \u2500\u2500\u2500\u2500")
-    box_scores = []
-    with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
-        for url in urls:
-            log("INFO", f"\U0001f50e Classifying {url}")
+    try:
+        # ---- phase 1 · discover box-score URLs -------------------------------
+        log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering box scores \u2500\u2500\u2500\u2500")
+        box_scores = []
+        with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
+            for url in urls:
+                log("INFO", f"\U0001f50e Classifying {url}")
+                try:
+                    box_scores.extend(_discover(discovery, url, log, tele, renderer=renderer))
+                except Exception as exc:  # noqa: BLE001 - one bad input can't kill the run
+                    tele.record_error(redact_secrets(f"Discovery failed for {url}: {exc}"), exc=exc)
+                    log("WARN", redact_secrets(f"\u26a0\ufe0f discovery failed: {exc.__class__.__name__}: {exc}"))
+
+        # De-dupe box scores, preserving order.
+        seen_urls = set()
+        ordered = []
+        for url in box_scores:
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                ordered.append(url)
+        box_scores = ordered
+
+        total = len(box_scores)
+        Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
+        log("INFO", f"\U0001f4cb {total} box-score recap(s) to extract")
+
+        if not box_scores:
+            msg = "No box-score recaps were discovered from the supplied URL(s)."
+            log("ERROR", f"\U0001f6d1 {msg}")
+            tele.record_error(msg)
+            return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+
+        # ---- phase 2 · Claude extraction (threaded) --------------------------
+        # Collect every extracted match (raw scraper-key dicts) under a lock; the
+        # canonical 23->65 mapping + DB dedup happens once, after the pool, via
+        # accounts.college_store.ingest(). A light in-run guard drops the obvious
+        # case of one box score emitting the same match twice (keyed by normalized
+        # identity); genuine cross-source/cross-run duplicates are left for the store
+        # to collapse against what's already persisted.
+        lock = threading.Lock()
+        collected = []
+        seen_ids = set()
+
+        def process(box_url):
+            client = ScraperClient(log=log, tele=tele, proxies=proxies)
+            claude_key = random.choice(claude_keys) if claude_keys else ""
             try:
-                box_scores.extend(_discover(discovery, url, log, tele, browser=browser_fb))
-            except Exception as exc:  # noqa: BLE001 - one bad input can't kill the run
-                tele.record_error(redact_secrets(f"Discovery failed for {url}: {exc}"), exc=exc)
-                log("WARN", redact_secrets(f"\u26a0\ufe0f discovery failed: {exc.__class__.__name__}: {exc}"))
-
-    # De-dupe box scores, preserving order.
-    seen_urls = set()
-    ordered = []
-    for url in box_scores:
-        if url and url not in seen_urls:
-            seen_urls.add(url)
-            ordered.append(url)
-    box_scores = ordered
-
-    total = len(box_scores)
-    Run.objects.filter(pk=run_obj.pk).update(progress_total=total, progress_done=0)
-    log("INFO", f"\U0001f4cb {total} box-score recap(s) to extract")
-
-    if not box_scores:
-        msg = "No box-score recaps were discovered from the supplied URL(s)."
-        log("ERROR", f"\U0001f6d1 {msg}")
-        tele.record_error(msg)
-        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
-
-    # ---- phase 2 · Claude extraction (threaded) --------------------------
-    # Collect every extracted match (raw scraper-key dicts) under a lock; the
-    # canonical 23->65 mapping + DB dedup happens once, after the pool, via
-    # accounts.college_store.ingest(). A light in-run guard drops the obvious
-    # case of one box score emitting the same match twice (keyed by normalized
-    # identity); genuine cross-source/cross-run duplicates are left for the store
-    # to collapse against what's already persisted.
-    lock = threading.Lock()
-    collected = []
-    seen_ids = set()
-
-    def process(box_url):
-        client = ScraperClient(log=log, tele=tele, proxies=proxies)
-        claude_key = random.choice(claude_keys) if claude_keys else ""
-        try:
-            rows = _extract_box_score(
-                client, claude_key, openai_key, system, box_url, log, tele,
-                browser=browser_fb,
-            )
-            for row in rows:
-                ident = college_store.match_hash(college_store.map_extracted(row))
-                with lock:
-                    if ident in seen_ids:
-                        continue
-                    seen_ids.add(ident)
-                    collected.append(row)
-                log(
-                    "INFO",
-                    f"   \U0001f3c6 {row.get('draw_team_type', '') or 'Match'}: "
-                    f"{row.get('winner_1_name') or '?'} def. "
-                    f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
-                    f"\u2014 {row.get('tournament_name') or 'Dual Match'}",
+                rows = _extract_box_score(
+                    client, claude_key, openai_key, system, box_url, log, tele,
+                    renderer=renderer,
                 )
-        except Exception as exc:  # noqa: BLE001 - one bad URL can't kill the run
-            tele.record_error(redact_secrets(f"Box score {box_url} failed: {exc}"), exc=exc)
-            log("WARN", redact_secrets(f"\u26a0\ufe0f box score failed: {exc.__class__.__name__}: {exc}"))
-        finally:
-            Run.objects.filter(pk=run_obj.pk).update(progress_done=F("progress_done") + 1)
-            client.close()
+                for row in rows:
+                    ident = college_store.match_hash(college_store.map_extracted(row))
+                    with lock:
+                        if ident in seen_ids:
+                            continue
+                        seen_ids.add(ident)
+                        collected.append(row)
+                    log(
+                        "INFO",
+                        f"   \U0001f3c6 {row.get('draw_team_type', '') or 'Match'}: "
+                        f"{row.get('winner_1_name') or '?'} def. "
+                        f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
+                        f"\u2014 {row.get('tournament_name') or 'Dual Match'}",
+                    )
+            except Exception as exc:  # noqa: BLE001 - one bad URL can't kill the run
+                tele.record_error(redact_secrets(f"Box score {box_url} failed: {exc}"), exc=exc)
+                log("WARN", redact_secrets(f"\u26a0\ufe0f box score failed: {exc.__class__.__name__}: {exc}"))
+            finally:
+                Run.objects.filter(pk=run_obj.pk).update(progress_done=F("progress_done") + 1)
+                client.close()
 
-    log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 extracting box scores \u2500\u2500\u2500\u2500")
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        list(executor.map(process, box_scores))
+        log("INFO", "\u2500\u2500\u2500\u2500 phase 2 \u00b7 extracting box scores \u2500\u2500\u2500\u2500")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            list(executor.map(process, box_scores))
 
-    extracted = len(collected)
+        extracted = len(collected)
 
-    # ---- phase 3 · persist new matches (dedup vs the match database) -----
-    log("INFO", "\u2500\u2500\u2500\u2500 phase 3 \u00b7 saving new matches \u2500\u2500\u2500\u2500")
-    mapped = [college_store.map_extracted(row) for row in collected]
-    new_rows, skipped = college_store.ingest(
-        mapped, run=run_obj, source=college_store.SOURCE_SCRAPE
-    )
-    new_count = len(new_rows)
+        # ---- phase 3 · persist new matches (dedup vs the match database) -----
+        log("INFO", "\u2500\u2500\u2500\u2500 phase 3 \u00b7 saving new matches \u2500\u2500\u2500\u2500")
+        mapped = [college_store.map_extracted(row) for row in collected]
+        new_rows, skipped = college_store.ingest(
+            mapped, run=run_obj, source=college_store.SOURCE_SCRAPE
+        )
+        new_count = len(new_rows)
 
-    # Items CSV per the invocation mode (see ``is_sheet_run`` above): a Google
-    # Sheet run emits only the new matches (the Sheets pipeline appends them);
-    # a single-link/schedule run emits every extracted match (a full re-extract),
-    # while still persisting only the new ones to the DB. ``mapped`` is already
-    # in-run de-duplicated (phase 2), so single-link CSVs never repeat a match.
-    csv_rows = new_rows if is_sheet_run else mapped
-    row_count = len(csv_rows)
+        # Items CSV per the invocation mode (see ``is_sheet_run`` above): a Google
+        # Sheet run emits only the new matches (the Sheets pipeline appends them);
+        # a single-link/schedule run emits every extracted match (a full re-extract),
+        # while still persisting only the new ones to the DB. ``mapped`` is already
+        # in-run de-duplicated (phase 2), so single-link CSVs never repeat a match.
+        csv_rows = new_rows if is_sheet_run else mapped
+        row_count = len(csv_rows)
 
-    log("INFO", "\u2500\u2500\u2500\u2500 summary \u2500\u2500\u2500\u2500")
-    log(
-        "INFO",
-        f"\U0001f9ee {extracted} match(es) extracted \u2014 {new_count} new, "
-        f"{skipped} already in the database",
-    )
-    log(
-        "INFO",
-        f"\U0001f4c4 CSV mode: {'Google Sheet (new only)' if is_sheet_run else 'single link(s) (all matches)'} "
-        f"\u2014 {row_count} row(s) written",
-    )
-    log(
-        "INFO",
-        f"\U0001f4ca Telemetry: {tele.request_count} request(s), {tele.error_count} error(s)",
-    )
-    # A run that extracted matches SUCCEEDS even when every one was already stored
-    # (0 new is a valid, healthy outcome). It only FAILS when nothing at all was
-    # extracted from the discovered box scores.
-    status = Run.Status.SUCCESS if extracted else Run.Status.FAILED
-    icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
-    log("INFO", f"{icon} Run finished \u2014 status={status}, new_rows={new_count}")
-    items_csv = college_store.to_csv(csv_rows) if csv_rows else ""
-    return items_csv, tele.requests_csv(), tele.errors_csv(), row_count, status
+        log("INFO", "\u2500\u2500\u2500\u2500 summary \u2500\u2500\u2500\u2500")
+        log(
+            "INFO",
+            f"\U0001f9ee {extracted} match(es) extracted \u2014 {new_count} new, "
+            f"{skipped} already in the database",
+        )
+        log(
+            "INFO",
+            f"\U0001f4c4 CSV mode: {'Google Sheet (new only)' if is_sheet_run else 'single link(s) (all matches)'} "
+            f"\u2014 {row_count} row(s) written",
+        )
+        log(
+            "INFO",
+            f"\U0001f4ca Telemetry: {tele.request_count} request(s), {tele.error_count} error(s)",
+        )
+        # A run that extracted matches SUCCEEDS even when every one was already stored
+        # (0 new is a valid, healthy outcome). It only FAILS when nothing at all was
+        # extracted from the discovered box scores.
+        status = Run.Status.SUCCESS if extracted else Run.Status.FAILED
+        icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
+        log("INFO", f"{icon} Run finished \u2014 status={status}, new_rows={new_count}")
+        items_csv = college_store.to_csv(csv_rows) if csv_rows else ""
+        return items_csv, tele.requests_csv(), tele.errors_csv(), row_count, status
+    finally:
+        # Stop the render owner thread and close the one Chromium so a run never
+        # leaves a lingering browser process behind — even on an early return or
+        # an unexpected error mid-phase.
+        renderer.close()
