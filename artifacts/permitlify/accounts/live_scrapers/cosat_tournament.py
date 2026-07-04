@@ -7,6 +7,10 @@ profile flag) rather than being a federation constant; ``id_type`` / import-sour
 / sanction are the fixed ``COSAT`` org label. Thin wrapper over the shared
 :mod:`accounts.live_scrapers._ts_tournament` engine in ``dynamic_country`` mode.
 
+Each player's ``third_party_id`` is the tournamentsoftware **player-profile
+GUID** (the ``/player-profile/<GUID>`` tail, in the site's own lower-case form),
+not the subhead's ``NIN…`` national-federation member-id aside.
+
 Player gender is inferred from the player's name via Claude (the source's
 ``format_name_gender_claude`` at ranking-registry time — hard requirement, no
 draw-name fallback), and DOB comes from the site-wide **ranking tab**: the
@@ -38,6 +42,11 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     claude_gender_required=True,
     ranking_dob=True,
     ranking_dob_full_date=True,
+    # third_party_id = the player-profile GUID (the /player-profile/<GUID> tail),
+    # not the subhead's ``NIN…`` national-federation member-id aside. COSAT's
+    # profile URLs are lower-case, so emit the GUID in that (site-canonical) case.
+    guid_third_party_id=True,
+    guid_third_party_id_upper=False,
 )
 
 

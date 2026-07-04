@@ -140,13 +140,17 @@ class TSTournamentConfig:
     # the exact value the source's registry stored.
     ranking_dob_full_date: bool = False
     # --- GUID third-party id ---------------------------------------------
-    # On some sites (juniors, e.g. Tennis Europe) the player subhead shows a
-    # member-id ``media__title-aside`` (a national-federation id) rather than the
-    # tournamentsoftware player id the framework wants. Setting
-    # ``guid_third_party_id`` takes the id from the subhead's player-profile link
-    # (``/player-profile/<GUID>``) instead — the genuine source-platform id,
-    # emitted upper-cased to match the site's canonical profile URLs.
+    # On some sites (Tennis Europe juniors, COSAT) the player subhead shows a
+    # member-id ``media__title-aside`` (a national-federation id, e.g. COSAT's
+    # ``NIN…`` number) rather than the tournamentsoftware player id the framework
+    # wants. Setting ``guid_third_party_id`` takes the id from the subhead's
+    # player-profile link (``/player-profile/<GUID>``) instead — the genuine
+    # source-platform id.
     guid_third_party_id: bool = False
+    # GUID case: Tennis Europe's canonical profile URLs are upper-case, so its
+    # id is emitted upper-cased (the default). COSAT's profile URLs are
+    # lower-case, so it sets this False to emit the GUID in the site's own case.
+    guid_third_party_id_upper: bool = True
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -733,10 +737,11 @@ def _parse_player(client, cfg, name, url, dob_map=None):
     )
 
     if cfg.guid_third_party_id:
-        # Junior sites (Tennis Europe) show a member-id ``media__title-aside``
+        # These sites (Tennis Europe, COSAT) show a member-id ``media__title-aside``
         # (a federation id, not this id); use the profile GUID instead, in the
-        # canonical upper-case form the site's profile URLs use.
-        third_party_id = _guid_from_profile_url(profile_href).upper()
+        # site's own canonical case (Tennis Europe upper-cases, COSAT lower-cases).
+        guid = _guid_from_profile_url(profile_href)
+        third_party_id = guid.upper() if cfg.guid_third_party_id_upper else guid
     else:
         third_party_id = _field(
             sel,
