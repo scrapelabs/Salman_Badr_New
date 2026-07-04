@@ -23,6 +23,18 @@ tournaments while others are fine. Reproduced: the 447-player club cup had
 ~100% empty match-page asides but 100% recoverable from the profile page; a
 singles league had 0 missing (its match pages carry the aside).
 
+**Stale-CSV signature (pre-fix vs live bug):** a CSV that shows DOB **present**
+but third_party_id **blank** across a whole team/club tournament is the
+fingerprint of *pre-step-3* code (an old export), NOT a live bug — `_player_dob`
+has always followed the profile link, so DOB filled even before `_player_id`
+learned to. Current code fills both together (`_get_sel` caches the profile page
+incl. `None`, so a failed fetch would blank BOTH). Before "fixing" a reported
+missing-id CSV, check its data signature and re-verify against the live site
+rather than trusting the file: the previously-failing club/youth tournaments
+resolve their licences via the profile-follow, and genuine misses are guest
+entries whose name carries a status note and which have no profile link and no
+DOB.
+
 **Rule:** `_player_id` must try the match-page subhead aside first, then FOLLOW
 the profile link and read the profile's page-head h2 aside, and only then fall
 back to `sha256_id` (which is blanked at export). This mirrors the source's
