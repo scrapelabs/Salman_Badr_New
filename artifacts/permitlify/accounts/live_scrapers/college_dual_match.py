@@ -139,7 +139,6 @@ COLUMNS = [
     "loser_1_college", "loser_2_college",
     "score", "winner_team", "loser_team", "team_score", "outcome",
 ]
-HEADER = [c.replace("_", " ").title() for c in COLUMNS]
 
 
 # ---------------------------------------------------------------------------

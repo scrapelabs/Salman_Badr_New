@@ -9,6 +9,20 @@ historical-CSV importer — funnel through one module (`accounts/college_store.p
 so the model, the run's items CSV, the Lab "Match database" tab, and the bulk
 importer all agree on the column set, dedup key, and CSV format.
 
+**Export header ≠ internal keys.** The CSV header row must be the exact
+human-readable labels of the user's production export ("Match ID", "Winner 1
+Third Party ID", "Tournament URL", "Winner 1 DOB", "ID Type", …), NOT the
+snake_case `COLUMNS` keys. `to_csv` writes `HEADER`, derived from `COLUMNS` with
+an acronym override map (`id→ID, dob→DOB, url→URL`) so labels can never drift out
+of order with the data. Both download paths (per-run items CSV + the Match-
+database export view) funnel through `to_csv`, so fixing it there fixes both.
+The importer's `_canon_key` normalizes headers (lowercase, spaces→underscores),
+so the human-readable header round-trips back to canonical keys — re-import of
+either format works. **Why:** the production Google-Sheets pipeline keys on these
+exact labels; snake_case headers broke it. Note: `Run.csv_data` is a stored
+snapshot, so old pre-fix runs keep their old header on re-download; only new runs
+and the (regenerated) export carry the corrected labels.
+
 **Dedup = normalized *identity* hash, not full-row hash.** The dedup key digests
 only identifying fields (date, gender, draw, sorted player pairs, score, teams),
 each normalized (ISO date, lower-cased, score whitespace stripped, doubles pairs

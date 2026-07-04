@@ -56,6 +56,26 @@ COLUMNS = [
     "winner_team", "loser_team", "team_score", "winner_team_type", "loser_team_type",
 ]
 
+# Acronyms that must stay upper-cased in the human-readable header labels
+# (title-casing would otherwise render them "Id" / "Dob" / "Url").
+_HEADER_ACRONYMS = {"id": "ID", "dob": "DOB", "url": "URL"}
+
+
+def _header_label(col):
+    """Turn a snake_case column key into its exact export header label.
+
+    ``winner_1_third_party_id`` -> ``"Winner 1 Third Party ID"``. Acronyms in
+    :data:`_HEADER_ACRONYMS` stay upper-cased; every other word is capitalised.
+    """
+    return " ".join(
+        _HEADER_ACRONYMS.get(word, word.capitalize()) for word in col.split("_")
+    )
+
+
+# The exact human-readable header row of the user's production export (derived
+# from :data:`COLUMNS` so the labels can never drift out of order with the data).
+HEADER = [_header_label(col) for col in COLUMNS]
+
 # Date spellings seen across sources, tried in order. ``strptime`` is lenient on
 # leading zeros so a single ``%m/%d/%Y`` covers both "05/24/2026" and "5/24/2026".
 _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%b %d, %Y", "%B %d, %Y", "%m/%d/%y")
@@ -261,10 +281,14 @@ def ingest(rows, *, run=None, source=SOURCE_SCRAPE):
 
 
 def to_csv(rows):
-    """Render canonical rows to a 65-column CSV string (with header)."""
+    """Render canonical rows to a 65-column CSV string.
+
+    The header row uses the exact human-readable labels of the user's production
+    export (:data:`HEADER`), not the internal snake_case keys.
+    """
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(COLUMNS)
+    writer.writerow(HEADER)
     for raw in rows:
         row = build_full_row(raw)
         writer.writerow([row[col] for col in COLUMNS])
