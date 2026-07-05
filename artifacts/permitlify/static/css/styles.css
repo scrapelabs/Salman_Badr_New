@@ -601,7 +601,7 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   display: inline-flex;
   align-items: center;
   height: 34px;
-  padding: 0 30px 0 30px;
+  padding: 0 30px 0 40px;
   border: 1px solid var(--app-border-2);
   background: var(--app-surface);
   border-radius: 9px;
@@ -612,7 +612,7 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
 }
 .scraper-jump-ico {
   position: absolute;
-  left: 10px;
+  left: 14px;
   width: 14px;
   height: 14px;
   color: var(--app-text-3);
@@ -3031,6 +3031,11 @@ body.qa-modal-open { overflow: hidden; }
 .qa-modal-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .qa-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .qa-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--app-border); }
+/* Desktop: let the wide (ticket) modals fill the content area right up to the left sidebar */
+@media (min-width: 861px) {
+  .qa-modal--wide { left: 248px; }
+  .qa-modal--wide .qa-modal-card { width: 100%; }
+}
 
 /* --- global confirm dialog (replaces native confirm()) --- */
 body.mm-modal-open { overflow: hidden; }
@@ -3245,6 +3250,27 @@ body.mm-modal-open { overflow: hidden; }
 }
 .sched-status.is-on .sched-dot { background: #1f9d55; box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.18); }
 .sched-last { margin-top: 14px; }
+/* Schedule tab: smaller, tighter type for a cleaner, less-heavy look */
+.sched-auto .status-eyebrow,
+.sched-history .status-eyebrow { font-size: 7.6px; }
+.sched-auto .status-name,
+.sched-history .status-name { font-size: 11.2px; }
+.sched-auto .rt-intro,
+.sched-history .rt-intro { font-size: 10px; line-height: 1.55; }
+.sched-auto .field-label { font-size: 7.8px; margin-bottom: 6px; }
+.sched-auto .rt-input { height: 38px; font-size: 10.5px; }
+.sched-toggle { font-size: 11.5px; }
+.sched-auto .status-note,
+.sched-history .status-note,
+.sched-last { font-size: 10px; }
+.sched-status { font-size: 11px; }
+.sched-actions .btn { font-size: 11px; }
+.sched-history .ch-outcome { font-size: 10.5px; }
+.sched-history .ch-when { font-size: 9px; }
+.sched-history .ch-detail { font-size: 9.6px; }
+.sched-history .ch-meta,
+.sched-history .ch-due,
+.sched-history .ch-runlink { font-size: 9px; }
 @media (max-width: 720px) {
   .sched-grid { grid-template-columns: 1fr; }
 }
