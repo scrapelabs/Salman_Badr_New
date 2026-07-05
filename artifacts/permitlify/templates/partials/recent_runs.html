@@ -2,14 +2,19 @@
 finished runs. `recent_runs` is a list of Run objects each with a `.run_state` attr.
 The tbody is refreshed live by the overview poller.{% endcomment %}
 <div class="tablewrap">
-  <table class="tbl" id="recentRunsTable">
+  <table class="tbl runs-tbl" id="recentRunsTable">
     <thead>
       <tr>
         <th>Scraper</th>
-        <th>Status</th>
+        <th>Run</th>
         <th>Started</th>
-        <th>Rows</th>
-        <th>Duration</th>
+        <th>Finished</th>
+        <th>Tournament</th>
+        <th>Window</th>
+        <th>Status</th>
+        <th class="num">Rows</th>
+        <th class="num">Size</th>
+        <th class="num">Duration</th>
         <th class="th-actions">Log</th>
       </tr>
     </thead>
@@ -22,16 +27,21 @@ The tbody is refreshed live by the overview poller.{% endcomment %}
             <span><a class="tbl-title" href="{% url 'scraper_detail' r.scraper.slug %}?tab=batch">{{ r.scraper.name }}</a></span>
           </div>
         </td>
+        <td><span class="run-id">#{{ r.short_id }}</span></td>
+        <td class="nowrap">{{ r.started_at|timesince }} ago</td>
+        <td class="nowrap">{% if r.finished_at %}{{ r.finished_at|timesince }} ago{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{{ r.tournament }}</td>
+        <td class="run-window">{% if r.date_from %}{{ r.date_from|date:"Y-m-d" }} → {{ r.date_to|date:"Y-m-d" }}{% else %}<span class="muted">full history</span>{% endif %}</td>
         <td><span class="run-badge run-st-{{ r.run_state }}">{{ r.get_status_display }}</span></td>
-        <td>{{ r.started_at|timesince }} ago</td>
-        <td>{{ r.row_count }}</td>
-        <td>{{ r.duration_label }}</td>
+        <td class="num">{{ r.row_count }}</td>
+        <td class="num nowrap">{{ r.size_label }}</td>
+        <td class="num nowrap">{{ r.duration_label }}</td>
         <td class="td-actions">
           <a class="btn btn-ghost btn-sm" href="{% url 'run_log' r.scraper.slug r.uuid %}">Open log</a>
         </td>
       </tr>
       {% empty %}
-      <tr class="tbl-empty-row"><td class="tbl-empty" colspan="6">No runs yet — launch a scraper from its Lab.</td></tr>
+      <tr class="tbl-empty-row"><td class="tbl-empty" colspan="11">No runs yet — launch a scraper from its Lab.</td></tr>
       {% endfor %}
     </tbody>
   </table>

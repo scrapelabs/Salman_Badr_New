@@ -294,16 +294,30 @@ def _recent_runs():
     return runs
 
 
+def _run_window_label(run):
+    """"YYYY-MM-DD → YYYY-MM-DD" window string, or "" for a full-history run."""
+    if not run.date_from:
+        return ""
+    start = run.date_from.strftime("%Y-%m-%d")
+    end = run.date_to.strftime("%Y-%m-%d") if run.date_to else ""
+    return f"{start} → {end}"
+
+
 def _run_brief(run):
     return {
         "slug": run.scraper.slug,
         "code": run.scraper.code,
         "name": run.scraper.name,
+        "short_id": run.short_id,
         "status": run.status,
         "status_label": run.get_status_display(),
         "state": _run_status_state(run),
         "started_human": f"{timesince(run.started_at)} ago",
+        "finished_human": f"{timesince(run.finished_at)} ago" if run.finished_at else "",
+        "tournament": run.tournament or "—",
+        "window": _run_window_label(run),
         "rows": run.row_count,
+        "size_label": run.size_label,
         "duration_label": run.duration_label,
         "log_url": reverse("run_log", args=[run.scraper.slug, run.uuid]),
         "detail_url": f"{reverse('scraper_detail', args=[run.scraper.slug])}?tab=batch",

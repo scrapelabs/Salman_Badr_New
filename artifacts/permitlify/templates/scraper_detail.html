@@ -626,6 +626,7 @@
           <th class="th-check"><input type="checkbox" id="selAll" aria-label="Select all runs on this page" /></th>
           <th>Run</th>
           <th>Started</th>
+          <th>Finished</th>
           <th>Tournament</th>
           <th>Window</th>
           <th>Status</th>
@@ -641,6 +642,7 @@
           <td class="td-check">{% if not run.is_running %}<input type="checkbox" class="run-check" name="run_uuids" value="{{ run.uuid }}" form="bulkDeleteForm" aria-label="Select run #{{ run.short_id }}" />{% endif %}</td>
           <td><span class="run-id">#{{ run.short_id }}</span></td>
           <td class="nowrap">{{ run.started_at|date:"M j, Y · H:i" }}</td>
+          <td class="nowrap">{% if run.finished_at %}{{ run.finished_at|date:"M j, Y · H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
           <td>{{ run.tournament }}</td>
           <td class="run-window">{% if run.date_from %}{{ run.date_from|date:"Y-m-d" }} → {{ run.date_to|date:"Y-m-d" }}{% else %}<span class="muted">full history</span>{% endif %}</td>
           <td><span class="run-status {{ run.status }}">{{ run.get_status_display }}</span></td>
@@ -700,7 +702,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="10" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
+        <tr><td colspan="11" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
         {% endfor %}
       </tbody>
     </table>

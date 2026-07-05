@@ -97,10 +97,15 @@
         '<tr data-href="' + esc(r.detail_url) + '">' +
           '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
             '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
+          '<td><span class="run-id">#' + esc(r.short_id) + "</span></td>" +
+          '<td class="nowrap">' + esc(r.started_human) + "</td>" +
+          '<td class="nowrap">' + (r.finished_human ? esc(r.finished_human) : '<span class="muted">—</span>') + "</td>" +
+          "<td>" + esc(r.tournament) + "</td>" +
+          '<td class="run-window">' + (r.window ? esc(r.window) : '<span class="muted">full history</span>') + "</td>" +
           '<td><span class="run-badge run-st-' + esc(r.state) + '">' + esc(r.status_label) + "</span></td>" +
-          "<td>" + esc(r.started_human) + "</td>" +
-          "<td>" + esc(r.rows) + "</td>" +
-          "<td>" + esc(r.duration_label) + "</td>" +
+          '<td class="num">' + esc(r.rows) + "</td>" +
+          '<td class="num nowrap">' + esc(r.size_label) + "</td>" +
+          '<td class="num nowrap">' + esc(r.duration_label) + "</td>" +
           '<td class="td-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.log_url) + '">Open log</a></td>' +
         "</tr>"
       );
@@ -117,7 +122,7 @@
       var runs = recentAll || [];
       var total = runs.length;
       if (!total) {
-        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="6">No runs yet — launch a scraper from its Lab.</td></tr>';
+        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="11">No runs yet — launch a scraper from its Lab.</td></tr>';
         if (pager) pager.hidden = true;
         return;
       }
