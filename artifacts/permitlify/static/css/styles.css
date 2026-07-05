@@ -637,7 +637,7 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   cursor: pointer;
   width: 240px;
   max-width: 240px;
-  padding: 0;
+  padding: 0 0 0 8px;
   outline: none;
 }
 .scraper-jump:focus-within {
@@ -647,6 +647,7 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
 .scraper-jump-select option {
   color: var(--app-text-1);
   background: var(--app-surface);
+  padding: 8px 12px;
 }
 .sr-only {
   position: absolute;

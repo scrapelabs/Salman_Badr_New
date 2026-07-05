@@ -329,7 +329,7 @@ class _MatchParser:
     # ---------- per-row extraction ----------
     def _players_in_row(self, li_sel):
         players = []
-        for ac in li_sel.xpath('./div[@class="avatar-container"]'):
+        for ac in li_sel.xpath('.//div[contains(@class,"avatar-container")]'):
             player_name = (
                 self._join_text(ac.xpath('./span[@class="avatar-info"]/a'))
                 or self._join_text(ac.xpath("./a"))
@@ -511,6 +511,10 @@ class _MatchParser:
                 winners, losers = row_b_players, row_a_players
                 winner_sets, loser_sets = row_b_sets, row_a_sets
 
+            draw_team_type = self.draw_team_type
+            if not draw_team_type:
+                draw_team_type = "Doubles" if len(winners) >= 2 or len(losers) >= 2 else "Singles"
+
             score = self._build_score(winner_sets, loser_sets, outcome)
             # Per-player gender is inferred from each player's name via Claude
             # (cached); the draw_gender field below still reflects the Portuguese
@@ -551,7 +555,7 @@ class _MatchParser:
                 "id_type": self.ID_TYPE,
                 "draw_bracket_value": self.draw_bracket_value,
                 "draw_name": self.draw_name,
-                "draw_team_type": self.draw_team_type,
+                "draw_team_type": draw_team_type,
                 "tournament_name": self.tournament_name,
                 "date": date,
                 "round": round_,
@@ -739,6 +743,7 @@ def _parse_category(client, tournament_url, sel, claude_keys=None):
     nr_rodada = _field(sel, '//select[@id="round-selector"]/option[1]/@value')
     id_torneio = _field(sel, '//input[@name="id_torneio"]/@value')
     id_categoria_ant = _field(sel, '//input[@name="id_categoria_ant"]/@value')
+    panel_url = f"{PAINEL_URL}/index/{id_torneio}" if id_torneio else PAINEL_URL
 
     headers = {"Referer": tournament_url}
     ajax_headers = {"Referer": tournament_url, "X-Requested-With": "XMLHttpRequest"}
@@ -759,14 +764,15 @@ def _parse_category(client, tournament_url, sel, claude_keys=None):
             if not id_categoria_ant:
                 data.pop("id_categoria_ant", None)
 
-            resp = client.post(PAINEL_URL, data=data, headers=headers)
+            resp = client.post(panel_url, data=data, headers=headers)
             if resp is None or not (200 <= resp.status_code < 300):
                 continue
             psel = Selector(text=resp.text)
             nr_rodadas = psel.xpath('//select[@id="round-selector"]/option/@value').getall()
             id_periodo = _field(psel, '//select[@id="id_periodo"]/option[@selected="selected"]/@value')
             nr_rodada = _field(psel, '//select[@id="round-selector"]/option[1]/@value')
-            id_torneio = _field(psel, '//input[@name="id_torneio"]/@value')
+            id_torneio = _field(psel, '//input[@name="id_torneio"]/@value') or id_torneio
+            panel_url = f"{PAINEL_URL}/index/{id_torneio}" if id_torneio else PAINEL_URL
             id_categoria_ant = _field(psel, '//input[@name="id_categoria_ant"]/@value')
 
             if nr_rodadas:
@@ -783,7 +789,7 @@ def _parse_category(client, tournament_url, sel, claude_keys=None):
                         data2.pop("nr_rodada", None)
                     if not id_categoria_ant:
                         data2.pop("id_categoria_ant", None)
-                    resp2 = client.post(PAINEL_URL, data=data2, headers=headers)
+                    resp2 = client.post(panel_url, data=data2, headers=headers)
                     if resp2 is not None and 200 <= resp2.status_code < 300:
                         out.extend(
                             _parse_games(
