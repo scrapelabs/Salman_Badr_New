@@ -119,15 +119,16 @@ class TSTournamentConfig:
     claude_country: bool = False
     # --- ranking-tab DOB mode ---------------------------------------------
     # Junior sites (Tennis Europe) hide DOB/YOB from both the profile head and
-    # the Biography tab, so per-profile DOB lookups come back empty. The
-    # production source instead walked the site-wide **ranking tab** up front
-    # (first ranking on ``{base}/ranking/`` → every "More" category list,
-    # 100 rows/page) and recorded each ranked player's ``1/1/<YOB>`` keyed by
-    # their profile GUID; match players were then joined against that registry.
-    # Setting ``ranking_dob`` reproduces that exactly: a pre-phase builds the
-    # GUID → DOB map and ``_parse_player`` reads DOB from it **only** (no
-    # profile/Biography fallback — unranked players keep a blank DOB, exactly
-    # like the source's registry miss).
+    # the Biography tab, so per-profile DOB lookups come back empty. The DOB
+    # instead comes from the site-wide **ranking tab**, walked up front: every
+    # ranking on ``{base}/ranking/`` → each ranking overview's per-category
+    # "More" links → each category's server-rendered ``ranking.aspx`` preview
+    # (see :func:`_ranking_dob_seed` — the full ``category.aspx`` lists are now
+    # client-side rendered). Each ranked player's ``1/1/<YOB>`` is recorded by
+    # profile GUID; match players are then joined against that registry.
+    # Setting ``ranking_dob`` turns this on: a pre-phase builds the GUID → DOB
+    # map and ``_parse_player`` reads DOB from it **only** (no profile/Biography
+    # fallback — unranked players keep a blank DOB, like a registry miss).
     ranking_dob: bool = False
     # COSAT's ranking lists a **full DOB**, not a YOB: its More links sit on
     # the ``/ranking/`` index itself, the profile link is in ``td[5]``
@@ -627,24 +628,66 @@ def _ranking_rows(sel, cfg):
 def _ranking_dob_seed(client, cfg, log):
     """Walk the ranking tab and seed the DOB registry (``ranking_dob`` mode).
 
-    Follows the source's traversal exactly: ``{base}/ranking/`` → every
-    ``More`` category list with ``&ps=100``. On COSAT the More links sit on
-    the index itself; on Tennis Europe the index only lists rankings, so when
-    none are found the seed hops to the **first** ranking's category page and
-    collects the More links there — each source's exact walk.
-    Parses each list's first page here and returns ``(dob_map, page_urls)``
-    where ``page_urls`` are the remaining paginated pages (``&p=2..N``, from
-    the ``page_caption`` result count / 100) still to fetch — the caller
-    fetches those concurrently and merges their rows into ``dob_map``.
+    Two site layouts are handled:
+
+    * **Tennis Europe** (``ranking_dob`` only): the ``{base}/ranking/`` index
+      lists rankings only, and the full ``category.aspx`` listings are now
+      client-side rendered (the server-side ``table.ruler`` is an empty shell —
+      zero profile links — so plain HTTP can't read them). Each ranking's
+      overview page (``ranking.aspx?rid=…``) still carries the per-category
+      ``More`` links, and the server-rendered top of every category is reachable
+      at ``ranking.aspx?id=<pub>&category=<cat>&ps=100`` (same rows, the preview
+      page — it ignores ``&p=N`` paging, so coverage is the ranked top of each
+      age category across every published ranking; unranked players keep a blank
+      DOB, exactly as before). Those per-category listing URLs are handed back in
+      ``page_urls`` for the caller to fetch + merge concurrently.
+    * **COSAT** (``ranking_dob_full_date``): the ``More`` links sit on the
+      ``/ranking/`` index itself and the ``category.aspx`` listings stay
+      server-rendered and paginated (``&ps=100`` + ``&p=2..N`` from the
+      ``page_caption`` result count / 100). First pages are parsed here; the
+      rest are returned in ``page_urls`` for concurrent fetching.
+
+    Returns ``(dob_map, page_urls)``.
     """
     index = cfg.base + "/ranking/"
     more_xpath = (
-        '//div[@id="content"]//table[@class="ruler"]//tr/th/a[text()="More"]/@href'
+        '//div[@id="content"]//table[@class="ruler"]//tr/th'
+        '/a[normalize-space(.)="More"]/@href'
     )
     dob_map, page_urls = {}, []
     sel = client.get_selector(index)
     if sel is None:
         return dob_map, page_urls
+
+    if not cfg.ranking_dob_full_date:
+        # Tennis Europe: enumerate every ranking, then read each ranking's
+        # per-category "More" links off its overview page and rewrite them to
+        # the server-rendered ranking.aspx preview (category.aspx is JS-only).
+        rid_hrefs = sel.xpath(
+            '//div[@id="content"]//table[@class="ruler"]//td/h5/a/@href'
+        ).getall()
+        seen = set()
+        for rid_href in rid_hrefs:
+            rid_sel = client.get_selector(urljoin(index, rid_href))
+            if rid_sel is None:
+                continue
+            for more in rid_sel.xpath(more_xpath).getall():
+                listing = more.strip().replace("category.aspx", "ranking.aspx")
+                listing = urljoin(
+                    index, listing + ("&" if "?" in listing else "?") + "ps=100"
+                )
+                if listing not in seen:
+                    seen.add(listing)
+                    page_urls.append(listing)
+        log(
+            "INFO",
+            f"\U0001f4c7 Ranking tab: {len(rid_hrefs)} ranking(s), "
+            f"{len(page_urls)} category listing(s) to fetch",
+        )
+        return dob_map, page_urls
+
+    # COSAT (ranking_dob_full_date): More links on the index; server-rendered
+    # paginated category.aspx listings.
     mores = sel.xpath(more_xpath).getall()
     if not mores:
         cat_href = _field(
