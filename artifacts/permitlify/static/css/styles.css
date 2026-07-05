@@ -601,7 +601,8 @@ html[data-theme="dark"] .theme-toggle .lbl-to-light {
   display: inline-flex;
   align-items: center;
   height: 34px;
-  padding: 0 30px 0 40px;
+  margin-left: 22px;
+  padding: 0 30px 0 38px;
   border: 1px solid var(--app-border-2);
   background: var(--app-surface);
   border-radius: 9px;
@@ -3031,10 +3032,27 @@ body.qa-modal-open { overflow: hidden; }
 .qa-modal-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .qa-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .qa-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--app-border); }
-/* Desktop: let the wide (ticket) modals fill the content area right up to the left sidebar */
+/* Desktop: let the wide (ticket) modals fill the content area right up to the
+   left sidebar, and stretch top-to-bottom with a scrolling body. */
 @media (min-width: 861px) {
   .qa-modal--wide { left: 248px; }
-  .qa-modal--wide .qa-modal-card { width: 100%; }
+  .qa-modal--wide .qa-modal-card {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .qa-modal--wide .qa-modal-card > form {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .qa-modal--wide .qa-modal-head,
+  .qa-modal--wide .qa-modal-foot { flex: 0 0 auto; }
+  .qa-modal--wide .qa-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 }
 
 /* --- global confirm dialog (replaces native confirm()) --- */
