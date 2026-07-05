@@ -61,3 +61,14 @@ check for a 404 on the model id first.
 latency compounds it). Verify `resolve_gender` + the draw_gender branches with a
 short shell probe (unit-style), and drive a single discovered **tournament** through
 `_discover_range`→`_list_players`→`_parse_player_matches` for a real end-to-end check.
+
+**Diagnosing a user-attached run log (which code version produced it?):** when
+`claude_gender=True` the engine's startup MUST emit exactly one of three lines right
+after the "Concurrency"/HTTP-client header and before "phase 1": `🧠 Gender: Claude
+name inference enabled` (key present), `⚠️ … falling back to draw-name gender only`
+(soft, no key), or a hard honest-fail `Anthropic API key required`. If a user's run
+log shows **none** of them yet still produced rows with all-blank gender, that run
+executed **pre-`claude_gender` code** — i.e. a stale local checkout, not a live bug.
+The local Windows scrape `.bat`s do NOT `git pull` (only `0_setup.bat` does), so a
+user can run old scraper code after a fix has already landed; tell them to pull +
+re-run rather than re-fixing working code.
