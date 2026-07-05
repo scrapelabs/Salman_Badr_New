@@ -11,11 +11,11 @@ Like the production source, this scraper is **Claude-dependent for gender**
 (``claude_gender`` + ``claude_gender_required``): junior draw names ("BS14",
 "GS16") carry no reliable gender word, so each player's gender is inferred from
 their name via Claude — no key means the run fails honestly and asks for one,
-matching the Finland / Estonia contract. DOB comes from the site-wide **ranking
-tab** (``ranking_dob``): junior profiles hide DOB/YOB, so a pre-phase walks the
-Tennis Europe Ranking's category lists and joins each match player to the
-recorded ``1/1/<YOB>`` by profile GUID, exactly like the source's player
-registry (unranked players keep a blank DOB — no fallback).
+matching the Finland / Estonia contract. DOB comes from each player's
+**Biography tab** (``biography_dob``): the profile head hides DOB/YOB for
+juniors, but the Biography tab lists a "Year of birth" for **every** player
+(ranked or not), recorded as ``1/1/<YOB>``. It is read lazily and cached per
+run by profile GUID so each player's biography is fetched at most once.
 ``run(run_obj, log)`` returns
 ``(items_csv, requests_csv, errors_csv, row_count, status)``.
 """
@@ -33,7 +33,7 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     org_label="Tennis Europe",
     claude_gender=True,
     claude_gender_required=True,
-    ranking_dob=True,
+    biography_dob=True,
     guid_third_party_id=True,
 )
 

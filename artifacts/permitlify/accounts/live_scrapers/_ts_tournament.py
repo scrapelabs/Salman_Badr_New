@@ -118,17 +118,20 @@ class TSTournamentConfig:
     # fails up front without one, like ``claude_gender_required``).
     claude_country: bool = False
     # --- ranking-tab DOB mode ---------------------------------------------
-    # Junior sites (Tennis Europe) hide DOB/YOB from both the profile head and
-    # the Biography tab, so per-profile DOB lookups come back empty. The DOB
-    # instead comes from the site-wide **ranking tab**, walked up front: every
-    # ranking on ``{base}/ranking/`` → each ranking overview's per-category
+    # Some sites expose DOB via the site-wide **ranking tab**, walked up front:
+    # every ranking on ``{base}/ranking/`` → each ranking overview's per-category
     # "More" links → each category's server-rendered ``ranking.aspx`` preview
-    # (see :func:`_ranking_dob_seed` — the full ``category.aspx`` lists are now
-    # client-side rendered). Each ranked player's ``1/1/<YOB>`` is recorded by
-    # profile GUID; match players are then joined against that registry.
-    # Setting ``ranking_dob`` turns this on: a pre-phase builds the GUID → DOB
-    # map and ``_parse_player`` reads DOB from it **only** (no profile/Biography
-    # fallback — unranked players keep a blank DOB, like a registry miss).
+    # (see :func:`_ranking_dob_seed`). Each ranked player's DOB is recorded by
+    # profile GUID and match players are joined against that registry
+    # (``_parse_player`` reads it **only**, no profile/Biography fallback).
+    # Setting ``ranking_dob`` turns this on. **Only COSAT uses it today**, always
+    # paired with ``ranking_dob_full_date`` below (its ranking carries a full
+    # date). Tennis Europe used the bare year-only ``ranking_dob`` branch but
+    # moved to ``biography_dob``: TE's ``/ranking/`` has TWO listings — a singles
+    # one with a "Year of birth" column and a doubles one WITHOUT (points in the
+    # same slot) — so the bare reader recorded doubles points as birth years. Its
+    # Biography tab has YOB for every player, so that non-full-date reader path is
+    # now unused (kept only for the full-date COSAT layout).
     ranking_dob: bool = False
     # COSAT's ranking lists a **full DOB**, not a YOB: its More links sit on
     # the ``/ranking/`` index itself, the profile link is in ``td[5]``
@@ -140,6 +143,16 @@ class TSTournamentConfig:
     # :func:`_ranking_rows` to that layout, normalising to ``MM/DD/YYYY`` —
     # the exact value the source's registry stored.
     ranking_dob_full_date: bool = False
+    # --- biography DOB mode -----------------------------------------------
+    # Tennis Europe juniors hide DOB/YOB from the profile head, but every
+    # player's **Biography tab** (``/player-profile/<GUID>/biography``) lists a
+    # "Year of birth" — for ranked AND unranked players alike. Setting
+    # ``biography_dob`` makes ``_parse_player`` read that YOB (as ``1/1/YYYY``)
+    # per player, lazily and cached per run by profile GUID (the shared
+    # ``dob_map``) so each unique player's biography is fetched at most once even
+    # though players recur across many matches. This gives full DOB coverage,
+    # unlike the ranked-only ``ranking_dob`` registry it replaced.
+    biography_dob: bool = False
     # --- GUID third-party id ---------------------------------------------
     # On some sites (Tennis Europe juniors, COSAT) the player subhead shows a
     # member-id ``media__title-aside`` (a national-federation id, e.g. COSAT's
@@ -794,7 +807,31 @@ def _parse_player(client, cfg, name, url, dob_map=None):
         third_party_id = _RE_PARENS.sub("", third_party_id).strip()
 
     dob = ""
-    if profile_href and cfg.ranking_dob:
+    if profile_href and cfg.biography_dob:
+        # Biography-tab DOB mode: the "Year of birth" on
+        # ``/player-profile/<GUID>/biography`` (→ ``1/1/YYYY``), present for
+        # ranked and unranked players alike. Cached per run by profile GUID
+        # (``dob_map``) so each unique player's biography — including a blank
+        # "" negative result — is fetched at most once despite players recurring
+        # across many matches.
+        guid = _guid_from_profile_url(profile_href).lower()
+        cache = dob_map if dob_map is not None else {}
+        if guid and guid in cache:
+            dob = cache[guid]
+        else:
+            bio_url = urljoin(cfg.base + "/", profile_href).rstrip("/") + "/biography"
+            bio_sel = client.get_selector(bio_url)
+            if bio_sel is not None:
+                dob = _parse_birth_year(bio_sel)
+                if cfg.dynamic_country and not country:
+                    country = _nat(bio_sel)
+                # Cache only a real fetch (incl. a genuine blank YOB). A failed
+                # fetch (bio_sel is None, after the client's retry budget) stays
+                # uncached so a later match for this player can retry, rather than
+                # permanently blanking their DOB from one transient failure.
+                if guid:
+                    cache[guid] = dob
+    elif profile_href and cfg.ranking_dob:
         # Ranking-tab DOB mode: join this player to the pre-built ranking
         # registry by profile GUID (the ``/player-profile/<guid>`` tail) and
         # take the ``1/1/YOB`` recorded there — the source's registry join,
@@ -1179,7 +1216,7 @@ def run(cfg, run_obj, log):
         player_url, ctx = item
         if claude_keys:
             ctx = {**ctx, "claude_keys": claude_keys}
-        if cfg.ranking_dob:
+        if cfg.ranking_dob or cfg.biography_dob:
             ctx = {**ctx, "dob_map": dob_map}
         try:
             rows = _parse_player_matches(client_for(), cfg, ctx, player_url)
