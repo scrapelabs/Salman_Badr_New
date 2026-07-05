@@ -13,6 +13,7 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     country="Luxembourg",
     country_code="LUX",
     sanction_body="Luxembourg",
+    discovery_lookback_days=30,
 )
 
 

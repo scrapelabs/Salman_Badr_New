@@ -42,7 +42,7 @@ import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from django.db.models import F
@@ -165,6 +165,10 @@ class TSTournamentConfig:
     # id is emitted upper-cased (the default). COSAT's profile URLs are
     # lower-case, so it sets this False to emit the GUID in the site's own case.
     guid_third_party_id_upper: bool = True
+    # Some TournamentSoftware hosts search by tournament start date only. For
+    # tournaments that start before the requested window but continue into it,
+    # discover from an earlier date and filter emitted rows by match date.
+    discovery_lookback_days: int = 0
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -1073,6 +1077,35 @@ def _window(run_obj):
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
+def _date_in_window(value, start_date, end_date):
+    """Whether a row date (MM/DD/YYYY) sits inside the requested YYYY-MM-DD window."""
+    if not value:
+        return True
+    try:
+        row_date = datetime.strptime(value, "%m/%d/%Y").date()
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    return start <= row_date <= end
+
+
+def _tournament_overlaps_window(tournament, start_date, end_date):
+    """Whether a discovered tournament's date range overlaps the requested window."""
+    t_start = tournament.get("tournament_start_date") or ""
+    t_end = tournament.get("tournament_end_date") or t_start
+    if not t_start:
+        return True
+    try:
+        tournament_start = datetime.strptime(t_start, "%m/%d/%Y").date()
+        tournament_end = datetime.strptime(t_end, "%m/%d/%Y").date()
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    return tournament_start <= end and tournament_end >= start
+
+
 def run(cfg, run_obj, log):
     """Execute one tournamentsoftware individual-tournament scrape.
 
@@ -1152,7 +1185,30 @@ def run(cfg, run_obj, log):
         if tournament_url:
             tournaments = _discover_one(discovery, cfg, tournament_url, log)
         else:
-            tournaments = _discover_range(discovery, cfg, start_date, end_date, log)
+            search_start = start_date
+            if cfg.discovery_lookback_days > 0:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+                search_start = (start_dt - timedelta(days=cfg.discovery_lookback_days)).strftime(
+                    "%Y-%m-%d"
+                )
+                log(
+                    "INFO",
+                    f"\U0001f50e Discovery lookback: searching {search_start} \u2192 {end_date} "
+                    f"and keeping rows dated {start_date} \u2192 {end_date}",
+                )
+            tournaments = _discover_range(discovery, cfg, search_start, end_date, log)
+            if cfg.discovery_lookback_days > 0:
+                before = len(tournaments)
+                tournaments = [
+                    t for t in tournaments if _tournament_overlaps_window(t, start_date, end_date)
+                ]
+                skipped = before - len(tournaments)
+                if skipped:
+                    log(
+                        "INFO",
+                        f"\U0001f9f9 Skipped {skipped} non-overlapping tournament(s) "
+                        "from the lookback discovery window",
+                    )
         if cfg.ranking_dob and tournaments:
             # ---- phase 1b · ranking-tab DOB registry (see TSTournamentConfig)
             log(
@@ -1221,6 +1277,12 @@ def run(cfg, run_obj, log):
         try:
             rows = _parse_player_matches(client_for(), cfg, ctx, player_url)
             for row in rows:
+                if (
+                    cfg.discovery_lookback_days > 0
+                    and not tournament_url
+                    and not _date_in_window(row.get("date", ""), start_date, end_date)
+                ):
+                    continue
                 # Each match is reachable from both players' pages, so dedupe on
                 # a content key without collapsing genuine rematches (same
                 # players/score in a different draw, round or date).
