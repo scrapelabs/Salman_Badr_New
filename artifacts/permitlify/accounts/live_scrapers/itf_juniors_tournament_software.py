@@ -388,7 +388,16 @@ def _discover_range(client, start_str, end_str, log):
             data["LoadMoreResults"] = "LoadMoreResults"
 
         resp = client.post(SEARCH_URL, data=data, headers=headers)
-        if resp is None or not (200 <= resp.status_code < 300):
+        if resp is None:
+            log("WARN", "⚠️ ITF Juniors tournament finder returned no response")
+            break
+        if not (200 <= resp.status_code < 300):
+            tele = getattr(client, "tele", None)
+            if tele is not None:
+                tele.record_error(
+                    f"ITF Juniors tournament finder returned HTTP {resp.status_code}"
+                )
+            log("WARN", f"⚠️ ITF Juniors tournament finder returned HTTP {resp.status_code}")
             break
         sel = client.selector(resp)
 
@@ -988,7 +997,10 @@ def run(run_obj, log):
         "INFO",
         f"\U0001f4ca Telemetry: {tele.request_count} request(s), {tele.error_count} error(s)",
     )
-    status = Run.Status.SUCCESS if row_count else Run.Status.FAILED
+    clean_empty_discovery = not tournament_url and total == 0 and tele.error_count == 0
+    if clean_empty_discovery:
+        log("INFO", "No tournaments found in date window; treating as successful empty run")
+    status = Run.Status.SUCCESS if row_count or clean_empty_discovery else Run.Status.FAILED
     icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
     log("INFO", f"{icon} Run finished \u2014 status={status}, rows={row_count}")
     items_csv = buf.getvalue() if row_count else ""
