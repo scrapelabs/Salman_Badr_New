@@ -237,10 +237,9 @@ def _resolve_keys(run_obj, scraper, log):
     """Return the ordered list of keys to actually process this run.
 
     ``run_all`` walks the ENTIRE queue and processes every key that isn't
-    already done — in a single run, with no per-run key cap. Otherwise the
-    pasted keys are upserted into the queue and processed. In both modes a key
-    that's already marked ``done`` is skipped (and logged) so it isn't
-    re-scraped.
+    already done — in a single run, with no per-run key cap. Explicitly pasted
+    keys are always re-scraped, even when already marked ``done``; the operator
+    asked for those keys and expects a fresh CSV, not a successful empty no-op.
     """
     params = run_obj.params or {}
 
@@ -265,28 +264,21 @@ def _resolve_keys(run_obj, scraper, log):
         )
         return todo
 
-    # Explicit paste: upsert each key, skip any that are already done.
+    # Explicit paste: upsert each key and process it even when already done.
     pasted = list(dict.fromkeys(params.get("keys") or []))[:KEY_BATCH_MAX_KEYS]
     todo = []
-    skipped = 0
     for k in pasted:
-        obj, _ = SAKey.objects.get_or_create(
+        obj, created = SAKey.objects.get_or_create(
             tournament_key=k, defaults={"scraper": scraper}
         )
-        if obj.status == SAKey.Status.DONE:
-            skipped += 1
+        if not created and obj.status == SAKey.Status.DONE:
             log(
                 "INFO",
-                f"\u23ed\ufe0f {k} already processed "
-                f"({obj.num_results or 0} result(s)) \u2014 skipping.",
+                f"\U0001f501 {k} already processed "
+                f"({obj.num_results or 0} result(s)) \u2014 re-scraping because it was explicitly requested.",
             )
-            continue
         todo.append(k)
-    log(
-        "INFO",
-        f"\U0001f4cb Pasted keys: {len(todo)} to process"
-        + (f", {skipped} already done (skipped)." if skipped else "."),
-    )
+    log("INFO", f"\U0001f4cb Pasted keys: {len(todo)} to process.")
     return todo
 
 
@@ -350,6 +342,23 @@ def run(run_obj, log):
                 continue
 
             results = data.get("data") or []
+            if not results:
+                keys_failed += 1
+                msg = f"Key {key}: API returned success but no result rows"
+                tele.record_error(msg)
+                log("WARN", f"   \u2717 {key} \u2014 no result rows")
+                SAKey.objects.filter(tournament_key=key).update(
+                    scraper=scraper,
+                    status=SAKey.Status.FAILED,
+                    num_results=0,
+                    last_run=run_obj,
+                    scraped_at=now,
+                )
+                Run.objects.filter(pk=run_obj.pk).update(
+                    progress_done=F("progress_done") + 1
+                )
+                continue
+
             written = 0
             for result in results:
                 try:
