@@ -753,6 +753,28 @@ class ScraperSchedule(models.Model):
         (5, "Saturday"),
         (6, "Sunday"),
     ]
+    ITF_SCHEDULE_SLUGS = frozenset(
+        {
+            "itf_juniors_tournament_software",
+            "itftennis_womens",
+            "itftennis_mens",
+            "itftennis_masters",
+            "itftennis_juniors",
+        }
+    )
+    ITF_LOOKBACK_DEFAULT_DAYS = 15
+    ITF_LOOKBACK_CHOICES = [(days, f"{days} days") for days in range(5, 50, 5)]
+    ITF_LOOKBACK_VALUES = frozenset(days for days, _label in ITF_LOOKBACK_CHOICES)
+
+    @classmethod
+    def normalize_itf_lookback_days(cls, value):
+        try:
+            days = int(value)
+        except (TypeError, ValueError):
+            return cls.ITF_LOOKBACK_DEFAULT_DAYS
+        if days not in cls.ITF_LOOKBACK_VALUES:
+            return cls.ITF_LOOKBACK_DEFAULT_DAYS
+        return days
 
     scraper = models.OneToOneField(
         Scraper, on_delete=models.CASCADE, related_name="schedule"
@@ -766,6 +788,11 @@ class ScraperSchedule(models.Model):
     weekday = models.PositiveSmallIntegerField(default=0)
     # Used by the monthly cadence (clamped to the month's length at compute time).
     day_of_month = models.PositiveSmallIntegerField(default=1)
+    # ITF-only rolling date window for scheduled itftennis_* runs.
+    itf_lookback_days = models.PositiveSmallIntegerField(
+        choices=ITF_LOOKBACK_CHOICES,
+        default=ITF_LOOKBACK_DEFAULT_DAYS,
+    )
     timezone = models.CharField(max_length=64, default="UTC")
     # Fortnight parity anchor for the biweekly cadence (the first scheduled local
     # date); recomputed on every save of a biweekly schedule, else NULL.

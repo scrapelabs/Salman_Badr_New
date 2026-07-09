@@ -219,7 +219,8 @@ def _launch(scraper, sched_pk, due_at=None):
     # Re-check the schedule is still enabled: the user may have turned it off
     # between this cycle's claim/advance and now, so honour that immediately
     # rather than firing one last already-claimed run.
-    if not ScraperSchedule.objects.filter(pk=sched_pk, enabled=True).exists():
+    schedule = ScraperSchedule.objects.filter(pk=sched_pk, enabled=True).first()
+    if schedule is None:
         logger.info("Scheduled run for %s skipped: schedule disabled.", scraper.slug)
         record(
             Outcome.SKIPPED_DISABLED,
@@ -229,7 +230,14 @@ def _launch(scraper, sched_pk, due_at=None):
 
     try:
         spec = registry.spec_for(scraper.slug)
-        inputs = validate_run_params(spec, {}, webhook=True)
+        run_data = {}
+        if scraper.slug in ScraperSchedule.ITF_SCHEDULE_SLUGS:
+            run_data["bi_weekly_days"] = str(
+                ScraperSchedule.normalize_itf_lookback_days(
+                    schedule.itf_lookback_days
+                )
+            )
+        inputs = validate_run_params(spec, run_data, webhook=True)
         # Unified path: enqueue the job, then pump the dispatcher. It promotes to
         # RUNNING immediately if capacity allows, otherwise the job waits in the
         # per-scraper queue and starts automatically once a slot frees up.

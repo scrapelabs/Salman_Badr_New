@@ -1355,9 +1355,20 @@
             <input class="rt-input" id="schedTime" type="time" name="time_of_day" value="{{ schedule_time_value }}" required />
           </div>
 
+          {% if show_itf_lookback %}
+          <div class="rt-field sched-itf-lookback">
+            <label class="field-label" for="schedItfLookback">ITF lookback</label>
+            <select class="rt-input" id="schedItfLookback" name="itf_lookback_days">
+              {% for value, label in itf_lookback_choices %}
+              <option value="{{ value }}" {% if schedule.itf_lookback_days == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
           <div class="rt-field sched-weekday" {% if schedule.frequency != 'weekly' and schedule.frequency != 'biweekly' %}hidden{% endif %}>
             <label class="field-label" for="schedWeekday">Day of week</label>
-            <select class="rt-input" id="schedWeekday" name="weekday">
+            <select class="rt-input" id="schedWeekday" name="weekday" {% if schedule.frequency != 'weekly' and schedule.frequency != 'biweekly' %}disabled{% endif %}>
               {% for value, label in weekday_choices %}
               <option value="{{ value }}" {% if schedule.weekday == value %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -1366,7 +1377,7 @@
 
           <div class="rt-field sched-dom" {% if schedule.frequency != 'monthly' %}hidden{% endif %}>
             <label class="field-label" for="schedDom">Day of month</label>
-            <select class="rt-input" id="schedDom" name="day_of_month">
+            <select class="rt-input" id="schedDom" name="day_of_month" {% if schedule.frequency != 'monthly' %}disabled{% endif %}>
               {% for d in dom_choices %}
               <option value="{{ d }}" {% if schedule.day_of_month == d %}selected{% endif %}>{{ d }}</option>
               {% endfor %}
@@ -1417,6 +1428,8 @@
       if (!freq) return;
       var wk = document.querySelector('.sched-weekday');
       var dom = document.querySelector('.sched-dom');
+      var wkSelect = document.getElementById('schedWeekday');
+      var domSelect = document.getElementById('schedDom');
       var domNote = document.querySelector('.sched-dom-note');
       function sync() {
         var v = freq.value;
@@ -1424,6 +1437,8 @@
         var showDom = (v === 'monthly');
         if (wk) wk.hidden = !showWk;
         if (dom) dom.hidden = !showDom;
+        if (wkSelect) wkSelect.disabled = !showWk;
+        if (domSelect) domSelect.disabled = !showDom;
         if (domNote) domNote.hidden = !showDom;
       }
       freq.addEventListener('change', sync);

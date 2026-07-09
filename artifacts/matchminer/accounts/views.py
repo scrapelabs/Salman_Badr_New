@@ -1216,6 +1216,10 @@ def scraper_detail_view(request, slug):
             sched.weekday = weekday
             sched.day_of_month = day_of_month
             sched.timezone = tz_name
+            if s.slug in ScraperSchedule.ITF_SCHEDULE_SLUGS:
+                sched.itf_lookback_days = ScraperSchedule.normalize_itf_lookback_days(
+                    request.POST.get("itf_lookback_days")
+                )
 
             if enabled:
                 now = timezone.now()
@@ -1486,6 +1490,8 @@ def scraper_detail_view(request, slug):
         ctx["weekday_choices"] = ScraperSchedule.WEEKDAYS
         ctx["dom_choices"] = list(range(1, 32))
         ctx["tz_choices"] = SCHEDULE_TIMEZONES
+        ctx["show_itf_lookback"] = s.slug in ScraperSchedule.ITF_SCHEDULE_SLUGS
+        ctx["itf_lookback_choices"] = ScraperSchedule.ITF_LOOKBACK_CHOICES
         ctx["schedule_time_value"] = sched.time_of_day.strftime("%H:%M")
         ctx["next_run_local"] = (
             sched.next_run_at.astimezone(scheduling.get_zone(sched.timezone))
