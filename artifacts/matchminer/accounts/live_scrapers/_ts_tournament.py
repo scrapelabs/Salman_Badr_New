@@ -43,7 +43,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse, urldefrag
 
 from django.db.models import F
 from django.utils import timezone
@@ -177,6 +177,9 @@ class TSTournamentConfig:
     # Used for federations whose TournamentSoftware search mixes tennis with
     # other racket sports (e.g. Luxembourg padel events).
     exclude_name_terms: tuple = ()
+    # Opt-in discovery for TournamentSoftware team-event pages linked from
+    # tournament/draw pages. Default-off to avoid changing other wrappers.
+    discover_team_matches: bool = False
 
 
 # Items CSV columns — the same ITF item schema used across MatchMiner scrapers
@@ -491,6 +494,120 @@ def _discover_range(client, cfg, start_date, end_date, log):
 def _is_team_match_url(url):
     """Whether a supplied TournamentSoftware URL points at a team-match page."""
     return urlparse(url or "").path.lower().endswith("/sport/teammatch.aspx")
+
+
+def _is_draw_url(url):
+    """Whether a TournamentSoftware URL points at a legacy draw page."""
+    return urlparse(url or "").path.lower().endswith("/sport/draw.aspx")
+
+
+def _normalize_ts_anchor_url(cfg, page_url, href):
+    """Normalize TournamentSoftware sport-page anchors to absolute URLs."""
+    href = (href or "").strip()
+    if not href:
+        return ""
+    lower = href.lower()
+    if lower.startswith(("teammatch.aspx", "draw.aspx")):
+        href = "/sport/" + href
+    elif lower.startswith(("./teammatch.aspx", "./draw.aspx")):
+        href = "/sport/" + href[2:]
+    elif lower.startswith("sport/"):
+        href = "/" + href
+    return urldefrag(urljoin(page_url or (cfg.base + "/"), href))[0]
+
+
+def _url_dedupe_key(url):
+    """Stable key for URL de-duplication while preserving the first URL seen."""
+    parts = urlparse(url or "")
+    return (
+        parts.scheme.lower(),
+        parts.netloc.lower(),
+        parts.path.rstrip("/").lower(),
+        tuple(sorted(parse_qsl(parts.query, keep_blank_values=True))),
+    )
+
+
+def _same_team_match_scope(match_url, cfg, tournament):
+    """Whether a discovered team-match URL belongs to this host/tournament."""
+    parts = urlparse(match_url or "")
+    base_parts = urlparse(cfg.base or "")
+    if parts.netloc and base_parts.netloc and parts.netloc.lower() != base_parts.netloc.lower():
+        return False
+    tournament_id = (tournament.get("tournament_id") or "").strip().lower()
+    if not tournament_id:
+        return True
+    match_tournament_id = parse_qs(parts.query).get("id", [""])[0].strip().lower()
+    return bool(match_tournament_id) and match_tournament_id == tournament_id
+
+
+def _discover_team_match_items(client, cfg, tournament):
+    """Return ``[(match_url, ctx)]`` for team matches linked by one tournament."""
+    tournament_url = tournament.get("tournament_url", "")
+    if not tournament_url:
+        return []
+    sel = client.get_selector(tournament_url)
+    if sel is None:
+        return []
+
+    ctx = {
+        "tournament_name": tournament.get("tournament_name", ""),
+        "tournament_url": tournament_url,
+        "tournament_start_date": tournament.get("tournament_start_date", ""),
+        "tournament_end_date": tournament.get("tournament_end_date", ""),
+        "tournament_city": tournament.get("tournament_city", ""),
+        "tournament_country": tournament.get("tournament_country", ""),
+    }
+    items = []
+    seen_matches = set()
+    seen_draws = set()
+    draw_urls = []
+
+    def add_match(href, page_url):
+        match_url = _normalize_ts_anchor_url(cfg, page_url, href)
+        if not _is_team_match_url(match_url):
+            return
+        if not _same_team_match_scope(match_url, cfg, tournament):
+            return
+        key = _url_dedupe_key(match_url)
+        if key in seen_matches:
+            return
+        seen_matches.add(key)
+        items.append((match_url, ctx))
+
+    def add_draw(href, page_url):
+        draw_url = _normalize_ts_anchor_url(cfg, page_url, href)
+        if not _is_draw_url(draw_url):
+            return
+        key = _url_dedupe_key(draw_url)
+        if key in seen_draws:
+            return
+        seen_draws.add(key)
+        draw_urls.append(draw_url)
+
+    for href in sel.xpath("//a/@href").getall():
+        add_match(href, tournament_url)
+        add_draw(href, tournament_url)
+
+    for draw_url in draw_urls:
+        draw_sel = client.get_selector(draw_url)
+        if draw_sel is None:
+            continue
+        for href in draw_sel.xpath("//a/@href").getall():
+            add_match(href, draw_url)
+    return items
+
+
+def _dedupe_team_match_items(items):
+    """De-dupe team-match work across all discovered tournaments."""
+    deduped = []
+    seen = set()
+    for match_url, ctx in items:
+        key = _url_dedupe_key(match_url)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append((match_url, ctx))
+    return deduped
 
 
 def _filter_tournaments(cfg, tournaments, log):
@@ -1647,6 +1764,18 @@ def run(cfg, run_obj, log):
             )
             return []
 
+    def list_team_matches(tournament):
+        try:
+            return _discover_team_match_items(client_for(), cfg, tournament)
+        except Exception as exc:  # noqa: BLE001 - a bad tournament can't kill the run
+            tele.record_error(
+                redact_secrets(
+                    f"Discover team matches {tournament.get('tournament_url', '')} failed: {exc}"
+                ),
+                exc=exc,
+            )
+            return []
+
     rank_lock = threading.Lock()
 
     def rank_one(url):
@@ -1713,6 +1842,12 @@ def run(cfg, run_obj, log):
         try:
             rows = _parse_team_match_page(client_for(), cfg, ctx, match_url)
             for row in rows:
+                if (
+                    not direct_team_match_url
+                    and not tournament_url
+                    and not _date_in_window(row.get("date", ""), start_date, end_date)
+                ):
+                    continue
                 if not write_row(row):
                     continue
                 log(
@@ -1769,10 +1904,22 @@ def run(cfg, run_obj, log):
                     "INFO",
                     "\u2500\u2500\u2500\u2500 phase 2 \u00b7 listing entrants \u2500\u2500\u2500\u2500",
                 )
+                team_work = []
+                if cfg.discover_team_matches:
+                    log(
+                        "INFO",
+                        "──── phase 2a · mapping team-matches ────",
+                    )
+                    nested_team = executor.map(list_team_matches, tournaments)
+                    team_work = _dedupe_team_match_items(
+                        item for sub in nested_team for item in sub
+                    )
+                    log("INFO", f"🗺️ {len(team_work)} team-match(es) to scrape")
+
                 nested = executor.map(list_one, tournaments)
                 work = [item for sub in nested for item in sub]
                 Run.objects.filter(pk=run_obj.pk).update(
-                    progress_total=len(work), progress_done=0
+                    progress_total=len(work) + len(team_work), progress_done=0
                 )
                 log("INFO", f"\U0001f5fa\ufe0f {len(work)} entrant(s) to scrape")
 
@@ -1783,6 +1930,12 @@ def run(cfg, run_obj, log):
                         "\u2500\u2500\u2500\u2500 phase 3 \u00b7 scraping matches \u2500\u2500\u2500\u2500",
                     )
                     list(executor.map(crawl_one, work))
+                if team_work:
+                    log(
+                        "INFO",
+                        "──── phase 3b · scraping team-matches ────",
+                    )
+                    list(executor.map(crawl_team_match, team_work))
     finally:
         for cli in clients:
             cli.close()

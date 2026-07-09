@@ -2,8 +2,9 @@
 title: 'Fix QA ticket 767cfc55 Tennis Europe team events'
 type: 'bugfix'
 created: '2026-07-09'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: '65f3c4f674f529166ba8f135bc30c99f664416b8'
 context: []
 ---
 
@@ -45,10 +46,10 @@ context: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `artifacts/matchminer/accounts/tests/test_ts_tournament.py` -- Add failing-first coverage for opt-in date-range/single-tournament team-match discovery and run integration -- Ensures the ticket failure cannot recur silently.
-- [ ] `artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py` -- Add a default-off config flag and helper(s) that enumerate team-match URLs from tournament/draw pages, dedupe links, and return `(match_url, ctx)` work items -- Keeps behavior narrow and reusable.
-- [ ] `artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py` -- Integrate discovered team-match work into the non-direct run path, parse via `_parse_team_match_page`, share Claude/DOB context, update progress totals, and apply date-window filtering where applicable -- Fixes the actual missing rows without bypassing existing parsing.
-- [ ] `artifacts/matchminer/accounts/live_scrapers/tennis_europe.py` -- Enable the opt-in flag for Tennis Europe only -- Limits blast radius to the reported scraper.
+- [x] `artifacts/matchminer/accounts/tests/test_ts_tournament.py` -- Add failing-first coverage for opt-in date-range/single-tournament team-match discovery and run integration -- Ensures the ticket failure cannot recur silently.
+- [x] `artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py` -- Add a default-off config flag and helper(s) that enumerate team-match URLs from tournament/draw pages, dedupe links, and return `(match_url, ctx)` work items -- Keeps behavior narrow and reusable.
+- [x] `artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py` -- Integrate discovered team-match work into the non-direct run path, parse via `_parse_team_match_page`, share Claude/DOB context, update progress totals, and apply date-window filtering where applicable -- Fixes the actual missing rows without bypassing existing parsing.
+- [x] `artifacts/matchminer/accounts/live_scrapers/tennis_europe.py` -- Enable the opt-in flag for Tennis Europe only -- Limits blast radius to the reported scraper.
 
 **Acceptance Criteria:**
 - Given a Tennis Europe date-range run discovers a tournament/draw page containing `teammatch.aspx` links, when the scraper runs, then matching team-match rows are written to the items CSV.
@@ -69,3 +70,40 @@ Use a narrow flag such as `discover_team_matches` rather than broadening all Tou
 **Commands:**
 - `python manage.py test accounts.tests.test_ts_tournament --keepdb` -- expected: targeted TournamentSoftware tests pass, including new red/green team-event regression.
 - `python manage.py test --keepdb` -- expected: full Django test suite passes.
+
+## Suggested Review Order
+
+**Design entry point**
+
+- Start with the default-off switch that limits blast radius.
+  [`_ts_tournament.py:182`](../../artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py#L182)
+
+- Tennis Europe is the only wrapper opting into team-match discovery.
+  [`tennis_europe.py:38`](../../artifacts/matchminer/accounts/live_scrapers/tennis_europe.py#L38)
+
+**Team-match discovery**
+
+- Scope guard prevents foreign host or tournament links using wrong context.
+  [`_ts_tournament.py:530`](../../artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py#L530)
+
+- Discovery collects direct and draw-linked team matches conservatively.
+  [`_ts_tournament.py:543`](../../artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py#L543)
+
+- Cross-tournament dedupe keeps progress and scraping work accurate.
+  [`_ts_tournament.py:600`](../../artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py#L600)
+
+**Run integration**
+
+- Team-match parsing reuses the existing direct URL pipeline.
+  [`_ts_tournament.py:1836`](../../artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py#L1836)
+
+- Non-direct runs map team matches before entrant scraping.
+  [`_ts_tournament.py:1908`](../../artifacts/matchminer/accounts/live_scrapers/_ts_tournament.py#L1908)
+
+**Regression coverage**
+
+- Date-range regression covers draw discovery, dedupe, and date filtering.
+  [`test_ts_tournament.py:398`](../../artifacts/matchminer/accounts/tests/test_ts_tournament.py#L398)
+
+- Single-tournament regression covers direct supplied tournament URLs.
+  [`test_ts_tournament.py:505`](../../artifacts/matchminer/accounts/tests/test_ts_tournament.py#L505)

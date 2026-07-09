@@ -1,3 +1,7 @@
+import csv
+import io
+from datetime import date
+from types import SimpleNamespace
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -13,6 +17,33 @@ class FakeSelectorClient:
     def get_selector(self, url):
         html = self.pages.get(url)
         return Selector(text=html) if html is not None else None
+
+
+class FakeResponse:
+    status_code = 200
+    text = ""
+
+
+class FakeScraperClient(FakeSelectorClient):
+    pages = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(self.pages)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
+    def close(self):
+        pass
+
+    def get(self, *args, **kwargs):
+        return FakeResponse()
+
+    def post(self, *args, **kwargs):
+        return FakeResponse()
 
 
 class TSTournamentDateWindowTests(SimpleTestCase):
@@ -364,6 +395,199 @@ class TSTournamentGenderOutputTests(SimpleTestCase):
 
 
 class TSTournamentTeamMatchTests(SimpleTestCase):
+    def test_opt_in_date_range_discovers_team_matches_from_tournament_and_draw_pages(self):
+        cfg = _ts_tournament.TSTournamentConfig(
+            label="Tennis Europe",
+            base="https://te.tournamentsoftware.com",
+            country="",
+            country_code="",
+            sanction_body="",
+            dynamic_country=True,
+            id_type_label="Europe",
+            org_label="Tennis Europe",
+        )
+        object.__setattr__(cfg, "discover_team_matches", True)
+        tournament_url = (
+            "https://te.tournamentsoftware.com/tournament/"
+            "E371BB26-50B1-461C-9ADF-A147ADBE272E"
+        )
+        draw_url = (
+            "https://te.tournamentsoftware.com/sport/draw.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&draw=1"
+        )
+        match_url = (
+            "https://te.tournamentsoftware.com/sport/teammatch.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&match=18"
+        )
+        outside_window_match_url = (
+            "https://te.tournamentsoftware.com/sport/teammatch.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&match=19"
+        )
+        FakeScraperClient.pages = {
+            tournament_url: f"""
+            <a href=\"/sport/teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=18\">Team match</a>
+            <a href=\"/sport/teammatch.aspx?id=FFFFFFFF-50B1-461C-9ADF-A147ADBE272E&amp;match=20\">Foreign tournament</a>
+            <a href=\"https://elsewhere.example/sport/teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=21\">Foreign host</a>
+            <a href=\"/sport/draw.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;draw=1\">Draw</a>
+            """,
+            draw_url: f"""
+            <a href=\"teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=18\">Duplicate team match</a>
+            <a href=\"teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=19\">Outside window</a>
+            """,
+        }
+        parse_calls = []
+
+        def fake_parse_team_match_page(client, cfg, ctx, url):
+            parse_calls.append(url)
+            return [
+                {
+                    "tournament_url": ctx.get("tournament_url", ""),
+                    "tournament_name": ctx.get("tournament_name", ""),
+                    "draw_name": "B14 - Main",
+                    "draw_team_type": "Singles",
+                    "round": "Final",
+                    "date": (
+                        "06/24/2026"
+                        if url == match_url
+                        else "07/05/2026"
+                    ),
+                    "score": "6-2, 6-4;",
+                    "winner_1_name": "Two, Winner",
+                    "loser_1_name": "One, Loser",
+                }
+            ]
+
+        run_obj = SimpleNamespace(
+            pk=123,
+            scraper=SimpleNamespace(worker_count=1),
+            params={},
+            date_from=date(2026, 6, 17),
+            date_to=date(2026, 7, 1),
+        )
+        progress_qs = mock.Mock()
+
+        with mock.patch.object(_ts_tournament, "ScraperClient", FakeScraperClient), \
+            mock.patch.object(_ts_tournament, "build_proxies", return_value={}), \
+            mock.patch.object(
+                _ts_tournament,
+                "_discover_range",
+                return_value=[
+                    {
+                        "tournament_id": "E371BB26-50B1-461C-9ADF-A147ADBE272E",
+                        "tournament_name": "Team Cup",
+                        "tournament_url": tournament_url,
+                        "tournament_start_date": "06/24/2026",
+                        "tournament_end_date": "07/05/2026",
+                        "tournament_city": "Paris",
+                        "tournament_country": "France",
+                    }
+                ],
+            ), \
+            mock.patch.object(
+                _ts_tournament,
+                "_parse_team_match_page",
+                side_effect=fake_parse_team_match_page,
+            ), \
+            mock.patch.object(
+                _ts_tournament.Run.objects, "filter", return_value=progress_qs
+            ):
+            items_csv, _requests_csv, _errors_csv, row_count, status = _ts_tournament.run(
+                cfg, run_obj, lambda *_args: None
+            )
+
+        rows = list(csv.DictReader(io.StringIO(items_csv)))
+        self.assertEqual(row_count, 1)
+        self.assertEqual(status, _ts_tournament.Run.Status.SUCCESS)
+        self.assertEqual(parse_calls, [match_url, outside_window_match_url])
+        self.assertEqual(rows[0]["Tournament Url"], tournament_url)
+        self.assertEqual(rows[0]["Date"], "06/24/2026")
+
+    def test_opt_in_single_tournament_url_discovers_team_matches_once(self):
+        cfg = _ts_tournament.TSTournamentConfig(
+            label="Tennis Europe",
+            base="https://te.tournamentsoftware.com",
+            country="",
+            country_code="",
+            sanction_body="",
+            dynamic_country=True,
+            id_type_label="Europe",
+            org_label="Tennis Europe",
+            discover_team_matches=True,
+        )
+        supplied_url = (
+            "https://te.tournamentsoftware.com/sport/tournament.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E"
+        )
+        tournament_url = (
+            "https://te.tournamentsoftware.com/tournament/"
+            "E371BB26-50B1-461C-9ADF-A147ADBE272E"
+        )
+        match_url = (
+            "https://te.tournamentsoftware.com/sport/teammatch.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&match=18"
+        )
+        FakeScraperClient.pages = {
+            supplied_url: f"""
+            <div class="page-head"><div class="media__content"><h2 class="media__title">
+              <span class="nav-link"><span class="nav-link__value">Team Cup</span></span>
+            </h2></div></div>
+            <ul class="page-nav"><li class="page-nav__item">
+              <a class="page-nav__link" href="/tournament/E371BB26-50B1-461C-9ADF-A147ADBE272E">Overview</a>
+            </li></ul>
+            """,
+            tournament_url: f"""
+            <a href="/sport/teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=18">Team match</a>
+            <a href="teammatch.aspx?match=18&amp;id=E371BB26-50B1-461C-9ADF-A147ADBE272E">Duplicate query order</a>
+            """,
+        }
+        parse_calls = []
+
+        def fake_parse_team_match_page(client, cfg, ctx, url):
+            parse_calls.append(url)
+            return [
+                {
+                    "tournament_url": ctx.get("tournament_url", ""),
+                    "tournament_name": ctx.get("tournament_name", ""),
+                    "draw_name": "B14 - Main",
+                    "draw_team_type": "Singles",
+                    "round": "Final",
+                    "date": "07/05/2026",
+                    "score": "6-2, 6-4;",
+                    "winner_1_name": "Two, Winner",
+                    "loser_1_name": "One, Loser",
+                }
+            ]
+
+        run_obj = SimpleNamespace(
+            pk=123,
+            scraper=SimpleNamespace(worker_count=1),
+            params={"tournament_url": supplied_url},
+            date_from=None,
+            date_to=None,
+        )
+        progress_qs = mock.Mock()
+
+        with mock.patch.object(_ts_tournament, "ScraperClient", FakeScraperClient), \
+            mock.patch.object(_ts_tournament, "build_proxies", return_value={}), \
+            mock.patch.object(
+                _ts_tournament,
+                "_parse_team_match_page",
+                side_effect=fake_parse_team_match_page,
+            ), \
+            mock.patch.object(
+                _ts_tournament.Run.objects, "filter", return_value=progress_qs
+            ):
+            items_csv, _requests_csv, _errors_csv, row_count, status = _ts_tournament.run(
+                cfg, run_obj, lambda *_args: None
+            )
+
+        rows = list(csv.DictReader(io.StringIO(items_csv)))
+        self.assertEqual(row_count, 1)
+        self.assertEqual(status, _ts_tournament.Run.Status.SUCCESS)
+        self.assertEqual(parse_calls, [match_url])
+        self.assertEqual(rows[0]["Tournament Url"], tournament_url)
+        self.assertEqual(rows[0]["Date"], "07/05/2026")
+
     def test_direct_legacy_team_match_page_is_parsed(self):
         cfg = _ts_tournament.TSTournamentConfig(
             label="Tennis Europe",
