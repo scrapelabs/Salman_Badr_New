@@ -408,12 +408,12 @@ class TSTournamentTeamMatchTests(SimpleTestCase):
         )
         object.__setattr__(cfg, "discover_team_matches", True)
         tournament_url = (
-            "https://te.tournamentsoftware.com/tournament/"
-            "E371BB26-50B1-461C-9ADF-A147ADBE272E"
+            "https://te.tournamentsoftware.com/sport/tournament"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E"
         )
-        draw_url = (
-            "https://te.tournamentsoftware.com/sport/draw.aspx"
-            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&draw=1"
+        legacy_matches_url = (
+            "https://te.tournamentsoftware.com/sport/legacymatches.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&d=20260624"
         )
         match_url = (
             "https://te.tournamentsoftware.com/sport/teammatch.aspx"
@@ -425,12 +425,11 @@ class TSTournamentTeamMatchTests(SimpleTestCase):
         )
         FakeScraperClient.pages = {
             tournament_url: f"""
-            <a href=\"/sport/teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=18\">Team match</a>
+            <a href=\"/sport/legacymatches.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;d=20260624\">Matches</a>
             <a href=\"/sport/teammatch.aspx?id=FFFFFFFF-50B1-461C-9ADF-A147ADBE272E&amp;match=20\">Foreign tournament</a>
             <a href=\"https://elsewhere.example/sport/teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=21\">Foreign host</a>
-            <a href=\"/sport/draw.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;draw=1\">Draw</a>
             """,
-            draw_url: f"""
+            legacy_matches_url: f"""
             <a href=\"teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=18\">Duplicate team match</a>
             <a href=\"teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=19\">Outside window</a>
             """,
@@ -515,28 +514,25 @@ class TSTournamentTeamMatchTests(SimpleTestCase):
             discover_team_matches=True,
         )
         supplied_url = (
-            "https://te.tournamentsoftware.com/sport/tournament.aspx"
+            "https://te.tournamentsoftware.com/sport/tournament"
             "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E"
         )
-        tournament_url = (
-            "https://te.tournamentsoftware.com/tournament/"
-            "E371BB26-50B1-461C-9ADF-A147ADBE272E"
+        legacy_matches_url = (
+            "https://te.tournamentsoftware.com/sport/legacymatches.aspx"
+            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&d=20260624"
         )
         match_url = (
             "https://te.tournamentsoftware.com/sport/teammatch.aspx"
-            "?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&match=18"
+            "?match=18&id=E371BB26-50B1-461C-9ADF-A147ADBE272E"
         )
         FakeScraperClient.pages = {
             supplied_url: f"""
-            <div class="page-head"><div class="media__content"><h2 class="media__title">
-              <span class="nav-link"><span class="nav-link__value">Team Cup</span></span>
-            </h2></div></div>
-            <ul class="page-nav"><li class="page-nav__item">
-              <a class="page-nav__link" href="/tournament/E371BB26-50B1-461C-9ADF-A147ADBE272E">Overview</a>
-            </li></ul>
+            <title>Tennis Europe - Team Cup - Organization</title>
+            <h2>Tennis Europe - Team Cup - Organization</h2>
+            <a href="/sport/legacymatches.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;d=20260624">Matches</a>
             """,
-            tournament_url: f"""
-            <a href="/sport/teammatch.aspx?id=E371BB26-50B1-461C-9ADF-A147ADBE272E&amp;match=18">Team match</a>
+            legacy_matches_url: f"""
+            <a href="teammatch.aspx?match=18&amp;id=E371BB26-50B1-461C-9ADF-A147ADBE272E">Team match</a>
             <a href="teammatch.aspx?match=18&amp;id=E371BB26-50B1-461C-9ADF-A147ADBE272E">Duplicate query order</a>
             """,
         }
@@ -585,7 +581,7 @@ class TSTournamentTeamMatchTests(SimpleTestCase):
         self.assertEqual(row_count, 1)
         self.assertEqual(status, _ts_tournament.Run.Status.SUCCESS)
         self.assertEqual(parse_calls, [match_url])
-        self.assertEqual(rows[0]["Tournament Url"], tournament_url)
+        self.assertEqual(rows[0]["Tournament Url"], supplied_url)
         self.assertEqual(rows[0]["Date"], "07/05/2026")
 
     def test_direct_legacy_team_match_page_is_parsed(self):

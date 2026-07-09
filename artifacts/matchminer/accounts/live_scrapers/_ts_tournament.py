@@ -316,6 +316,15 @@ def _discover_one(client, cfg, tournament_url, log):
         '//h2[contains(@class, "media__title")]//span[contains(@class, "nav-link")]'
         '/span[@class="nav-link__value"]/text()',
     )
+    if not name:
+        title = _field(sel, "normalize-space(//title)") or _field(
+            sel, "normalize-space(//h2)"
+        )
+        title_parts = [part.strip() for part in title.split(" - ") if part.strip()]
+        if len(title_parts) > 2:
+            name = " - ".join(title_parts[1:-1])
+        elif title_parts:
+            name = title_parts[-1]
 
     href = _field(
         sel,
@@ -330,6 +339,8 @@ def _discover_one(client, cfg, tournament_url, log):
         tournament_id = parts[idx + 1]
     except (ValueError, IndexError):
         tournament_id = ""
+    if not tournament_id:
+        tournament_id = parse_qs(urlparse(url).query).get("id", [""])[0]
 
     start_date = end_date = city = country = ""
     for d1 in sel.xpath(
@@ -496,9 +507,16 @@ def _is_team_match_url(url):
     return urlparse(url or "").path.lower().endswith("/sport/teammatch.aspx")
 
 
-def _is_draw_url(url):
-    """Whether a TournamentSoftware URL points at a legacy draw page."""
-    return urlparse(url or "").path.lower().endswith("/sport/draw.aspx")
+def _is_team_match_listing_url(url):
+    """Whether a TournamentSoftware URL may list team-match page links."""
+    path = urlparse(url or "").path.lower()
+    return path.endswith(
+        (
+            "/sport/draw.aspx",
+            "/sport/draws.aspx",
+            "/sport/legacymatches.aspx",
+        )
+    )
 
 
 def _normalize_ts_anchor_url(cfg, page_url, href):
@@ -507,9 +525,9 @@ def _normalize_ts_anchor_url(cfg, page_url, href):
     if not href:
         return ""
     lower = href.lower()
-    if lower.startswith(("teammatch.aspx", "draw.aspx")):
+    if lower.startswith(("teammatch.aspx", "draw.aspx", "draws.aspx", "legacymatches.aspx")):
         href = "/sport/" + href
-    elif lower.startswith(("./teammatch.aspx", "./draw.aspx")):
+    elif lower.startswith(("./teammatch.aspx", "./draw.aspx", "./draws.aspx", "./legacymatches.aspx")):
         href = "/sport/" + href[2:]
     elif lower.startswith("sport/"):
         href = "/" + href
@@ -559,8 +577,8 @@ def _discover_team_match_items(client, cfg, tournament):
     }
     items = []
     seen_matches = set()
-    seen_draws = set()
-    draw_urls = []
+    seen_listing_pages = set()
+    listing_urls = []
 
     def add_match(href, page_url):
         match_url = _normalize_ts_anchor_url(cfg, page_url, href)
@@ -574,26 +592,26 @@ def _discover_team_match_items(client, cfg, tournament):
         seen_matches.add(key)
         items.append((match_url, ctx))
 
-    def add_draw(href, page_url):
-        draw_url = _normalize_ts_anchor_url(cfg, page_url, href)
-        if not _is_draw_url(draw_url):
+    def add_listing_page(href, page_url):
+        listing_url = _normalize_ts_anchor_url(cfg, page_url, href)
+        if not _is_team_match_listing_url(listing_url):
             return
-        key = _url_dedupe_key(draw_url)
-        if key in seen_draws:
+        key = _url_dedupe_key(listing_url)
+        if key in seen_listing_pages:
             return
-        seen_draws.add(key)
-        draw_urls.append(draw_url)
+        seen_listing_pages.add(key)
+        listing_urls.append(listing_url)
 
     for href in sel.xpath("//a/@href").getall():
         add_match(href, tournament_url)
-        add_draw(href, tournament_url)
+        add_listing_page(href, tournament_url)
 
-    for draw_url in draw_urls:
-        draw_sel = client.get_selector(draw_url)
-        if draw_sel is None:
+    for listing_url in listing_urls:
+        listing_sel = client.get_selector(listing_url)
+        if listing_sel is None:
             continue
-        for href in draw_sel.xpath("//a/@href").getall():
-            add_match(href, draw_url)
+        for href in listing_sel.xpath("//a/@href").getall():
+            add_match(href, listing_url)
     return items
 
 
