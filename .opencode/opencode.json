@@ -6,8 +6,6 @@
     "paths": ["../.agents/skills"]
   },
   "plugin": [
-    "superpowers@git+https://github.com/obra/superpowers.git",
-    "oh-my-opencode@3.0.1",
-    "./plugin/bmad-ohmy-guard.js"
+    "superpowers@git+https://github.com/obra/superpowers.git"
   ]
 }
