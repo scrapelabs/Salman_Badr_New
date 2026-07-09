@@ -1,0 +1,91 @@
+<form id="notificationBulkDeleteForm" method="post" action="{% url 'qa_notifications_bulk_delete' %}"
+      data-confirm="Delete the selected notification(s)? This only removes them from your history."
+      data-confirm-title="Delete notifications?"
+      data-confirm-ok="Delete"
+      data-confirm-tone="danger">
+  {% csrf_token %}
+</form>
+
+{% if notification_total %}
+<div class="calls-toolbar notification-history-toolbar">
+  <span class="calls-sel-count"><strong id="notificationSelCount">0</strong> selected</span>
+  <button type="submit" form="notificationBulkDeleteForm" class="btn btn-danger btn-sm" id="notificationBulkDelBtn" disabled>Delete selected</button>
+</div>
+{% endif %}
+
+<div class="tablewrap notification-history-wrap">
+  <table class="tbl runs-tbl notification-history-table">
+    <thead>
+      <tr>
+        <th class="th-check"><input type="checkbox" id="notificationSelAll" aria-label="Select all notifications" /></th>
+        <th>Notification date</th>
+        <th>User</th>
+        <th>Description</th>
+        <th>Ticket</th>
+        <th>Ticket status</th>
+        <th class="th-actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for n in notifications %}
+      <tr class="{% if not n.is_read %}notification-unread{% endif %}">
+        <td class="td-check"><input type="checkbox" class="notification-check" name="notification_ids" value="{{ n.id }}" form="notificationBulkDeleteForm" aria-label="Select notification {{ n.id }}" /></td>
+        <td class="nowrap">{{ n.created_at|date:"M j, Y · H:i" }}</td>
+        <td>
+          {% if n.actor %}
+          <span class="tbl-title">{{ n.actor.username }}</span>
+          {% else %}
+          <span class="muted">System</span>
+          {% endif %}
+        </td>
+        <td class="notification-desc">{{ n.text }}</td>
+        <td>
+          {% if n.ticket %}
+          <span class="run-id">#{{ n.ticket.short_id }}</span>
+          <span class="muted">{{ n.ticket.title }}</span>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if n.ticket %}
+          <span class="qa-status qa-status--{{ n.ticket.status }}">{{ n.ticket.get_status_display }}</span>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="td-actions run-actions">
+          {% if n.ticket %}
+          <a class="run-act" href="{% url 'qa_notification_open' n.id %}">Go to ticket</a>
+          {% else %}
+          <a class="run-act" href="{% url 'qa_board' %}">Open QA</a>
+          {% endif %}
+          <form class="run-del-form" method="post" action="{% url 'qa_notification_delete' n.id %}"
+                data-confirm="Delete this notification from your history?"
+                data-confirm-title="Delete notification?"
+                data-confirm-ok="Delete"
+                data-confirm-tone="danger">
+            {% csrf_token %}
+            <button type="submit" class="run-act run-act-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr class="tbl-empty-row"><td class="tbl-empty" colspan="7">No notifications yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="tbl-pager recent-pager" id="notificationPager" {% if not notification_page or notification_page.paginator.num_pages <= 1 %}hidden{% endif %}>
+  <div class="tbl-pager-nav">
+    <button type="button" class="btn btn-ghost btn-sm" data-notification-page="{% if notification_page.has_previous %}{{ notification_page.previous_page_number }}{% else %}{{ notification_page.number }}{% endif %}" aria-label="Previous page" {% if not notification_page.has_previous %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Prev
+    </button>
+    <span class="tbl-pager-info">Page {{ notification_page.number }} of {{ notification_page.paginator.num_pages }}</span>
+    <button type="button" class="btn btn-ghost btn-sm" data-notification-page="{% if notification_page.has_next %}{{ notification_page.next_page_number }}{% else %}{{ notification_page.number }}{% endif %}" aria-label="Next page" {% if not notification_page.has_next %}disabled{% endif %}>
+      Next
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </div>
+</div>

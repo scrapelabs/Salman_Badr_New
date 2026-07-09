@@ -40,7 +40,7 @@ of a confusing empty FAILED. The diagnostic message intentionally omits the
 account email (never leak credentials/usernames into the run log).
 
 **Security note:** test creds were once supplied in a plaintext attachment under
-`attached_assets/` (untracked but NOT gitignored → would be swept into the
-end-of-turn commit and auto-pushed to GitHub). Delete such files before the turn
-ends and advise rotating the exposed password; store real creds as
+`attached_assets/`; source/log attachments have since been removed from the repo
+and `attached_assets/` is deployment-ignored. If new credential-bearing
+attachments appear, delete them before the turn ends and advise rotating the exposed password; store real creds as
 `PRESTOSPORTS_USERNAME`/`PRESTOSPORTS_PASSWORD` secrets, never in the repo.

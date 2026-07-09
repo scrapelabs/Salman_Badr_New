@@ -120,7 +120,7 @@ if "%FRESH_ENV%"=="1" (
 )
 
 REM --- 6. Migrations --------------------------------------------------------
-cd /d "%~dp0..\artifacts\permitlify"
+cd /d "%~dp0..\artifacts\matchminer"
 
 echo.
 echo Applying database migrations ...

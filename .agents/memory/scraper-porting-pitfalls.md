@@ -1,13 +1,14 @@
 ---
 name: Porting source scrapers into MatchMiner
-description: Cross-cutting cautions when porting the attached_assets script catalogue into LIVE_SCRAPERS (probe the live API, the sources contain real bugs, credential handling).
+description: Cross-cutting cautions when porting source-script snapshots into LIVE_SCRAPERS (probe the live API, the sources contain real bugs, credential handling).
 ---
 
-# Porting the source-script catalogue (attached_assets scripts zip)
+# Porting the source-script catalogue
 
-These ~38 source scrapers are being ported one-by-one into `accounts/live_scrapers/`.
-They were written against the user's private framework and **contain real bugs** plus
-cosmetic AI steps. Treat the source as a reference, not gospel.
+The original ~38 source scrapers were written against the user's private framework
+and **contain real bugs** plus cosmetic AI steps. Treat any external/private source
+snapshot as a reference, not gospel, and do not recommit source zips or logs to
+`attached_assets/`.
 
 ## Always probe the live API/page before trusting source field names
 The sources read keys that no longer exist or never did. Confirm every join key and

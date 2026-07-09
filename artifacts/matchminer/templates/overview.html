@@ -1,0 +1,294 @@
+{% extends "app_base.html" %}
+{% block title %}Overview · MatchMiner{% endblock %}
+{% block breadcrumb %}
+  <a class="crumb" href="{% url 'overview' %}">MatchMiner</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb current">Overview</span>
+{% endblock %}
+{% block content %}
+<div class="content-narrow" data-live-stats="{{ live_stats_url }}" data-notification-history-url="{{ notification_history_url }}">
+  <div class="page-head">
+    <div class="kicker">Tennis Intelligence Platform</div>
+    <h1 class="h-title">Welcome back, {{ user.username }}</h1>
+    <p class="h-sub">
+      Your scrapers, schedules and proxies at a glance. Daily AI-scored tennis
+      insights are mined and ranked across the web automatically.
+    </p>
+  </div>
+
+  <div class="section-head">
+    <h2 class="section-title">Live system monitor</h2>
+    <span class="live-dot" title="Updating in real time">Live</span>
+  </div>
+  <div class="monitor-cards">
+    <div class="monitor-card threads-card">
+      <div class="monitor-label">Threads running</div>
+      <div class="threads-value"><span data-threads-running>{{ threads_running }}</span></div>
+      <div class="monitor-foot">
+        across <span data-running-scrapers>{{ running_scrapers }}</span>
+        active scraper<span data-running-plural>{{ running_scrapers|pluralize }}</span>
+      </div>
+    </div>
+    {% include "partials/gauge.html" with g=monitor.cpu key="cpu" %}
+    {% include "partials/gauge.html" with g=monitor.mem key="mem" %}
+    {% include "partials/gauge.html" with g=monitor.disk key="disk" %}
+  </div>
+
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="stat-label">Active scrapers</div>
+      <div class="stat-value" data-stat-active>{{ active_scrapers }}</div>
+      <div class="stat-foot">Production sources mining tennis data</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Runs today</div>
+      <div class="stat-value" data-stat-runs>{{ runs_today }}</div>
+      <div class="stat-foot">Real-time + scheduled jobs since midnight UTC</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">In maintenance</div>
+      <div class="stat-value" data-stat-maint>{{ maint_count }}</div>
+      <div class="stat-foot">Paused sources awaiting re-enable</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Queued jobs</h2>
+  {% include "partials/queued_jobs.html" with queued_jobs=queued_jobs %}
+
+  <h2 class="section-title">Recently active</h2>
+  {% include "partials/recent_runs.html" with recent_runs=recent_runs %}
+
+  <div class="calls-head notification-history-head" id="notification-history">
+    <h2 class="section-title">Notification history</h2>
+    <span class="calls-count" data-notification-count>Loading…</span>
+  </div>
+  <div id="notificationHistoryPane">
+    <div class="tablewrap notification-history-wrap">
+      <table class="tbl runs-tbl notification-history-table">
+        <tbody>
+          <tr class="tbl-empty-row"><td class="tbl-empty">Loading notification history…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var root = document.querySelector("[data-live-stats]");
+    if (!root || root.__liveInit) return;
+    root.__liveInit = true;
+    var url = root.getAttribute("data-live-stats");
+    var notificationUrl = root.getAttribute("data-notification-history-url");
+    var CIRC = {{ monitor.cpu.circumference }};
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function severity(p) { return p >= 85 ? "crit" : p >= 60 ? "warn" : "ok"; }
+    function setText(sel, v) { var el = root.querySelector(sel); if (el) el.textContent = v; }
+
+    function tournamentHtml(r) {
+      return r.tournament_url
+        ? '<span class="run-url-tooltip" data-link="' + esc(r.tournament_url) + '"><a class="run-url-link" href="' + esc(r.tournament_url) + '" target="_blank" rel="noopener">Open link</a></span>'
+        : esc(r.tournament);
+    }
+
+    function updateGauge(key, g) {
+      var card = root.querySelector('[data-gauge="' + key + '"]');
+      if (!card || !g) return;
+      var pct = g.percent || 0;
+      var pctEl = card.querySelector("[data-gauge-pct]");
+      if (pctEl) pctEl.textContent = pct;
+      var fill = card.querySelector("[data-gauge-fill]");
+      if (fill) fill.style.strokeDashoffset = (CIRC * (1 - Math.min(100, Math.max(0, pct)) / 100)).toFixed(2);
+      var ring = card.querySelector(".gauge");
+      if (ring) ring.className = "gauge gauge-" + severity(pct);
+      var foot = card.querySelector("[data-gauge-foot]");
+      if (foot) {
+        if (key === "cpu") foot.textContent = (g.cores || 0) + " cores · system load";
+        else foot.textContent = (g.used_gb || 0) + " / " + (g.total_gb || 0) + " GB";
+      }
+    }
+
+    function rowHtml(r) {
+      return (
+        '<tr data-href="' + esc(r.detail_url) + '">' +
+          '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
+            '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
+          '<td><span class="run-id">#' + esc(r.short_id) + "</span></td>" +
+          '<td class="nowrap">' + esc(r.started_human) + "</td>" +
+          '<td class="nowrap">' + (r.finished_human ? esc(r.finished_human) : '<span class="muted">—</span>') + "</td>" +
+          "<td>" + tournamentHtml(r) + "</td>" +
+          '<td class="run-window">' + (r.window ? esc(r.window) : '<span class="muted">full history</span>') + "</td>" +
+          '<td><span class="run-badge run-st-' + esc(r.state) + '">' + esc(r.status_label) + "</span></td>" +
+          '<td class="num">' + esc(r.rows) + "</td>" +
+          '<td class="num nowrap">' + esc(r.size_label) + "</td>" +
+          '<td class="num nowrap">' + esc(r.duration_label) + "</td>" +
+          '<td class="td-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.log_url) + '">Open log</a></td>' +
+        "</tr>"
+      );
+    }
+
+    var recentAll = [];
+    var recentPage = 1;
+    var RECENT_SIZE = 5;
+
+    function renderRecent() {
+      var body = root.querySelector("#recentRunsBody");
+      var pager = root.querySelector("#recentPager");
+      if (!body) return;
+      var runs = recentAll || [];
+      var total = runs.length;
+      if (!total) {
+        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="11">No runs yet — launch a scraper from its Lab.</td></tr>';
+        if (pager) pager.hidden = true;
+        return;
+      }
+      var pages = Math.max(1, Math.ceil(total / RECENT_SIZE));
+      if (recentPage > pages) recentPage = pages;
+      if (recentPage < 1) recentPage = 1;
+      var start = (recentPage - 1) * RECENT_SIZE;
+      body.innerHTML = runs.slice(start, start + RECENT_SIZE).map(rowHtml).join("");
+      if (pager) {
+        pager.hidden = pages <= 1;
+        var info = pager.querySelector("[data-recent-info]");
+        if (info) info.textContent = "Page " + recentPage + " of " + pages;
+        var prev = pager.querySelector("[data-recent-prev]");
+        var next = pager.querySelector("[data-recent-next]");
+        if (prev) prev.disabled = recentPage <= 1;
+        if (next) next.disabled = recentPage >= pages;
+      }
+    }
+
+    function updateRuns(runs) {
+      recentAll = runs || [];
+      renderRecent();
+    }
+
+    function queuedRowHtml(r) {
+      var params = r.params_url
+        ? '<span class="batch-param-tooltip" data-link="' + esc(r.params_url) + '"><a class="batch-param-link" href="' + esc(r.params_url) + '" target="_blank" rel="noopener">Open link</a></span>'
+        : esc(r.params);
+      return (
+        '<tr data-href="' + esc(r.detail_url) + '">' +
+          '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
+            '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
+          "<td>" + params + "</td>" +
+          '<td><span class="run-badge run-st-queued">' + esc(r.status_label) + "</span></td>" +
+          "<td>" + esc(r.queued_human) + "</td>" +
+          '<td class="td-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.detail_url) + '">View queue</a></td>' +
+        "</tr>"
+      );
+    }
+
+    function updateQueued(jobs) {
+      var body = root.querySelector("#queuedJobsBody");
+      if (!body) return;
+      if (!jobs || !jobs.length) {
+        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="5">No queued jobs — the queue is clear.</td></tr>';
+        return;
+      }
+      body.innerHTML = jobs.map(queuedRowHtml).join("");
+    }
+
+    function apply(d) {
+      var sys = d.system || {};
+      updateGauge("cpu", sys.cpu);
+      updateGauge("mem", sys.mem);
+      updateGauge("disk", sys.disk);
+      setText("[data-threads-running]", d.threads_running);
+      setText("[data-running-scrapers]", d.running_scrapers);
+      var pl = root.querySelector("[data-running-plural]");
+      if (pl) pl.textContent = d.running_scrapers === 1 ? "" : "s";
+      var ov = d.overview || {};
+      setText("[data-stat-active]", ov.active_scrapers);
+      setText("[data-stat-runs]", ov.runs_today);
+      setText("[data-stat-maint]", ov.maint_count);
+      updateRuns(ov.recent_runs);
+      updateQueued(ov.queued_jobs);
+    }
+
+    var notificationPane = root.querySelector("#notificationHistoryPane");
+    var notificationCount = root.querySelector("[data-notification-count]");
+
+    function updateNotificationSelection() {
+      if (!notificationPane) return;
+      var selAll = notificationPane.querySelector("#notificationSelAll");
+      var btn = notificationPane.querySelector("#notificationBulkDelBtn");
+      var countEl = notificationPane.querySelector("#notificationSelCount");
+      var boxes = Array.prototype.slice.call(notificationPane.querySelectorAll(".notification-check"));
+      var checked = boxes.filter(function (b) { return b.checked; }).length;
+      if (countEl) countEl.textContent = checked;
+      if (btn) btn.disabled = checked === 0;
+      if (selAll) {
+        selAll.checked = boxes.length > 0 && checked === boxes.length;
+        selAll.indeterminate = checked > 0 && checked < boxes.length;
+      }
+    }
+
+    function loadNotifications(page) {
+      if (!notificationPane || !notificationUrl) return;
+      fetch(notificationUrl + "?page=" + encodeURIComponent(page || 1), {
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "fetch" }
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) throw new Error("notification history unavailable");
+          notificationPane.innerHTML = d.html || "";
+          if (notificationCount) {
+            notificationCount.textContent = d.count + " notification" + (d.count === 1 ? "" : "s");
+          }
+          updateNotificationSelection();
+        })
+        .catch(function () {
+          notificationPane.innerHTML = '<div class="panel"><div class="panel-empty"><h3>Notification history unavailable</h3><p>Refresh the page to try again.</p></div></div>';
+          if (notificationCount) notificationCount.textContent = "Unavailable";
+        });
+    }
+
+    if (notificationPane) {
+      notificationPane.addEventListener("click", function (e) {
+        var pageBtn = e.target.closest("[data-notification-page]");
+        if (!pageBtn || pageBtn.disabled) return;
+        loadNotifications(pageBtn.getAttribute("data-notification-page"));
+      });
+      notificationPane.addEventListener("change", function (e) {
+        if (e.target && e.target.id === "notificationSelAll") {
+          var boxes = Array.prototype.slice.call(notificationPane.querySelectorAll(".notification-check"));
+          boxes.forEach(function (b) { b.checked = e.target.checked; });
+        }
+        updateNotificationSelection();
+      });
+      loadNotifications(1);
+    }
+
+    function tick() {
+      if (document.hidden) return schedule();
+      fetch(url, { headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d) apply(d); })
+        .catch(function () {})
+        .finally(schedule);
+    }
+    function schedule() { setTimeout(tick, 3000); }
+
+    var recentPager = root.querySelector("#recentPager");
+    if (recentPager) {
+      var rprev = recentPager.querySelector("[data-recent-prev]");
+      var rnext = recentPager.querySelector("[data-recent-next]");
+      if (rprev) rprev.addEventListener("click", function () { recentPage -= 1; renderRecent(); });
+      if (rnext) rnext.addEventListener("click", function () { recentPage += 1; renderRecent(); });
+    }
+    var recentSeed = document.getElementById("recentRunsData");
+    if (recentSeed) {
+      try { updateRuns(JSON.parse(recentSeed.textContent)); } catch (e) {}
+    }
+
+    schedule();
+  })();
+</script>
+{% endblock %}

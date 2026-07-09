@@ -13,7 +13,7 @@ if not exist "%VENV_PY%" (
     pause
     exit /b 1
 )
-cd /d "%~dp0..\artifacts\permitlify"
+cd /d "%~dp0..\artifacts\matchminer"
 
 echo ===========================================================
 echo  Create a MatchMiner superadmin

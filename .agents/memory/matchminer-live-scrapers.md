@@ -5,8 +5,8 @@ description: The catalogue is being expanded from the full source zip by porting
 
 # Which tennis sources are wired (and the shared-engine strategy)
 
-The catalogue is being expanded from the supplied source zip
-(`attached_assets/scripts_*.zip`, ~38 spiders) by porting **families** onto a few
+The catalogue was expanded from a supplied source-zip snapshot (~38 spiders; the
+attachment zips have since been removed from the repo for security) by porting **families** onto a few
 **shared, parameterised engines**, each driven by thin per-source config wrappers
 (host/labels/constants only) + a `LIVE_SCRAPERS` registry entry + an idempotent
 seed migration. Ports are **deterministic and AI-free**: the source AI was only
@@ -143,7 +143,7 @@ Source quirks worth remembering:
   `views.py` the per-kind defaults (real-time-tab context + `sched_defaults`),
   `validate_run_params`, `_trigger_example_json`, and `_github_workflow_yaml`, plus the
   `scraper_detail.html` start-form `elif` branch. After any of these, **restart** the
-  `artifacts/permitlify: web` workflow (`--noreload`).
+  `artifacts/matchminer: web` workflow (`--noreload`).
 - Per-run telemetry (requests/errors CSVs) must stay byte-compatible with the
   production framework; see `telemetry.py`.
 - **tournamentsoftware date locale ≠ lcid**: some TS sites render `m/d/Y` (non-padded)

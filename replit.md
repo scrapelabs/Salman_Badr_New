@@ -2,7 +2,7 @@
 
 MatchMiner is a Tennis Intelligence Platform SaaS delivering daily, AI-scored tennis insights mined and ranked from across the web.
 
-> **Naming:** the artifact dir/slug is still `permitlify` (the app began as "Permitlify" before the rebrand). Don't rename it — that breaks the workflow and proxy paths. Only the title, wordmark, domain text, and logo are MatchMiner.
+> **Naming:** the Django artifact dir is now `artifacts/matchminer`, matching the app name. The app began as "Permitlify" before the tennis rebrand, so older design mockups still use dailypermit/permit naming.
 
 ## Stack
 
@@ -16,7 +16,7 @@ Django (Python), serving every page and handling auth directly. Rebuilt from scr
 
 ## Run & Operate
 
-Runs via the **`artifacts/permitlify: web`** workflow (not `pnpm dev`). The workflow cwd **is** the artifact dir, so use plain relative commands:
+Runs via the **`artifacts/matchminer: web`** workflow (not `pnpm dev`). The workflow cwd **is** the artifact dir, so use plain relative commands:
 
 - Dev server: `python3 manage.py runserver 0.0.0.0:$PORT --noreload` (wired in `artifact.toml`).
 - `migrate` / `createsuperuser` / `shell` / `collectstatic --noinput` as usual.
@@ -38,7 +38,7 @@ Double-click helpers at the workspace root:
 
 ## Where things live
 
-`artifacts/permitlify/` — the Django project (previewPath `/`).
+`artifacts/matchminer/` — the Django project (previewPath `/`).
 
 - `matchminer/` — `settings.py` (DB, cookies, proxy, static; see "Replit integration"), `urls.py`.
 - `accounts/` — the app:
@@ -91,7 +91,7 @@ Django's built-in auth. Seeded login: username `salman` (password set out-of-ban
 
 ## Legacy / cleanup
 
-The old React+Vite frontend + Express API (and the `lib/api-spec`, `lib/api-client-react`, `lib/api-zod`, `lib/db` Drizzle packages) are **removed** — MatchMiner is Django-only (`artifacts/permitlify`). The canvas design tool (`artifacts/mockup-sandbox`) is unrelated infrastructure and stays. The old Express `users`/`session` Postgres tables are unused (Django uses `auth_user`/`django_session`) and can be dropped on request.
+The old React+Vite frontend + Express API (and the `lib/api-spec`, `lib/api-client-react`, `lib/api-zod`, `lib/db` Drizzle packages) are **removed** — MatchMiner is Django-only (`artifacts/matchminer`). The canvas design tool (`artifacts/mockup-sandbox`) is unrelated infrastructure and stays. The old Express `users`/`session` Postgres tables are unused (Django uses `auth_user`/`django_session`) and can be dropped on request.
 
 ## User preferences
 

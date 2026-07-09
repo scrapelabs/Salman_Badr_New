@@ -72,5 +72,5 @@ Recording is best-effort/after-commit (consistent with at-most-once, no backfill
 
 ## Restart after changes
 `runserver --noreload` + the long-lived thread mean the running scheduler holds
-**old code** until you restart the `artifacts/permitlify: web` workflow. Always
+**old code** until you restart the `artifacts/matchminer: web` workflow. Always
 restart after editing `scheduler.py` / `scheduling.py` / settings.

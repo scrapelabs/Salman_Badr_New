@@ -3,7 +3,7 @@ name: Windows + POSIX cross-platform constraints
 description: This Django app runs on Replit (Linux) AND is run locally on Windows; rules to keep both working.
 ---
 
-# Windows / POSIX cross-platform constraints (permitlify / MatchMiner)
+# Windows / POSIX cross-platform constraints (MatchMiner)
 
 This app runs on **two** targets: Replit (Linux) and the user's **local Windows + Python 3.10** box (the `bat_files/` flow). Code that is correct on Linux can hard-crash on Windows. Two classes of bug to never reintroduce:
 

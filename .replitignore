@@ -3,3 +3,22 @@
 
 # No need to store the pnpm store twice.
 .local
+
+# Local secrets/configuration.
+.env
+artifacts/matchminer/.env
+
+# Local development/runtime state.
+.venv/
+venv/
+node_modules/
+.cache/
+__pycache__/
+*.py[cod]
+artifacts/matchminer/.browser_profiles/
+artifacts/matchminer/staticfiles/
+scrape_output/
+
+# Uploaded source dumps, logs, screenshots, and spreadsheets are not needed in
+# deploy images and may contain sensitive source data or credentials.
+attached_assets/

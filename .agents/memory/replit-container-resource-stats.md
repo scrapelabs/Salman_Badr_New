@@ -13,4 +13,4 @@ When building any real-time system-monitor / resource gauge inside a Replit cont
 
 **Why:** these are container/cgroup realities, not bugs — discovered by experimentation (disk `/`=0, psutil memory = host total). 
 
-**How to apply:** any new system-stats/telemetry code in a Replit container should follow the cgroup-v2-first / BASE_DIR-for-disk / prime-CPU pattern (see `accounts/system_stats.py` in the MatchMiner/permitlify artifact). Always degrade gracefully (wrap in try/except, return zeros) so a missing file never 500s the page.
+**How to apply:** any new system-stats/telemetry code in a Replit container should follow the cgroup-v2-first / BASE_DIR-for-disk / prime-CPU pattern (see `accounts/system_stats.py` in the MatchMiner artifact). Always degrade gracefully (wrap in try/except, return zeros) so a missing file never 500s the page.
