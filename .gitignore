@@ -48,6 +48,9 @@ Thumbs.db
 .cache/
 .local/
 
+# Local Git worktrees
+.worktrees/
+
 # Python (local / Windows venv dev)
 .venv/
 venv/
