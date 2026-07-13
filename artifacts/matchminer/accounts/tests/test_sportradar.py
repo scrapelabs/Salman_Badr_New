@@ -152,6 +152,74 @@ class SportRadarTests(SimpleTestCase):
         self.assertEqual(row["tournament_start_date"], "05/11/2026")
         self.assertEqual(row["tournament_end_date"], "05/17/2026")
 
+    def test_enriched_row_uses_parent_tournament_and_child_draw_suffix(self):
+        summary = singles_summary()
+        home = summary["sport_event"]["competitors"][0]
+        home.pop("country_code", None)
+        home["country"] = " Neutral "
+        competition_metadata = {
+            "parent": {
+                "id": "sr:competition:parent",
+                "name": "UTR PTT Newport Beach",
+            },
+            "child": {
+                "id": "sr:competition:1",
+                "name": "UTR PTT Newport Beach Men Singles",
+                "parent_id": "sr:competition:parent",
+                "type": "singles",
+                "gender": "men",
+            },
+        }
+
+        row = sportradar._row_from_summary(
+            summary,
+            competition_metadata=competition_metadata,
+        )
+
+        self.assertEqual(row["tournament_name"], "UTR PTT Newport Beach")
+        self.assertEqual(row["draw_name"], "Men Singles")
+        self.assertEqual(row["draw_team_type"], "Singles")
+        self.assertEqual(row["draw_gender"], "Male")
+        self.assertEqual(row["loser_1_country"], "")
+
+    def test_country_value_skips_neutral_before_real_fallback(self):
+        self.assertEqual(
+            sportradar._country_value(" Neutral ", "", "RUS"),
+            "RUS",
+        )
+        self.assertEqual(
+            sportradar._country_value("neutral", None, "  "),
+            "",
+        )
+
+    def test_enriched_row_uses_daily_child_and_keeps_empty_suffix_fallback(self):
+        summary = singles_summary()
+        competition = summary["sport_event"]["sport_event_context"]["competition"]
+        competition["name"] = "UTR PTT Newport Beach Men Singles"
+        metadata = {
+            "parent": {
+                "id": "sr:competition:parent",
+                "name": "UTR PTT Newport Beach",
+            },
+            "child": {},
+        }
+
+        row = sportradar._row_from_summary(
+            summary,
+            competition_metadata=metadata,
+        )
+
+        self.assertEqual(row["tournament_name"], "UTR PTT Newport Beach")
+        self.assertEqual(row["draw_name"], "Men Singles")
+
+        competition["name"] = "UTR PTT Newport Beach"
+        row = sportradar._row_from_summary(
+            summary,
+            competition_metadata=metadata,
+        )
+
+        self.assertEqual(row["draw_name"], "2026 Newport Beach Men 11, 13-16 Playoff")
+
     def test_disallowed_category_is_skipped(self):
         row = sportradar._row_from_summary(singles_summary("sr:category:999"))
 
@@ -199,8 +267,27 @@ class SportRadarTests(SimpleTestCase):
             {"number": 1, "home_score": 7, "away_score": 5},
         ]
 
-        row = sportradar._row_from_summary(summary)
+        competition_metadata = {
+            "parent": {
+                "id": "sr:competition:parent",
+                "name": "UTR PTT Newport Beach",
+            },
+            "child": {
+                "id": "sr:competition:1",
+                "name": "UTR PTT Newport Beach Women Doubles",
+                "parent_id": "sr:competition:parent",
+                "type": "doubles",
+                "gender": "women",
+            },
+        }
 
+        row = sportradar._row_from_summary(
+            summary,
+            competition_metadata=competition_metadata,
+        )
+
+        self.assertEqual(row["tournament_name"], "UTR PTT Newport Beach")
+        self.assertEqual(row["draw_name"], "Women Doubles")
         self.assertEqual(row["draw_team_type"], "Doubles")
         self.assertEqual(row["draw_gender"], "Female")
         self.assertEqual(row["score"], "7-5;")

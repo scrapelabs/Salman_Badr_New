@@ -138,6 +138,24 @@ def _gender_long(value):
     return ""
 
 
+def _country_value(*values):
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if text and text.lower() != "neutral":
+            return text
+    return ""
+
+
+def _draw_suffix(parent_name, child_name):
+    parent = (parent_name or "").strip()
+    child = (child_name or "").strip()
+    if not parent or not child.startswith(parent):
+        return ""
+    return child[len(parent):].lstrip(" \t,-:").strip()
+
+
 def _team_type(competition_type):
     text = (competition_type or "").strip().lower()
     return "Doubles" if "double" in text else "Singles"
@@ -312,17 +330,23 @@ def _person_fields(person, fallback_competitor, fallback_gender, client, api_key
         "gender": gender,
         "dob": dob,
         "id": cid,
-        "country": (
-            person.get("country_code")
-            or person.get("country")
-            or fallback_competitor.get("country_code")
-            or fallback_competitor.get("country")
-            or ""
+        "country": _country_value(
+            person.get("country_code"),
+            person.get("country"),
+            fallback_competitor.get("country_code"),
+            fallback_competitor.get("country"),
         ),
     }
 
 
-def _row_from_summary(summary, *, client=None, api_key="", dob_cache=None):
+def _row_from_summary(
+    summary,
+    *,
+    client=None,
+    api_key="",
+    dob_cache=None,
+    competition_metadata=None,
+):
     dob_cache = dob_cache if dob_cache is not None else {}
     sport_event = summary.get("sport_event") or {}
     status = summary.get("sport_event_status") or {}
@@ -332,9 +356,13 @@ def _row_from_summary(summary, *, client=None, api_key="", dob_cache=None):
         return None
 
     competition = context.get("competition") or {}
-    competition_type = competition.get("type") or ""
+    metadata = competition_metadata if isinstance(competition_metadata, dict) else {}
+    parent_competition = metadata.get("parent") or {}
+    child_competition = metadata.get("child") or {}
+    competition_type = child_competition.get("type") or competition.get("type") or ""
+    competition_gender = child_competition.get("gender") or competition.get("gender") or ""
     team_type = _team_type(competition_type)
-    fallback_gender = _gender_short(competition.get("gender", ""))
+    fallback_gender = _gender_short(competition_gender)
 
     competitors = [c for c in (sport_event.get("competitors") or []) if isinstance(c, dict)]
     if len(competitors) < 2:
@@ -364,7 +392,11 @@ def _row_from_summary(summary, *, client=None, api_key="", dob_cache=None):
     venue = sport_event.get("venue") or {}
     season = context.get("season") or {}
     round_info = context.get("round") or {}
-    draw_name = _first_group_name(context) or competition.get("name", "")
+    fallback_draw_name = _first_group_name(context) or competition.get("name", "")
+    parent_name = (parent_competition.get("name") or "").strip()
+    child_name = child_competition.get("name") or competition.get("name") or ""
+    draw_name = _draw_suffix(parent_name, child_name) or fallback_draw_name
+    tournament_name = parent_name or competition.get("name", "")
 
     return {
         "match_id": "",
@@ -373,7 +405,7 @@ def _row_from_summary(summary, *, client=None, api_key="", dob_cache=None):
         "draw_bracket_value": "",
         "draw_name": draw_name,
         "draw_team_type": team_type,
-        "tournament_name": competition.get("name", ""),
+        "tournament_name": tournament_name,
         "date": sport_event.get("start_time", ""),
         "round": round_info.get("name", ""),
         "score": _score(status, _qualifier(winner_comp)),
@@ -406,7 +438,7 @@ def _row_from_summary(summary, *, client=None, api_key="", dob_cache=None):
         "loser_2_state": "",
         "loser_2_country": l2["country"] if l2 else "",
         "outcome": _outcome(status),
-        "draw_gender": _gender_long(competition.get("gender", "")),
+        "draw_gender": _gender_long(competition_gender),
         "draw_bracket_type": "",
         "draw_type": "",
         "tournament_city": venue.get("city_name", ""),
