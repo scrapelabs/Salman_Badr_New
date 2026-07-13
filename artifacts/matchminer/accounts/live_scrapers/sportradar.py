@@ -101,6 +101,14 @@ def _profile_url(competitor_id):
     )
 
 
+def _competition_url(competition_id):
+    cid = quote(competition_id or "", safe=":")
+    return (
+        f"{BASE_URL}/{_access_level()}/v3/{_language_code()}"
+        f"/competitions/{cid}/info.json"
+    )
+
+
 def _iter_dates(start_d, end_d):
     day = start_d
     while day <= end_d:
@@ -282,6 +290,38 @@ def _fetch_json(client, api_key, url, *, params=None):
     except Exception as exc:  # noqa: BLE001
         client.tele.record_error(f"SportRadar response was not valid JSON for {url}", exc=exc)
         return None
+
+
+def _competition_metadata(client, api_key, competition, cache):
+    parent_id = (competition.get("parent_id") or "").strip()
+    if not parent_id:
+        return None
+
+    if parent_id not in cache:
+        data = _fetch_json(client, api_key, _competition_url(parent_id))
+        parent = data.get("competition") if isinstance(data, dict) else None
+        if not isinstance(parent, dict) or not (parent.get("name") or "").strip():
+            if data is not None:
+                client.tele.record_error(
+                    f"SportRadar Competition Info payload was malformed for {parent_id}"
+                )
+            parent = None
+        cache[parent_id] = parent
+
+    parent = cache[parent_id]
+    if parent is None:
+        return None
+
+    children = parent.get("children") or []
+    if not isinstance(children, list):
+        children = []
+    child = None
+    for entry in children:
+        candidate = entry.get("competition") if isinstance(entry, dict) else None
+        if isinstance(candidate, dict) and candidate.get("id") == competition.get("id"):
+            child = candidate
+            break
+    return {"parent": parent, "child": child or {}}
 
 
 def _fetch_daily_summaries(client, api_key, day):
@@ -499,6 +539,7 @@ def run(run_obj, log):
     writer.writerow(HEADER)
     seen = set()
     dob_cache = {}
+    competition_cache = {}
     row_count = 0
     failed_days = 0
     proxies = build_proxies(scraper, log)
@@ -519,11 +560,21 @@ def run(run_obj, log):
                     continue
                 log("INFO", f"{day}: {len(summaries)} summaries received")
                 for summary in summaries:
+                    context = summary.get("sport_event", {}).get("sport_event_context") or {}
+                    if (context.get("category") or {}).get("id") not in ALLOWED_CATEGORY_IDS:
+                        continue
+                    competition_metadata = _competition_metadata(
+                        client,
+                        api_key,
+                        context.get("competition") or {},
+                        competition_cache,
+                    )
                     row = _row_from_summary(
                         summary,
                         client=client,
                         api_key=api_key,
                         dob_cache=dob_cache,
+                        competition_metadata=competition_metadata,
                     )
                     if not row:
                         continue

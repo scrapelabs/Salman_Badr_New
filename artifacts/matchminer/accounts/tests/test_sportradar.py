@@ -1,4 +1,9 @@
+import copy
+import csv
+import io
 from datetime import date, timedelta
+from types import SimpleNamespace
+from unittest import mock
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -33,6 +38,24 @@ class FakeClient:
     def get(self, url, **kwargs):
         self.requests.append({"url": url, **kwargs})
         return self.responses.pop(0)
+
+
+class FakeRunClient:
+    payload = {}
+    requests = []
+
+    def __init__(self, *, tele, **_kwargs):
+        self.tele = tele
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return None
+
+    def get(self, url, **kwargs):
+        self.__class__.requests.append({"url": url, **kwargs})
+        return FakeResponse(self.__class__.payload)
 
 
 def singles_summary(category_id="sr:category:3"):
@@ -116,6 +139,203 @@ class SportRadarTests(SimpleTestCase):
         self.assertEqual(client.requests[1]["params"], {"start": "200", "limit": "200"})
         self.assertEqual(client.requests[0]["headers"]["x-api-key"], "SECRET")
         self.assertNotIn("SECRET", client.requests[0]["url"])
+
+    def test_competition_metadata_caches_missing_and_malformed_results(self):
+        without_parent = singles_summary()["sport_event"]["sport_event_context"]["competition"]
+        empty_client = FakeClient([])
+
+        self.assertIsNone(
+            sportradar._competition_metadata(
+                empty_client,
+                "SECRET",
+                without_parent,
+                {},
+            )
+        )
+        self.assertEqual(empty_client.requests, [])
+
+        with_parent = dict(without_parent, parent_id="sr:competition:parent")
+
+        failed_client = FakeClient([FakeResponse({}, status_code=500)])
+        failed_cache = {}
+        self.assertIsNone(
+            sportradar._competition_metadata(
+                failed_client,
+                "SECRET",
+                with_parent,
+                failed_cache,
+            )
+        )
+        self.assertIsNone(
+            sportradar._competition_metadata(
+                failed_client,
+                "SECRET",
+                with_parent,
+                failed_cache,
+            )
+        )
+        self.assertEqual(len(failed_client.requests), 1)
+
+        malformed_client = FakeClient([FakeResponse({"competition": []})])
+        cache = {}
+
+        self.assertIsNone(
+            sportradar._competition_metadata(
+                malformed_client,
+                "SECRET",
+                with_parent,
+                cache,
+            )
+        )
+        self.assertIsNone(
+            sportradar._competition_metadata(
+                malformed_client,
+                "SECRET",
+                with_parent,
+                cache,
+            )
+        )
+        self.assertEqual(len(malformed_client.requests), 1)
+        self.assertTrue(
+            any(
+                "malformed" in message.lower()
+                for _level, message, _exc in malformed_client.tele.errors
+            )
+        )
+
+        malformed_children_client = FakeClient(
+            [
+                FakeResponse(
+                    {
+                        "competition": {
+                            "id": "sr:competition:parent",
+                            "name": "UTR PTT Newport Beach",
+                            "children": {"unexpected": "shape"},
+                        }
+                    }
+                )
+            ]
+        )
+        metadata = sportradar._competition_metadata(
+            malformed_children_client,
+            "SECRET",
+            with_parent,
+            {},
+        )
+        self.assertEqual(metadata["parent"]["name"], "UTR PTT Newport Beach")
+        self.assertEqual(metadata["child"], {})
+
+        mismatched_child_client = FakeClient(
+            [
+                FakeResponse(
+                    {
+                        "competition": {
+                            "id": "sr:competition:parent",
+                            "name": "UTR PTT Newport Beach",
+                            "children": [
+                                {
+                                    "competition": {
+                                        "id": "sr:competition:other",
+                                        "name": "UTR PTT Newport Beach Women Doubles",
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                )
+            ]
+        )
+        metadata = sportradar._competition_metadata(
+            mismatched_child_client,
+            "SECRET",
+            with_parent,
+            {},
+        )
+        self.assertEqual(metadata["parent"]["name"], "UTR PTT Newport Beach")
+        self.assertEqual(metadata["child"], {})
+
+    def test_run_fetches_parent_once_and_skips_disallowed_categories(self):
+        first = singles_summary()
+        context = first["sport_event"]["sport_event_context"]
+        context["competition"].update(
+            {
+                "name": "UTR PTT Newport Beach Men Singles",
+                "parent_id": "sr:competition:parent",
+            }
+        )
+        home = first["sport_event"]["competitors"][0]
+        home.pop("country_code", None)
+        home["country"] = "Neutral"
+        for competitor in first["sport_event"]["competitors"]:
+            competitor["date_of_birth"] = "2000-01-01"
+
+        second = copy.deepcopy(first)
+        second["sport_event"]["id"] = "sr:sport_event:2"
+        disallowed = singles_summary("sr:category:999")
+
+        FakeRunClient.payload = {
+            "competition": {
+                "id": "sr:competition:parent",
+                "name": "UTR PTT Newport Beach",
+                "children": [
+                    {
+                        "competition": {
+                            "id": "sr:competition:1",
+                            "name": "UTR PTT Newport Beach Men Singles",
+                            "parent_id": "sr:competition:parent",
+                            "type": "singles",
+                            "gender": "men",
+                        }
+                    }
+                ],
+            }
+        }
+        FakeRunClient.requests = []
+        run_obj = SimpleNamespace(
+            pk=123,
+            scraper=SimpleNamespace(secret_value="SECRET"),
+            params={},
+            date_from=date(2026, 5, 17),
+            date_to=date(2026, 5, 17),
+        )
+        progress_qs = mock.Mock()
+
+        with mock.patch.object(sportradar, "ScraperClient", FakeRunClient), \
+            mock.patch.object(sportradar, "build_proxies", return_value=None), \
+            mock.patch.object(
+                sportradar,
+                "_fetch_daily_summaries",
+                return_value=[first, second, disallowed],
+            ), \
+            mock.patch.object(
+                sportradar.Run.objects,
+                "filter",
+                return_value=progress_qs,
+            ):
+            items_csv, _requests_csv, _errors_csv, row_count, status = sportradar.run(
+                run_obj,
+                lambda *_args: None,
+            )
+
+        rows = list(csv.DictReader(io.StringIO(items_csv)))
+        self.assertEqual(status, sportradar.Run.Status.SUCCESS)
+        self.assertEqual(row_count, 2)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(FakeRunClient.requests), 1)
+        self.assertEqual(
+            FakeRunClient.requests[0]["url"],
+            sportradar._competition_url("sr:competition:parent"),
+        )
+        self.assertEqual(
+            FakeRunClient.requests[0]["headers"]["x-api-key"],
+            "SECRET",
+        )
+        self.assertNotIn("SECRET", FakeRunClient.requests[0]["url"])
+        self.assertTrue(
+            all(row["Tournament Name"] == "UTR PTT Newport Beach" for row in rows)
+        )
+        self.assertTrue(all(row["Draw Name"] == "Men Singles" for row in rows))
+        self.assertTrue(all(row["Loser 1 Country"] == "" for row in rows))
 
     def test_singles_row_maps_winner_score_and_profile_dobs(self):
         client = FakeClient(
