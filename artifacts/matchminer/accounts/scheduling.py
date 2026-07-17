@@ -14,8 +14,8 @@ Cadence semantics (all "strictly after" the reference instant):
 * ``monthly``  — every month on ``day_of_month`` (clamped to the month's length)
   at ``time_of_day``.
 
-Times are interpreted in the schedule's IANA ``timezone`` (DST-aware via
-``zoneinfo``); minute-level drift across a DST transition is acceptable.
+The timezone remains an explicit argument to keep the date math deterministic;
+MatchMiner passes ``UTC`` for every application schedule.
 """
 
 from __future__ import annotations

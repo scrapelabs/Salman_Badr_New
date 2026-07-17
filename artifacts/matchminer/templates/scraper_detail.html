@@ -9,9 +9,6 @@
   <span class="crumb-sep">/</span>
   <span class="crumb current">{{ tab_label }}</span>
 {% endblock %}
-{% block topbar_actions %}
-  <a class="btn btn-ghost btn-sm" href="{% url 'scrapers' %}">All scrapers</a>
-{% endblock %}
 {% block content %}
 <div class="content-narrow">
   <div class="detail-head">
@@ -28,7 +25,7 @@
     </div>
   </div>
 
-  <nav class="tabs">
+  <nav class="tabs" aria-label="Scraper sections">
     <a class="tab {% if tab == 'batch' %}active{% endif %}" href="?tab=batch" {% if tab == 'batch' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Batch jobs</span>
     </a>
@@ -58,6 +55,17 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg><span>Status</span>
     </a>
   </nav>
+
+  <script>
+    (function () {
+      var tabs = document.querySelector(".tabs");
+      var active = tabs && tabs.querySelector(".tab.active");
+      if (!tabs || !active || tabs.scrollWidth <= tabs.clientWidth) return;
+      window.requestAnimationFrame(function () {
+        active.scrollIntoView({ block: "nearest", inline: "center" });
+      });
+    })();
+  </script>
 
   {% if s.is_maintenance %}
   <div class="maint-strip">
@@ -621,6 +629,7 @@
   {% endif %}
 
   {% elif tab == 'calls' %}
+  {% if user.is_superuser %}
   <form id="bulkDeleteForm" method="post" action="{% url 'runs_bulk_delete' s.slug %}"
         data-confirm="Delete the selected run(s)? Their log and CSV files will be permanently removed."
         data-confirm-title="Delete runs?"
@@ -629,11 +638,12 @@
     {% csrf_token %}
     <input type="hidden" name="page" value="{{ page_obj.number }}" />
   </form>
+  {% endif %}
   <div class="calls-head">
     <h2 class="section-title">Calls history</h2>
     <span class="calls-count">{{ run_total }} run{{ run_total|pluralize }}</span>
   </div>
-  {% if page_obj %}
+  {% if user.is_superuser and page_obj %}
   <div class="calls-toolbar">
     <span class="calls-sel-count"><strong id="selCount">0</strong> selected</span>
     <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="bulkDelBtn" disabled>Delete selected</button>
@@ -643,7 +653,7 @@
     <table class="tbl runs-tbl">
       <thead>
         <tr>
-          <th class="th-check"><input type="checkbox" id="selAll" aria-label="Select all runs on this page" /></th>
+          {% if user.is_superuser %}<th class="th-check"><input type="checkbox" id="selAll" aria-label="Select all runs on this page" /></th>{% endif %}
           <th>Run</th>
           <th>Started</th>
           <th>Finished</th>
@@ -659,7 +669,7 @@
       <tbody>
         {% for run in page_obj %}
         <tr>
-          <td class="td-check">{% if not run.is_running %}<input type="checkbox" class="run-check" name="run_uuids" value="{{ run.uuid }}" form="bulkDeleteForm" aria-label="Select run #{{ run.short_id }}" />{% endif %}</td>
+          {% if user.is_superuser %}<td class="td-check">{% if run.status != 'running' and run.status != 'queued' %}<input type="checkbox" class="run-check" name="run_uuids" value="{{ run.uuid }}" form="bulkDeleteForm" aria-label="Select run #{{ run.short_id }}" />{% endif %}</td>{% endif %}
           <td><span class="run-id">#{{ run.short_id }}</span></td>
           <td class="nowrap">{{ run.started_at|date:"M j, Y · H:i" }}</td>
           <td class="nowrap">{% if run.finished_at %}{{ run.finished_at|date:"M j, Y · H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
@@ -720,7 +730,7 @@
               </button>
             </form>
             {% endif %}
-            {% if not run.is_running %}
+            {% if user.is_superuser and run.status != 'running' and run.status != 'queued' %}
             <form class="run-del-form" method="post" action="{% url 'run_delete' s.slug run.uuid %}" data-confirm="Delete run #{{ run.short_id }}? Its log and CSV files will be permanently removed." data-confirm-title="Delete run?" data-confirm-ok="Delete" data-confirm-tone="danger">
               {% csrf_token %}
               <input type="hidden" name="page" value="{{ page_obj.number }}" />
@@ -730,7 +740,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="11" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
+        <tr><td colspan="{% if user.is_superuser %}11{% else %}10{% endif %}" class="runs-empty">No runs yet — start one from the <a href="?tab=real-time">Real-time test</a> tab.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -1076,7 +1086,7 @@
   </div>
 
   {% elif tab == 'settings' %}
-  <form class="panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=settings">
+  <form class="panel settings-panel" method="post" action="{% url 'scraper_detail' s.slug %}?tab=settings">
     {% csrf_token %}
     <input type="hidden" name="form" value="settings" />
     <div class="panel-pad">
@@ -1234,7 +1244,7 @@
   </form>
 
   {% if model_upload_label %}
-  <form class="panel settings-section-gap" method="post" enctype="multipart/form-data"
+  <form class="panel settings-panel settings-section-gap" method="post" enctype="multipart/form-data"
         action="{% url 'scraper_detail' s.slug %}?tab=settings">
     {% csrf_token %}
     <input type="hidden" name="form" value="model-upload" />
@@ -1328,7 +1338,8 @@
         chosen time. Each scheduled run is identical to pressing “Start” on the Real-time tab and
         respects maintenance mode and the one-run-at-a-time rule. The schedule runs while the app
         is online — if the app is offline at the scheduled time that run is skipped (missed runs
-        aren’t backfilled) and the schedule resumes on its next slot.
+        aren’t backfilled) and the schedule resumes on its next slot. All schedule dates and times
+        use UTC, matching the server clock above.
       </p>
 
       <form method="post" action="{% url 'scraper_detail' s.slug %}?tab=schedule" id="schedForm">
@@ -1351,7 +1362,7 @@
           </div>
 
           <div class="rt-field">
-            <label class="field-label" for="schedTime">Time of day</label>
+            <label class="field-label" for="schedTime">Time of day (UTC)</label>
             <input class="rt-input" id="schedTime" type="time" name="time_of_day" value="{{ schedule_time_value }}" required />
           </div>
 
@@ -1386,11 +1397,7 @@
 
           <div class="rt-field">
             <label class="field-label" for="schedTz">Timezone</label>
-            <select class="rt-input" id="schedTz" name="timezone">
-              {% for tz in tz_choices %}
-              <option value="{{ tz }}" {% if schedule.timezone == tz %}selected{% endif %}>{{ tz }}</option>
-              {% endfor %}
-            </select>
+            <input class="rt-input" id="schedTz" name="timezone" value="UTC" readonly aria-readonly="true" />
           </div>
         </div>
 
@@ -1400,11 +1407,11 @@
 
         <div class="sched-actions">
           <button class="btn btn-primary" type="submit">Save schedule</button>
-          {% if schedule.enabled and next_run_local %}
+          {% if schedule.enabled and next_run_utc %}
           <span class="sched-status is-on">
             <span class="sched-dot"></span>
-            Next run <strong>{{ next_run_local|date:"D, M j Y" }}</strong> at
-            <strong>{{ next_run_local|date:"H:i" }}</strong> ({{ schedule.timezone }})
+            Next run <strong>{{ next_run_utc|date:"D, M j Y" }}</strong> at
+            <strong>{{ next_run_utc|date:"H:i" }}</strong> UTC
           </span>
           {% else %}
           <span class="sched-status is-off"><span class="sched-dot"></span> Automatic runs are off</span>

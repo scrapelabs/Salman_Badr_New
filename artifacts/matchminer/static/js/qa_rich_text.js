@@ -86,8 +86,21 @@
       var bounds = quill.getBounds(state.anchor);
       if (!bounds) return;
       var rect = quill.root.getBoundingClientRect();
-      box.style.left = window.scrollX + rect.left + bounds.left + "px";
-      box.style.top = window.scrollY + rect.top + bounds.bottom + 4 + "px";
+      var viewport = window.visualViewport;
+      var viewLeft = window.scrollX + (viewport ? viewport.offsetLeft : 0);
+      var viewTop = window.scrollY + (viewport ? viewport.offsetTop : 0);
+      var viewWidth = viewport ? viewport.width : window.innerWidth;
+      var viewHeight = viewport ? viewport.height : window.innerHeight;
+      var left = window.scrollX + rect.left + bounds.left;
+      var top = window.scrollY + rect.top + bounds.bottom + 4;
+      var width = box.offsetWidth;
+      var height = box.offsetHeight;
+      left = Math.max(viewLeft + 8, Math.min(left, viewLeft + viewWidth - width - 8));
+      if (top + height > viewTop + viewHeight - 8) {
+        top = window.scrollY + rect.top + bounds.top - height - 4;
+      }
+      box.style.left = left + "px";
+      box.style.top = Math.max(viewTop + 8, top) + "px";
     }
 
     function render() {
@@ -200,6 +213,14 @@
     window.addEventListener("scroll", function () {
       if (state.open) position();
     }, true);
+    window.addEventListener("resize", function () {
+      if (state.open) position();
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", function () {
+        if (state.open) position();
+      });
+    }
   }
 
   var TOOLBAR = [

@@ -10,10 +10,7 @@
   <span class="crumb current">Run #{{ run.short_id }}</span>
 {% endblock %}
 {% block topbar_actions %}
-  <a class="btn btn-ghost btn-sm" href="{% url 'run_log_download' s.slug run.uuid %}">Download log</a>
-  {% if run.has_csv %}<a class="btn btn-ghost btn-sm" href="{% url 'run_csv_download' s.slug run.uuid %}">Download CSV</a>{% endif %}
-  {% if run.has_requests %}<a class="btn btn-ghost btn-sm" href="{% url 'run_requests_download' s.slug run.uuid %}">Requests CSV</a>{% endif %}
-  {% if run.has_errors %}<a class="btn btn-ghost btn-sm" href="{% url 'run_errors_download' s.slug run.uuid %}">Errors CSV</a>{% endif %}
+  {% include "partials/run_download_actions.html" %}
 {% endblock %}
 {% block content %}
 <div class="content-narrow">
@@ -21,6 +18,10 @@
     <div class="kicker">Run log</div>
     <h1 class="h-title">#{{ run.short_id }} · {{ s.name }}</h1>
     <p class="h-sub">Full execution log for this run. {{ line_total }} line{{ line_total|pluralize }} total.</p>
+  </div>
+
+  <div class="run-mobile-actions" aria-label="Run downloads">
+    {% include "partials/run_download_actions.html" %}
   </div>
 
   <div class="term-stage">

@@ -1,4 +1,4 @@
-"""Belgium (Tennis & Padel Vlaanderen) results scraper.
+"""Belgium (Tennis Vlaanderen and Tennis Wallonie-Bruxelles) results scraper.
 
 Ports the production ``belgium_results`` spider onto MatchMiner's shared HTTP
 client (:mod:`accounts.live_scrapers._http`) + telemetry. The source scrapes
@@ -15,8 +15,8 @@ interstitial (see :mod:`accounts.live_scrapers._belgium_captcha`). The pipeline:
    rows carry ``<a userId=...>`` profile links. One CSV row per played match.
 
 Input is a **date range** (``date_from`` / ``date_to``) *or* a single
-``tournament_url`` (validated against the ``tennisenpadelvlaanderen.be`` allowlist
-at the view layer); a URL skips discovery and scrapes that one tournament.
+``tournament_url`` validated against the supported federation hosts. A Tennis
+Wallonie-Bruxelles URL is draw-scoped and uses that site's JSON endpoint.
 
 **Deterministic port.** The source's AI name/gender guessing
 (``format_name_gender_claude``) and its ``PlayersBelgiumResultsModel`` cache are
@@ -40,11 +40,12 @@ errors_csv, row_count, status)`` tuple.
 import csv
 import hashlib
 import io
+import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 from django.db.models import F
 from django.utils import timezone
@@ -59,10 +60,18 @@ from ._belgium_captcha import (
     materialize_uploaded_model,
 )
 from ._http import ScraperClient, build_proxies
+from ._names import last_first
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 BASE = "https://www.tennisenpadelvlaanderen.be"
-ALLOWED_HOSTS = ("www.tennisenpadelvlaanderen.be", "tennisenpadelvlaanderen.be")
+TPPWB_BASE = "https://tennis.tppwb.be"
+TPPWB_DRAW_ENDPOINT = f"{TPPWB_BASE}/MyAFT/Competitions/GetTournamentDrawData"
+TPPWB_DRAW_PATH = "/MyAFT/Competitions/TournamentDraw"
+ALLOWED_HOSTS = (
+    "www.tennisenpadelvlaanderen.be",
+    "tennisenpadelvlaanderen.be",
+    "tennis.tppwb.be",
+)
 
 # Items CSV columns — the shared MatchMiner items schema (same as Brazil/Czech).
 COLUMNS = [
@@ -287,6 +296,284 @@ def _scrape_serie(client, solver, serie_url, log):
         data = parser.parse_match(cell)
         if data:
             rows.append(data)
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Tennis Wallonie-Bruxelles direct draws
+# ---------------------------------------------------------------------------
+_TPPWB_HEADER_RE = re.compile(
+    r"^\s*\d+\s+\[(?P<host>[^]]+)]\s*-\s*Du\s+"
+    r"(?P<start>\d{1,2}/\d{1,2}/\d{4})\s+au\s+"
+    r"(?P<end>\d{1,2}/\d{1,2}/\d{4})\s*-\s*(?P<name>.+?)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_tppwb_url(url):
+    return (urlsplit(url).hostname or "").lower() == "tennis.tppwb.be"
+
+
+def _tppwb_draw_params(tournament_url):
+    parts = urlsplit(tournament_url)
+    if (parts.hostname or "").lower() != "tennis.tppwb.be":
+        raise ValueError("TPPWB draw URL must use tennis.tppwb.be")
+    if parts.path.rstrip("/").lower() != TPPWB_DRAW_PATH.lower():
+        raise ValueError("TPPWB URL must point to TournamentDraw")
+
+    query = parse_qs(parts.query, keep_blank_values=True)
+
+    def required(name):
+        values = query.get(name) or []
+        if len(values) != 1 or not values[0].strip():
+            raise ValueError(f"TPPWB draw URL needs one {name} value")
+        return values[0].strip()
+
+    tournament_id = required("idTournoi")
+    category_id = required("idCategory")
+    draw_type = required("drawType")
+    if not tournament_id.isdigit() or not category_id.isdigit():
+        raise ValueError("TPPWB tournament and category IDs must be numeric")
+    if draw_type not in {"F", "Q", "P"}:
+        raise ValueError("TPPWB drawType must be F, Q, or P")
+
+    selected = {}
+    for query_name, post_name in (
+        ("roundIndex", "selectedRoundIndex"),
+        ("rowIndex", "selectedRowIndex"),
+    ):
+        values = query.get(query_name) or []
+        if len(values) > 1:
+            raise ValueError(f"TPPWB draw URL has duplicate {query_name} values")
+        value = values[0].strip() if values else ""
+        if value and not value.isdigit():
+            raise ValueError(f"TPPWB {query_name} must be numeric")
+        selected[post_name] = value
+
+    return {
+        "idTournoi": tournament_id,
+        "idCategory": category_id,
+        "drawType": draw_type,
+        **selected,
+    }
+
+
+def _tppwb_format_date(value):
+    try:
+        parsed = datetime.strptime(value, "%d/%m/%Y")
+    except (TypeError, ValueError):
+        return ""
+    return f"{parsed.month}/{parsed.day}/{parsed.year}"
+
+
+def _tppwb_metadata(selector, category_id):
+    header_node = selector.xpath('//h4[contains(normalize-space(.), " - Du ")]')
+    header = _join_text(header_node[0]) if header_node else ""
+    match = _TPPWB_HEADER_RE.match(header)
+    if not match:
+        raise ValueError("TPPWB tournament metadata was not found")
+
+    category_name = ""
+    for option in selector.xpath('//select[@id="drawCategory"]/option'):
+        value = (option.xpath("./@value").get() or "").strip()
+        if value.split("|", 1)[0] == category_id:
+            category_name = _join_text(option)
+            break
+    if not category_name:
+        raise ValueError(f"TPPWB category {category_id} was not found")
+
+    category_lower = category_name.casefold()
+    if "messieurs" in category_lower:
+        gender_code, draw_gender = "M", "Male"
+    elif "dames" in category_lower:
+        gender_code, draw_gender = "F", "Female"
+    else:
+        gender_code = ""
+        draw_gender = "Mixed" if "mixte" in category_lower else ""
+
+    return {
+        "tournament_name": _clean(match.group("name")),
+        "tournament_host": _clean(match.group("host")),
+        "tournament_start_date": _tppwb_format_date(match.group("start")),
+        "tournament_end_date": _tppwb_format_date(match.group("end")),
+        "draw_name": category_name,
+        "gender_code": gender_code,
+        "draw_gender": draw_gender,
+    }
+
+
+def _tppwb_player(side, *, partner=False):
+    id_key = "idB" if partner else "id"
+    name_key = "nameB" if partner else "name"
+    player_id = str(side.get(id_key) or "")
+    raw_name = _clean(side.get(name_key) or "")
+
+    if not partner:
+        detail_url = (side.get("urlPlayerDrawDetail") or "").replace("&amp;", "&")
+        query = parse_qs(urlsplit(urljoin(TPPWB_BASE + "/", detail_url)).query)
+        last = _clean((query.get("PlayerLastName") or [""])[0])
+        first = _clean((query.get("PlayerFirstName") or [""])[0])
+        if last and first:
+            return {"name": f"{last}, {first}", "id": player_id}
+        if last or first:
+            return {"name": last or first, "id": player_id}
+
+    return {"name": last_first(raw_name), "id": player_id}
+
+
+def _tppwb_outcome(winner, loser):
+    result_types = {
+        str(side.get("resultType") or "").strip().upper()
+        for side in (winner, loser)
+    }
+    if "WO" in result_types:
+        return "Walkover"
+    if any(value.startswith("AB") for value in result_types):
+        return "retired"
+    return "Completed"
+
+
+def _tppwb_score(winner, loser, outcome):
+    if outcome == "Walkover":
+        return "W.O.;"
+
+    winner_sets = str(winner.get("score") or "").split("-")
+    loser_sets = str(loser.get("score") or "").split("-")
+    sets = []
+    for winner_games, loser_games in zip(winner_sets, loser_sets):
+        winner_games = winner_games.strip()
+        loser_games = loser_games.strip()
+        if not (winner_games.isdigit() and loser_games.isdigit()):
+            continue
+        if winner_games == loser_games == "0":
+            continue
+        sets.append(f"{winner_games}-{loser_games}")
+
+    score = ", ".join(sets)
+    if outcome == "retired" and score:
+        score += " ret."
+    return f"{score};" if score else ""
+
+
+def _tppwb_match_row(game, metadata, round_name, tournament_url):
+    if not isinstance(game, list) or len(game) != 2:
+        return None
+    sides = [side for side in game if isinstance(side, dict)]
+    if len(sides) != 2 or any(
+        str(side.get("id") or "").lower() == "virtual_final_team" for side in sides
+    ):
+        return None
+
+    winners = [
+        side for side in sides if str(side.get("statusWin") or "").upper() == "V"
+    ]
+    losers = [
+        side for side in sides if str(side.get("statusWin") or "").upper() == "E"
+    ]
+    if len(winners) != 1 or len(losers) != 1:
+        return None
+
+    winner, loser = winners[0], losers[0]
+    is_doubles = any(side.get("nameB") or side.get("idB") for side in sides)
+    winner_1 = _tppwb_player(winner)
+    winner_2 = _tppwb_player(winner, partner=True) if is_doubles else {"name": "", "id": ""}
+    loser_1 = _tppwb_player(loser)
+    loser_2 = _tppwb_player(loser, partner=True) if is_doubles else {"name": "", "id": ""}
+    if not winner_1["name"] or not loser_1["name"]:
+        return None
+
+    outcome = _tppwb_outcome(winner, loser)
+    match_id = next(
+        (str(side.get("matchId")) for side in sides if side.get("matchId") not in (None, "")),
+        "",
+    )
+    gender = metadata["gender_code"]
+    row = {column: "" for column in COLUMNS}
+    row.update(
+        {
+            "match_id": match_id,
+            "ball_type": "Yellow",
+            "id_type": "Belgium",
+            "draw_name": metadata["draw_name"],
+            "draw_team_type": "Doubles" if is_doubles else "Singles",
+            "tournament_name": metadata["tournament_name"],
+            "date": metadata["tournament_start_date"],
+            "round": round_name,
+            "score": _tppwb_score(winner, loser, outcome),
+            "winner_1_name": winner_1["name"],
+            "winner_1_gender": gender,
+            "winner_1_third_party_id": winner_1["id"],
+            "winner_1_country": "Belgium",
+            "winner_2_name": winner_2["name"],
+            "winner_2_gender": gender if winner_2["name"] else "",
+            "winner_2_third_party_id": winner_2["id"],
+            "winner_2_country": "Belgium" if winner_2["name"] else "",
+            "loser_1_name": loser_1["name"],
+            "loser_1_gender": gender,
+            "loser_1_third_party_id": loser_1["id"],
+            "loser_1_country": "Belgium",
+            "loser_2_name": loser_2["name"],
+            "loser_2_gender": gender if loser_2["name"] else "",
+            "loser_2_third_party_id": loser_2["id"],
+            "loser_2_country": "Belgium" if loser_2["name"] else "",
+            "outcome": outcome,
+            "draw_gender": metadata["draw_gender"],
+            "tournament_country_code": "BEL",
+            "tournament_host": metadata["tournament_host"],
+            "tournament_import_source": "Belgium",
+            "tournament_sanction_body": "Tennis Wallonie-Bruxelles",
+            "tournament_event_type": "Tournament",
+            "tournament_url": tournament_url,
+            "tournament_country": "Belgium",
+            "tournament_start_date": metadata["tournament_start_date"],
+            "tournament_end_date": metadata["tournament_end_date"],
+        }
+    )
+    return row
+
+
+def _scrape_tppwb_draw(client, tournament_url, log):
+    params = _tppwb_draw_params(tournament_url)
+    page_response = client.get(tournament_url, headers=_HEADERS)
+    if page_response is None or not (200 <= page_response.status_code < 300):
+        raise RuntimeError("TPPWB tournament page could not be fetched")
+    metadata = _tppwb_metadata(Selector(text=page_response.text), params["idCategory"])
+
+    response = client.post(
+        TPPWB_DRAW_ENDPOINT,
+        data=params,
+        headers={
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": tournament_url,
+        },
+    )
+    if response is None or not (200 <= response.status_code < 300):
+        raise RuntimeError("TPPWB draw data could not be fetched")
+
+    outer = response.json()
+    if not isinstance(outer, dict):
+        raise ValueError("TPPWB draw response was not an object")
+    draw_data = outer.get("drawData") or []
+    round_names = outer.get("roundNames") or []
+    if isinstance(draw_data, str):
+        draw_data = json.loads(draw_data)
+    if isinstance(round_names, str):
+        round_names = json.loads(round_names)
+    if not isinstance(draw_data, list) or not isinstance(round_names, list):
+        raise ValueError("TPPWB draw response had an unexpected shape")
+
+    rows = []
+    for round_index, games in enumerate(draw_data):
+        if not isinstance(games, list):
+            continue
+        round_name = str(round_names[round_index] or "") if round_index < len(round_names) else ""
+        for game in games:
+            row = _tppwb_match_row(game, metadata, round_name, tournament_url)
+            if row:
+                rows.append(row)
+    log("INFO", f"TPPWB draw returned {len(rows)} played match(es)")
     return rows
 
 
@@ -761,8 +1048,12 @@ def run(run_obj, log):
     workers = scraper.worker_count
     params = run_obj.params or {}
     tournament_url = (params.get("tournament_url") or "").strip()
+    tppwb_direct = bool(tournament_url and _is_tppwb_url(tournament_url))
 
-    if tournament_url:
+    if tppwb_direct:
+        log("INFO", "Belgium (Tennis Wallonie-Bruxelles) - single draw URL")
+        start_d = end_d = None
+    elif tournament_url:
         log("INFO", "\U0001f3be Belgium (Tennis Vlaanderen) \u2014 single tournament URL")
         start_d = end_d = None
     else:
@@ -772,25 +1063,23 @@ def run(run_obj, log):
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
     proxies = build_proxies(scraper, log)
 
-    # Best-effort load the captcha solver. An admin can upload the model via the
-    # Settings tab (stored in the DB) — drop it onto disk first so the loader finds
-    # it. Without TensorFlow + the model, challenged pages can't be cleared and the
-    # run fails honestly.
     solver = None
-    try:
-        materialize_uploaded_model(scraper, log)
-        solver = CaptchaSolver(log)
-        log("INFO", "\U0001f9e0 captcha solver ready")
-    except CaptchaSolverUnavailable as exc:
-        tele.record_error(
-            f"Captcha solver unavailable (TensorFlow + captcha_model.keras "
-            f"required): {exc}"
-        )
-        log(
-            "WARN",
-            "\u26a0\ufe0f captcha solver unavailable \u2014 Zenedge-challenged "
-            f"pages cannot be cleared: {exc}",
-        )
+    if not tppwb_direct:
+        # Tennis Vlaanderen is challenge-protected; TPPWB's JSON draw is not.
+        try:
+            materialize_uploaded_model(scraper, log)
+            solver = CaptchaSolver(log)
+            log("INFO", "\U0001f9e0 captcha solver ready")
+        except CaptchaSolverUnavailable as exc:
+            tele.record_error(
+                f"Captcha solver unavailable (TensorFlow + captcha_model.keras "
+                f"required): {exc}"
+            )
+            log(
+                "WARN",
+                "\u26a0\ufe0f captcha solver unavailable \u2014 Zenedge-challenged "
+                f"pages cannot be cleared: {exc}",
+            )
 
     # ---- phase 1 · discovery ------------------------------------------
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
@@ -818,7 +1107,14 @@ def run(run_obj, log):
             log=log, tele=tele, proxies=proxies, allowed_hosts=ALLOWED_HOSTS
         )
         try:
-            rows = _scrape_tournament(client, solver, tournament, log)
+            if _is_tppwb_url(tournament.get("tournament_url", "")):
+                rows = _scrape_tppwb_draw(
+                    client,
+                    tournament.get("tournament_url", ""),
+                    log,
+                )
+            else:
+                rows = _scrape_tournament(client, solver, tournament, log)
             for row in rows:
                 key = _dedup_key(row)
                 with lock:
@@ -832,7 +1128,7 @@ def run(run_obj, log):
                     f"   \U0001f3c6 {row.get('draw_team_type', '')}: "
                     f"{row.get('winner_1_name') or '?'} def. "
                     f"{row.get('loser_1_name') or '?'} [{row.get('score', '')}] "
-                    f"@ {row.get('tournament_name') or 'Tennis Vlaanderen'}",
+                    f"@ {row.get('tournament_name') or 'Belgium tennis'}",
                 )
         except Exception as exc:  # noqa: BLE001 - one bad tournament can't kill the run
             tele.record_error(

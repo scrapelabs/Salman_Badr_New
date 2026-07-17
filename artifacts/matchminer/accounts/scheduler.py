@@ -48,24 +48,56 @@ def _disabled_by_env():
 
 
 def should_run_in_this_process():
-    """True only in a web-serving process (gunicorn / runserver).
+    """True only in a web-serving process (gunicorn / waitress / runserver).
 
     Excludes every management command: their argv carries the command name
-    (``migrate``, ``run_scrape``, ``scrape_now`` …) rather than ``runserver`` /
-    ``gunicorn``, so this returns ``False`` and no thread is spawned there.
+    (``migrate``, ``run_scrape``, ``scrape_now`` …), so this returns ``False``
+    and no thread is spawned there.
     """
     if _disabled_by_env():
         return False
-    argv = sys.argv
-    if any("gunicorn" in str(a) for a in argv):
-        return True
-    if "runserver" in argv:
+    argv = [str(a) for a in sys.argv]
+    argv_lower = [a.lower() for a in argv]
+    argv_parts = [
+        [part for part in a.replace("\\", "/").split("/") if part]
+        for a in argv_lower
+    ]
+    executable_names = [parts[-1] if parts else "" for parts in argv_parts]
+    first_name = executable_names[0] if executable_names else ""
+    command = argv_lower[1] if len(argv_lower) > 1 else ""
+    management_launchers = {
+        "manage.py",
+        "django-admin",
+        "django-admin.py",
+        "django-admin.exe",
+    }
+    if first_name in management_launchers:
+        if command != "runserver":
+            return False
         # Avoid a double-start under the autoreloader: with ``--noreload`` there
         # is a single process (RUN_MAIN unset); with the reloader only the child
         # (RUN_MAIN == "true") should own the thread.
-        if "--noreload" in argv:
+        if "--noreload" in argv_lower:
             return True
         return os.environ.get("RUN_MAIN") == "true"
+    web_servers = {
+        "gunicorn",
+        "gunicorn.exe",
+        "waitress",
+        "waitress.exe",
+        "waitress-serve",
+        "waitress-serve.exe",
+    }
+    if first_name in web_servers:
+        return True
+    web_modules = {"gunicorn", "waitress"}
+    if (
+        argv_parts
+        and len(argv_parts[0]) >= 2
+        and argv_parts[0][-1] == "__main__.py"
+        and argv_parts[0][-2] in web_modules
+    ):
+        return True
     return False
 
 
@@ -141,13 +173,19 @@ def tick(now=None):
                     time_of_day=sched.time_of_day,
                     weekday=sched.weekday,
                     day_of_month=sched.day_of_month,
-                    tz_name=sched.timezone,
+                    tz_name=ScraperSchedule.TIMEZONE,
                     anchor_date=sched.anchor_date,
                     after_utc=now,
                 )
+                sched.timezone = ScraperSchedule.TIMEZONE
                 sched.last_fired_at = now
                 sched.save(
-                    update_fields=["next_run_at", "last_fired_at", "updated_at"]
+                    update_fields=[
+                        "next_run_at",
+                        "timezone",
+                        "last_fired_at",
+                        "updated_at",
+                    ]
                 )
                 to_launch.append((sched.scraper, sched.pk, due_at))
         for scraper, sched_pk, due_at in to_launch:

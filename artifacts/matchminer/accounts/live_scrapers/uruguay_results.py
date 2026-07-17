@@ -38,7 +38,7 @@ from django.db.models import F
 from django.utils import timezone
 from parsel import Selector
 
-from accounts.models import Run
+from accounts.models import Proxy, Run
 
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -782,7 +782,25 @@ def run(run_obj, log):
         f"month={month or 'all'}",
     )
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
-    proxies = build_proxies(scraper, log)
+    # This origin intermittently rejects the rotating datacenter IP on one
+    # request after accepting it on another. The server's stable direct route is
+    # accepted, so keep one direct route for discovery and every tournament
+    # request. Other scrapers continue to honour their configured routing.
+    selected_proxy = scraper.proxy
+    if (
+        selected_proxy
+        and selected_proxy.is_active
+        and (selected_proxy.address or "").strip()
+        and selected_proxy.kind == Proxy.Kind.DATACENTER
+    ):
+        proxies = None
+        log(
+            "INFO",
+            "\U0001f6e3 Uruguay routing: bypassing the blocked rotating proxy; "
+            "using direct connection",
+        )
+    else:
+        proxies = build_proxies(scraper, log)
 
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:

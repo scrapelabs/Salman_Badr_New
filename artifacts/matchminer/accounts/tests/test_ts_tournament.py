@@ -394,6 +394,71 @@ class TSTournamentGenderOutputTests(SimpleTestCase):
         self.assertEqual(rows[0]["loser_1_gender"], "")
 
 
+class TSTournamentPlayerMatchTests(SimpleTestCase):
+    def test_player_page_parses_normal_and_best_of_five_match_cards(self):
+        cfg = _ts_tournament.TSTournamentConfig(
+            label="Sweden Tournament",
+            base="https://svtf.tournamentsoftware.com",
+            country="Sweden",
+            country_code="SWE",
+            sanction_body="Sweden",
+        )
+        player_url = f"{cfg.base}/player-profile/PLAYER"
+
+        def card(css_class, winner, loser, sets):
+            points = "".join(
+                f'<div class="match__result"><ul class="points">'
+                f"<li>{win}</li><li>{lose}</li></ul></div>"
+                for win, lose in sets
+            )
+            return f"""
+                <li class="match-group__item"><div class="{css_class}">
+                  <div class="match__body">
+                    <div class="match__row-wrapper"><div class="match__row has-won">
+                      <a class="nav-link" href="/player-profile/{winner}">
+                        <span class="nav-link__value">{winner}</span>
+                      </a>
+                    </div></div>
+                    <div class="match__row-wrapper"><div class="match__row">
+                      <a class="nav-link" href="/player-profile/{loser}">
+                        <span class="nav-link__value">{loser}</span>
+                      </a>
+                    </div></div>
+                    {points}
+                  </div>
+                </div></li>
+            """
+
+        html = (
+            '<div class="module-container"><ul>'
+            + card("match", "Winner One", "Loser One", [(6, 3), (6, 4)])
+            + card(
+                "best-of-5-or-more match",
+                "Winner Two",
+                "Loser Two",
+                [(6, 4), (3, 6), (7, 5), (4, 6), (6, 2)],
+            )
+            + "</ul></div>"
+        )
+
+        with mock.patch.object(
+            _ts_tournament,
+            "_build_row",
+            side_effect=lambda _client, _cfg, _ctx, match_data: match_data,
+        ):
+            rows = _ts_tournament._parse_player_matches(
+                FakeSelectorClient({player_url: html}),
+                cfg,
+                {},
+                player_url,
+            )
+
+        self.assertEqual(
+            [row["score"] for row in rows],
+            ["6-3, 6-4;", "6-4, 3-6, 7-5, 4-6, 6-2;"],
+        )
+
+
 class TSTournamentTeamMatchTests(SimpleTestCase):
     def test_opt_in_date_range_discovers_team_matches_from_tournament_and_draw_pages(self):
         cfg = _ts_tournament.TSTournamentConfig(

@@ -53,6 +53,8 @@ FEED_URL = "https://www.njschoolsports.com/Feeds/UTRResults/"
 GENDERS = ("boys", "girls")
 # Non-secret feed key from the source; overridable via settings for safety.
 NJ_HS_API_KEY = "4f59cee1-3db0-4128-84ba-bd7995dadd95"
+# Data-bearing NJ feed responses routinely take a little over 30 seconds.
+FEED_TIMEOUT = 90
 
 # Items CSV columns — the shared MatchMiner items schema (copied verbatim from
 # czech_scraper), so downloaded files stay uniform across scrapers.
@@ -245,13 +247,21 @@ def _parse_feed(results):
     return rows
 
 
-def _scrape_day(client, api_key, genders, job_date, log):
+def _scrape_day(client, api_key, genders, job_date, log, *, fallback_client=None):
     """Fetch + parse the requested genders for one day; return a list of row dicts."""
     rows = []
     gamedate = job_date.strftime("%m/%d/%Y")
     for gender in genders:
         params = {"key": api_key, "gender": gender, "gamedate": gamedate}
-        results = client.get_json(FEED_URL, params=params)
+        results = client.get_json(FEED_URL, params=params, timeout=FEED_TIMEOUT)
+        if results is None and fallback_client is not None:
+            log(
+                "WARN",
+                f"Proxy fetch failed for {gender} {gamedate}; trying direct retry",
+            )
+            results = fallback_client.get_json(
+                FEED_URL, params=params, timeout=FEED_TIMEOUT
+            )
         if not results:
             continue
         rows.extend(_parse_feed(results))
@@ -306,8 +316,18 @@ def run(run_obj, log):
 
     def process(job_date):
         client = ScraperClient(log=log, tele=tele, proxies=proxies)
+        fallback_client = (
+            ScraperClient(log=log, tele=tele, proxies=None) if proxies else None
+        )
         try:
-            rows = _scrape_day(client, api_key, genders, job_date, log)
+            rows = _scrape_day(
+                client,
+                api_key,
+                genders,
+                job_date,
+                log,
+                fallback_client=fallback_client,
+            )
             for row in rows:
                 # Dedup on the match id + players + score (mirrors the source's
                 # existence check), so a match never lands twice.
@@ -343,6 +363,8 @@ def run(run_obj, log):
         finally:
             Run.objects.filter(pk=run_obj.pk).update(progress_done=F("progress_done") + 1)
             client.close()
+            if fallback_client is not None:
+                fallback_client.close()
 
     if job_dates:
         log("INFO", "\u2500\u2500\u2500\u2500 scraping days \u2500\u2500\u2500\u2500")
@@ -356,7 +378,7 @@ def run(run_obj, log):
         "INFO",
         f"\U0001f4ca Telemetry: {tele.request_count} request(s), {tele.error_count} error(s)",
     )
-    status = Run.Status.SUCCESS if row_count else Run.Status.FAILED
+    status = Run.Status.SUCCESS if row_count or not tele.error_count else Run.Status.FAILED
     icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
     log("INFO", f"{icon} Run finished \u2014 status={status}, rows={row_count}")
     items_csv = buf.getvalue() if row_count else ""

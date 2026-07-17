@@ -10,6 +10,16 @@ urlpatterns = [
         views.overview_notifications_view,
         name="overview_notifications",
     ),
+    path(
+        "overview/runs/<uuid:run_uuid>/delete/",
+        views.overview_run_delete_view,
+        name="overview_run_delete",
+    ),
+    path(
+        "overview/runs/bulk-delete/",
+        views.overview_runs_bulk_delete_view,
+        name="overview_runs_bulk_delete",
+    ),
     path("stats/live/", views.live_stats_view, name="live_stats"),
     path("scrapers/", views.scrapers_view, name="scrapers"),
     path("scrapers/<slug:slug>/", views.scraper_detail_view, name="scraper_detail"),
@@ -101,6 +111,11 @@ urlpatterns = [
     # QA Team Tasks
     path("qa/", qa_views.board, name="qa_board"),
     path("qa/tickets/", qa_views.tickets_page, name="qa_tickets"),
+    path(
+        "qa/tickets/bulk-delete/",
+        qa_views.tickets_bulk_delete,
+        name="qa_tickets_bulk_delete",
+    ),
     path("qa/new/", qa_views.ticket_create, name="qa_ticket_create"),
     path("qa/t/<uuid:uuid>/", qa_views.ticket_detail, name="qa_ticket"),
     path("qa/t/<uuid:uuid>/update/", qa_views.ticket_update, name="qa_ticket_update"),

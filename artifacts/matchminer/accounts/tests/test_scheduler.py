@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time as dtime, timedelta, timezone as dt_timezone
 from html.parser import HTMLParser
 from unittest.mock import patch
 
@@ -36,6 +36,161 @@ def _select_from(response, select_id):
     parser = _SelectParser(select_id)
     parser.feed(response.content.decode())
     return parser
+
+
+class SchedulerProcessTests(TestCase):
+    def test_scheduler_runs_inside_gunicorn_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["gunicorn", "matchminer.wsgi:application"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertTrue(scheduler.should_run_in_this_process())
+
+    def test_scheduler_runs_inside_gunicorn_module_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            [
+                "C:\\Python310\\Lib\\site-packages\\gunicorn\\__main__.py",
+                "matchminer.wsgi:application",
+            ],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertTrue(scheduler.should_run_in_this_process())
+
+    def test_scheduler_runs_inside_runserver_child_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["manage.py", "runserver"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true", "RUN_MAIN": "true"},
+        ):
+            self.assertTrue(scheduler.should_run_in_this_process())
+
+    def test_scheduler_runs_inside_runserver_noreload_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["manage.py", "runserver", "--noreload"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true", "RUN_MAIN": "false"},
+        ):
+            self.assertTrue(scheduler.should_run_in_this_process())
+
+    def test_scheduler_skips_runserver_parent_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["manage.py", "runserver"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true", "RUN_MAIN": "false"},
+        ):
+            self.assertFalse(scheduler.should_run_in_this_process())
+
+    def test_scheduler_runs_inside_waitress_module_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            [
+                "C:\\Python310\\Lib\\site-packages\\waitress\\__main__.py",
+                "--listen=0.0.0.0:80",
+                "matchminer.wsgi:application",
+            ],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertTrue(scheduler.should_run_in_this_process())
+
+    def test_scheduler_runs_inside_waitress_serve_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            [
+                "waitress-serve",
+                "--listen=0.0.0.0:80",
+                "matchminer.wsgi:application",
+            ],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertTrue(scheduler.should_run_in_this_process())
+
+    def test_scheduler_env_disable_wins_for_waitress_process(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            [
+                "C:\\Python310\\Lib\\site-packages\\waitress\\__main__.py",
+                "--listen=0.0.0.0:80",
+                "matchminer.wsgi:application",
+            ],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "false"},
+        ):
+            self.assertFalse(scheduler.should_run_in_this_process())
+
+    def test_scheduler_does_not_run_for_management_command_with_waitress_label(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            [
+                "manage.py",
+                "test",
+                "accounts.tests.test_scheduler."
+                "SchedulerProcessTests."
+                "test_scheduler_runs_inside_waitress_module_process",
+            ],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertFalse(scheduler.should_run_in_this_process())
+
+    def test_scheduler_does_not_run_for_management_command_with_runserver_label(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["manage.py", "test", "runserver"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true", "RUN_MAIN": "true"},
+        ):
+            self.assertFalse(scheduler.should_run_in_this_process())
+
+    def test_scheduler_does_not_run_for_pytest_marker_named_waitress(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["pytest", "-m", "waitress"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertFalse(scheduler.should_run_in_this_process())
+
+    def test_scheduler_does_not_run_for_non_server_module_under_waitress_path(self):
+        with patch.object(
+            scheduler.sys,
+            "argv",
+            ["C:\\work\\waitress\\tools\\__main__.py"],
+        ), patch.dict(
+            scheduler.os.environ,
+            {"MATCHMINER_SCHEDULER_ENABLED": "true"},
+        ):
+            self.assertFalse(scheduler.should_run_in_this_process())
 
 
 class SchedulerScheduleTests(TestCase):
@@ -87,6 +242,56 @@ class SchedulerScheduleTests(TestCase):
             [opt.get("value") for opt in lookback.options if "selected" in opt],
             ["15"],
         )
+
+    def test_schedule_page_shows_utc_date_clock_and_fixed_timezone(self):
+        response = self.client.get(
+            reverse("scraper_detail", args=[self.non_itf_scraper.slug])
+            + "?tab=schedule"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="serverClockDate"')
+        self.assertContains(response, "All schedule dates and times")
+        self.assertContains(
+            response,
+            'id="schedTz" name="timezone" value="UTC" readonly',
+        )
+        self.assertNotContains(response, '<option value="America/New_York"')
+
+    def test_schedule_save_ignores_non_utc_timezone_and_computes_in_utc(self):
+        now = datetime(2026, 7, 15, 5, 30, tzinfo=dt_timezone.utc)
+        with patch("accounts.views.timezone.now", return_value=now):
+            response = self.client.post(
+                reverse("scraper_detail", args=[self.non_itf_scraper.slug])
+                + "?tab=schedule",
+                {
+                    "form": "schedule-config",
+                    "enabled": "on",
+                    "frequency": "daily",
+                    "time_of_day": "06:00",
+                    "timezone": "America/New_York",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        schedule = ScraperSchedule.objects.get(scraper=self.non_itf_scraper)
+        self.assertEqual(schedule.timezone, "UTC")
+        self.assertEqual(schedule.time_of_day, dtime(6, 0))
+        self.assertEqual(
+            schedule.next_run_at,
+            datetime(2026, 7, 15, 6, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_seeded_sportradar_schedule_is_normalized_to_utc(self):
+        schedule = ScraperSchedule.objects.get(scraper__slug="sportradar")
+        next_run_utc = schedule.next_run_at.astimezone(dt_timezone.utc)
+
+        self.assertEqual(schedule.timezone, "UTC")
+        self.assertEqual(
+            schedule.time_of_day,
+            next_run_utc.time().replace(tzinfo=None),
+        )
+        self.assertNotIn("America/New_York", schedule.scraper.description)
 
     def test_all_itf_schedule_slugs_render_lookback_dropdown(self):
         for slug in self.ITF_SCHEDULE_SLUGS:

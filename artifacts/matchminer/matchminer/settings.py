@@ -259,6 +259,10 @@ SPORTRADAR_API_KEY = os.environ.get("SPORTRADAR_API_KEY", "")
 SPORTRADAR_ACCESS_LEVEL = os.environ.get("SPORTRADAR_ACCESS_LEVEL", "trial")
 SPORTRADAR_LANGUAGE_CODE = os.environ.get("SPORTRADAR_LANGUAGE_CODE", "en")
 
+# Louisiana high-school tennis feed. The scraper first uses the per-scraper
+# Settings secret, then this env fallback, then its source-provided default.
+LHSAA_API_KEY = os.environ.get("LHSAA_API_KEY", "")
+
 # The USTA Team Captains scraper logs into tennislink.usta.com with a USTA
 # account email + password. Same rules: read from the environment, never
 # hard-coded or logged; when unset the run fails honestly.

@@ -1285,7 +1285,7 @@ def _parse_player_matches(client, cfg, ctx, player_url):
     rows = []
     for d1 in sel.xpath(
         '//div[@class="module-container"]/ul/li[@class="match-group__item"]'
-        '/div[@class="match"]'
+        '/div[contains(concat(" ", normalize-space(@class), " "), " match ")]'
     ):
         body = d1.xpath('.//div[@class="match__body"]').get()
         if not body:
@@ -1547,7 +1547,7 @@ def _parse_team_match_page(client, cfg, ctx, match_url):
     rows = []
     for d1 in sel.xpath(
         '//div[@class="module-container"]/ul/li[@class="match-group__item"]'
-        '/div[@class="match"]'
+        '/div[contains(concat(" ", normalize-space(@class), " "), " match ")]'
     ):
         body = d1.xpath('.//div[@class="match__body"]').get()
         if not body:

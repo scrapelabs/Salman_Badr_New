@@ -734,8 +734,12 @@ class ScraperSchedule(models.Model):
     recomputed whenever the schedule is saved and after every fire. There is no
     backfill — a schedule missed while the app was offline fires once on
     recovery, then resumes its cadence. ``anchor_date`` pins the fortnight parity
-    for the ``biweekly`` cadence and is unused by the other frequencies.
+    for the ``biweekly`` cadence and is unused by the other frequencies. Every
+    wall-clock schedule field is interpreted as UTC.
     """
+
+    TIMEZONE = "UTC"
+    TIMEZONE_CHOICES = [(TIMEZONE, TIMEZONE)]
 
     class Frequency(models.TextChoices):
         DAILY = "daily", "Daily"
@@ -793,8 +797,12 @@ class ScraperSchedule(models.Model):
         choices=ITF_LOOKBACK_CHOICES,
         default=ITF_LOOKBACK_DEFAULT_DAYS,
     )
-    timezone = models.CharField(max_length=64, default="UTC")
-    # Fortnight parity anchor for the biweekly cadence (the first scheduled local
+    timezone = models.CharField(
+        max_length=64,
+        choices=TIMEZONE_CHOICES,
+        default=TIMEZONE,
+    )
+    # Fortnight parity anchor for the biweekly cadence (the first scheduled UTC
     # date); recomputed on every save of a biweekly schedule, else NULL.
     anchor_date = models.DateField(null=True, blank=True)
     # Authoritative next-due instant, stored UTC. NULL when disabled.

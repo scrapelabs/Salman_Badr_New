@@ -3,13 +3,14 @@ One board section's ticket rows — a <tbody> fragment. Shared by the initial
 board render and the AJAX pager endpoint (accounts.qa_views.tickets_page) so the
 markup stays in one place. Expects `items` — an iterable of Ticket rows
 annotated with `n_comments`. Each row is a <tr data-href> wired up as a click
-target by qa_board.html (delegated, so AJAX-swapped rows work too); the inner
-"Go to scraper" link and title link opt out of the row-nav via the a/button
-guard. Column count is 7 — keep the empty-row colspan in sync (board template +
-the JS fallback in qa_board.html).
+target by qa_board.html (delegated, so AJAX-swapped rows work too); links and
+selection controls opt out of row navigation. Rows normally have 7 columns;
+Done rows gain an eighth checkbox column for admins. Keep the empty-row colspan
+in sync in the board template and its JS fallback.
 {% endcomment %}
 {% for t in items %}
 <tr class="qa-row" data-href="{% url 'qa_ticket' t.uuid %}">
+  {% if request.user.is_superuser and t.status == "done" %}<td class="td-check"><input type="checkbox" class="qa-done-check" name="ticket_uuids" value="{{ t.uuid }}" form="qaDoneBulkDeleteForm" aria-label="Select Done ticket #{{ t.short_id }}" /></td>{% endif %}
   <td><span class="qa-pri qa-pri--{{ t.priority }}">{{ t.get_priority_display }}</span></td>
   <td>
     <div class="tbl-name">

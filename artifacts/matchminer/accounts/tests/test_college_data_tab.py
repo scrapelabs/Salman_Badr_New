@@ -34,7 +34,7 @@ class CollegeDataTabTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "?v=20260707-data-panels")
+        self.assertContains(response, "?v=20260715-responsive")
         self.assertContains(response, 'class="data-tab-panel"')
         self.assertContains(response, 'class="stat-cards data-stat-cards"')
         self.assertContains(response, "Match database")

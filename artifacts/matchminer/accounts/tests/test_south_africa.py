@@ -55,7 +55,7 @@ class SouthAfricaRunTests(TestCase):
         row = south_africa._row_for(
             {
                 "result_id": "123",
-                "discipline": "Singles",
+                "discipline": "tennis",
                 "match_date": "2026-07-01",
                 "game_scores_winner_first": "6-4, 6-2",
                 "winner": 1,
@@ -66,7 +66,10 @@ class SouthAfricaRunTests(TestCase):
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
 
-        self.assertEqual(row[7], "6-4, 6-2;")
+        self.assertEqual(
+            row[south_africa.HEADER.index("Score")],
+            "6-4, 6-2;",
+        )
 
     def test_existing_score_semicolon_is_not_duplicated(self):
         row = south_africa._row_for(
@@ -81,7 +84,45 @@ class SouthAfricaRunTests(TestCase):
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
 
-        self.assertEqual(row[7], "6-4, 6-2;")
+        self.assertEqual(
+            row[south_africa.HEADER.index("Score")],
+            "6-4, 6-2;",
+        )
+
+    def test_schema_swaps_key_for_standalone_id_type(self):
+        self.assertEqual(len(south_africa.HEADER), 64)
+        self.assertEqual(south_africa.HEADER[2], "ID Type")
+        self.assertNotIn("Key", south_africa.HEADER)
+        self.assertEqual(south_africa.HEADER[-1], "Tournament End Date")
+
+    def test_id_type_and_draw_team_type_mapping(self):
+        query_key = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+        for discipline, expected in (
+            ("tennis", "Singles"),
+            ("doubles_tennis", "Doubles"),
+        ):
+            with self.subTest(discipline=discipline):
+                row = south_africa._row_for(
+                    {
+                        "result_id": "123",
+                        "discipline": discipline,
+                        "winner": 1,
+                        "tournament": {"end_date": "2026-07-03"},
+                        "user_1": {"first_name": "Winner"},
+                        "user_2": {"first_name": "Loser"},
+                    },
+                    query_key,
+                )
+                values = dict(zip(south_africa.HEADER, row))
+
+                self.assertEqual(len(row), 64)
+                self.assertEqual(values["ID Type"], "South Africa")
+                self.assertEqual(values["Draw Team Type"], expected)
+                self.assertEqual(values["Winner 1 ID Type"], "")
+                self.assertEqual(values["Loser 1 ID Type"], "")
+                self.assertEqual(row[-1], "07/03/2026")
+                self.assertNotIn(query_key, row)
 
     @patch("accounts.live_scrapers.south_africa.build_proxies", return_value=None)
     @patch("accounts.live_scrapers.south_africa.ScraperClient", _FakeClient)

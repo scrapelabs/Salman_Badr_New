@@ -26,8 +26,10 @@ AI-flavoured had to be removed.
 
 The ``apikey`` is a non-secret constant baked into the source; it is exposed as
 :data:`MAXPREPS_API_KEY` and may be overridden via ``settings.MAXPREPS_API_KEY``.
-The feed ``ssid`` is read from the run's params (``ssid``) with a settings /
-module-constant fallback so the scraper still runs out of the box.
+It is deliberately not read from run params: bad ad-hoc API-key overrides make
+the feed return empty 200 responses. The feed ``ssid`` is read from the run's
+params (``ssid``) with a settings / module-constant fallback so the scraper still
+runs out of the box.
 
 ``run(run_obj, log)`` returns the standard ``(items_csv, requests_csv,
 errors_csv, row_count, status)`` tuple.
@@ -95,13 +97,12 @@ HEADER = [c.replace("_", " ").title() for c in COLUMNS]
 def _api_key(params=None):
     """The MaxPreps feed API key.
 
-    Prefers a run-supplied ``api_key`` param (start form / webhook), then a
-    ``settings.MAXPREPS_API_KEY`` override, then the module default.
+    Prefers a server-side ``settings.MAXPREPS_API_KEY`` override, then the module
+    default. ``params`` is accepted for call-site compatibility but ignored so a
+    bad run/webhook payload cannot silently poison the feed request.
     """
-    params = params or {}
     return (
-        (params.get("api_key") or "").strip()
-        or (getattr(settings, "MAXPREPS_API_KEY", "") or "").strip()
+        (getattr(settings, "MAXPREPS_API_KEY", "") or "").strip()
         or MAXPREPS_API_KEY
     )
 

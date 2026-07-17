@@ -227,8 +227,14 @@ def _score(status, winner_qualifier):
         away = period.get("away_score")
         if home is None or away is None:
             continue
+        loser_tiebreak = None
+        if home > away:
+            loser_tiebreak = period.get("away_tiebreak_score")
+        elif away > home:
+            loser_tiebreak = period.get("home_tiebreak_score")
         first, second = (away, home) if winner_qualifier == "away" else (home, away)
-        parts.append(f"{first}-{second}")
+        suffix = f"({loser_tiebreak})" if loser_tiebreak is not None else ""
+        parts.append(f"{first}-{second}{suffix}")
     if not parts:
         home = status.get("home_score")
         away = status.get("away_score")
@@ -446,7 +452,7 @@ def _row_from_summary(
         "draw_name": draw_name,
         "draw_team_type": team_type,
         "tournament_name": tournament_name,
-        "date": sport_event.get("start_time", ""),
+        "date": _to_mdy(sport_event.get("start_time", "")),
         "round": round_info.get("name", ""),
         "score": _score(status, _qualifier(winner_comp)),
         "winner_1_name": w1["name"],

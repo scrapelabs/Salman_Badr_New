@@ -92,7 +92,7 @@ scraper_detail.html, scoped per-form). Defaults to "Date range".
       the script can read it. Every box-score page (HTML or PDF) is extracted by
       <strong>Claude</strong> — there is no deterministic fallback, so a
       <strong>Claude API key is required</strong> (set <code>ANTHROPIC_API_KEY</code>
-      or a per-scraper key on the <a href="?tab=settings">Settings tab</a>). Without
+      {% if user.is_superuser %}or a per-scraper key on the <a href="?tab=settings">Settings tab</a>{% else %}or ask an administrator to configure the per-scraper key{% endif %}). Without
       one the run fails with an error.
     </p>
   </div>

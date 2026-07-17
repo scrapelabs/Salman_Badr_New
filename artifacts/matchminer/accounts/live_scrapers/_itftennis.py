@@ -155,7 +155,9 @@ def _jsonld(sel):
     if not raw:
         return {}
     try:
-        data = json.loads(raw)
+        # Some ITF event descriptions contain literal newlines inside the
+        # JSON-LD string. They are valid page content but invalid strict JSON.
+        data = json.loads(raw, strict=False)
     except (ValueError, TypeError):
         return {}
     if isinstance(data, list):

@@ -49,11 +49,16 @@ IMPORT_SOURCE = "Tennis South Africa"
 SANCTION_BODY = "Tennis South Africa"
 BALL_TYPE = "Yellow"
 EVENT_TYPE = "Tournament"
+ID_TYPE = "South Africa"
 
-# Exact 64-column Tennis South Africa schema, header verbatim from the spec
-# (NOT derived by title-casing snake_case — the wording is authoritative).
+DRAW_TEAM_TYPE_MAP = {
+    "tennis": "Singles",
+    "doubles_tennis": "Doubles",
+}
+
+# Exact 64-column Tennis South Africa schema.
 HEADER = [
-    "Match ID", "Ball Type", "Draw Bracket Value", "Draw Name",
+    "Match ID", "Ball Type", "ID Type", "Draw Bracket Value", "Draw Name",
     "Draw Team Type", "Tournament Name", "Date", "Score",
     "Winner 1 Name", "Winner 1 Gender", "Winner 1 DOB", "Winner 1 Third Party ID",
     "Winner 1 ID Type", "Winner 1 City", "Winner 1 State", "Winner 1 Country",
@@ -70,7 +75,7 @@ HEADER = [
     "Tournament Import Source", "Tournament Sanction Body",
     "Winner 2 College", "Loser 2 College", "Tournament Event Type",
     "Winner 1 College", "Loser 1 College", "Tournament URL",
-    "Tournament Country", "Tournament Start Date", "Tournament End Date", "Key",
+    "Tournament Country", "Tournament Start Date", "Tournament End Date",
 ]
 assert len(HEADER) == 64, f"expected 64 columns, got {len(HEADER)}"
 
@@ -194,15 +199,17 @@ def _row_for(result, key):
     tournament = result.get("tournament") or {}
     draw = tournament.get("draw") or {}
     club = result.get("club") or {}
+    discipline = result.get("discipline") or ""
 
     w1, w2, l1, l2 = _teams(result)
 
     row = [
         str(result.get("result_id") or ""),          # Match ID
         BALL_TYPE,                                    # Ball Type
+        ID_TYPE,                                      # ID Type
         "",                                           # Draw Bracket Value
         draw.get("name") or "",                       # Draw Name
-        result.get("discipline") or "",               # Draw Team Type
+        DRAW_TEAM_TYPE_MAP.get(discipline, discipline), # Draw Team Type
         tournament.get("name") or "",                 # Tournament Name
         _us_date(result.get("match_date")),           # Date
         _score(result.get("game_scores_winner_first")), # Score
@@ -235,7 +242,6 @@ def _row_for(result, key):
         COUNTRY,                                      # Tournament Country
         _us_date(tournament.get("start_date")),       # Tournament Start Date
         _us_date(tournament.get("end_date")),         # Tournament End Date
-        key,                                          # Key (the queried key)
     ]
     return row
 

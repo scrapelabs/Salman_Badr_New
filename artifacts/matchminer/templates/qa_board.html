@@ -44,7 +44,23 @@
         {% endfor %}
       </select>
     </form>
-    <span class="qa-total">{{ total_tickets }} ticket{{ total_tickets|pluralize }}</span>
+    <div class="qa-toolbar-summary">
+      <span class="qa-total">{{ total_tickets }} ticket{{ total_tickets|pluralize }}</span>
+      {% if request.user.is_superuser %}
+      <form id="qaDoneBulkDeleteForm" method="post" action="{% url 'qa_tickets_bulk_delete' %}"
+            data-confirm="Delete the selected Done ticket(s) permanently? Their comments and notifications will be removed. This can’t be undone."
+            data-confirm-title="Delete Done tickets?"
+            data-confirm-ok="Delete tickets"
+            data-confirm-tone="danger">
+        {% csrf_token %}
+        <input type="hidden" name="scraper" value="{{ active_scraper }}" />
+        <button type="submit" class="btn btn-ghost btn-sm qa-bulk-delete-btn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          <span data-bulk-label>Delete selected done</span>
+        </button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 
   <div class="qa-board" data-tickets-url="{% url 'qa_tickets' %}" data-scraper="{{ active_scraper }}">
@@ -59,6 +75,7 @@
         <table class="tbl qa-tbl">
           <thead>
             <tr>
+              {% if request.user.is_superuser and col.status == "done" %}<th class="th-check"><input type="checkbox" id="qaDoneSelAll" aria-label="Select all Done tickets on this page" /></th>{% endif %}
               <th>Priority</th>
               <th>Ticket</th>
               <th>Scraper</th>
@@ -70,7 +87,7 @@
           </thead>
           <tbody class="qa-col-body" data-status="{{ col.status }}">
             {% include "partials/qa_cards.html" with items=col.items %}
-            {% if not col.items %}<tr class="tbl-empty-row"><td class="tbl-empty" colspan="7">No tickets here</td></tr>{% endif %}
+            {% if not col.items %}<tr class="tbl-empty-row"><td class="tbl-empty" colspan="{% if request.user.is_superuser and col.status == 'done' %}8{% else %}7{% endif %}">No tickets here</td></tr>{% endif %}
           </tbody>
         </table>
       </div>
@@ -171,16 +188,47 @@
     if (!board) return;
     var ticketsUrl = board.getAttribute("data-tickets-url");
     var scraper = board.getAttribute("data-scraper") || "";
-    var EMPTY_ROW =
-      '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="7">No tickets here</td></tr>';
+    var bulkForm = document.getElementById("qaDoneBulkDeleteForm");
+    var bulkButton = bulkForm && bulkForm.querySelector("button[type=submit]");
+    var bulkLabel = bulkForm && bulkForm.querySelector("[data-bulk-label]");
+    var selectAll = document.getElementById("qaDoneSelAll");
+
+    function doneChecks() {
+      return Array.prototype.slice.call(board.querySelectorAll(".qa-done-check"));
+    }
+
+    function updateBulkState() {
+      if (!bulkForm || !bulkButton) return;
+      var checks = doneChecks();
+      var selected = checks.filter(function (box) { return box.checked; }).length;
+      bulkButton.disabled = selected === 0;
+      if (bulkLabel) {
+        bulkLabel.textContent = selected
+          ? "Delete selected done (" + selected + ")"
+          : "Delete selected done";
+      }
+      if (selectAll) {
+        selectAll.checked = checks.length > 0 && selected === checks.length;
+        selectAll.indeterminate = selected > 0 && selected < checks.length;
+      }
+    }
 
     // Whole row opens the ticket, but ignore clicks on inner links/buttons
     // (the title link, the "Go to scraper" action and the pager buttons).
     // Delegated so AJAX-swapped rows stay clickable too.
     board.addEventListener("click", function (e) {
-      if (e.target.closest("a, button")) return;
+      if (e.target.closest("a, button, input, label")) return;
       var row = e.target.closest("tr.qa-row[data-href]");
       if (row) window.location.href = row.getAttribute("data-href");
+    });
+
+    board.addEventListener("change", function (e) {
+      if (e.target === selectAll) {
+        doneChecks().forEach(function (box) { box.checked = selectAll.checked; });
+      }
+      if (e.target === selectAll || e.target.classList.contains("qa-done-check")) {
+        updateBulkState();
+      }
     });
 
     // Per-section pager: replaces the section's <tbody> rows with the requested
@@ -212,7 +260,10 @@
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (data) {
           body.classList.remove("is-loading");
-          body.innerHTML = (data.html && data.html.trim()) ? data.html : EMPTY_ROW;
+          var isDoneAdmin = bulkForm && pager.getAttribute("data-status") === "done";
+          var emptyRow = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="' +
+            (isDoneAdmin ? "8" : "7") + '">No tickets here</td></tr>';
+          body.innerHTML = (data.html && data.html.trim()) ? data.html : emptyRow;
           var landed = data.page || target;
           var total = data.num_pages || pages;
           pager.setAttribute("data-page", String(landed));
@@ -221,6 +272,7 @@
           if (curEl) curEl.textContent = String(landed);
           if (prevBtn) prevBtn.disabled = landed <= 1;
           if (nextBtn) nextBtn.disabled = landed >= total;
+          updateBulkState();
         })
         .catch(function () {
           // Leave the current page in place; just restore the buttons.
@@ -229,6 +281,7 @@
           if (nextBtn) nextBtn.disabled = cur >= pages;
         });
     });
+    updateBulkState();
   })();
 </script>
 {% endblock %}

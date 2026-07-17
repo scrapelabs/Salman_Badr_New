@@ -81,6 +81,8 @@
     var url = root.getAttribute("data-live-stats");
     var notificationUrl = root.getAttribute("data-notification-history-url");
     var CIRC = {{ monitor.cpu.circumference }};
+    var canDeleteRuns = {{ user.is_superuser|yesno:"true,false" }};
+    var csrfToken = "{{ csrf_token }}";
 
     function esc(s) {
       return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -95,6 +97,24 @@
         ? '<span class="run-url-tooltip" data-link="' + esc(r.tournament_url) + '"><a class="run-url-link" href="' + esc(r.tournament_url) + '" target="_blank" rel="noopener">Open link</a></span>'
         : esc(r.tournament);
     }
+
+    {% if user.is_superuser %}
+    function recentDeleteCells(r) {
+      if (!r.can_delete) return { check: '<td class="td-check"></td>', action: "" };
+      var checked = recentSelected[r.uuid] ? " checked" : "";
+      return {
+        check: '<td class="td-check"><input type="checkbox" class="overview-run-check" name="run_uuids" value="' + esc(r.uuid) + '" form="overviewBulkDeleteForm" aria-label="Select run #' + esc(r.short_id) + '"' + checked + ' /></td>',
+        action: '<form class="run-del-form" method="post" action="' + esc(r.delete_url) + '" data-confirm="Delete run #' + esc(r.short_id) + '? Its log and CSV files will be permanently removed." data-confirm-title="Delete run?" data-confirm-ok="Delete" data-confirm-tone="danger">' +
+          '<input type="hidden" name="csrfmiddlewaretoken" value="' + esc(csrfToken) + '">' +
+          '<button type="submit" class="run-act run-act-danger" title="Delete this run and its files">Delete</button>' +
+        '</form>'
+      };
+    }
+    {% else %}
+    function recentDeleteCells(r) {
+      return { check: "", action: "" };
+    }
+    {% endif %}
 
     function updateGauge(key, g) {
       var card = root.querySelector('[data-gauge="' + key + '"]');
@@ -114,8 +134,10 @@
     }
 
     function rowHtml(r) {
+      var del = recentDeleteCells(r);
       return (
         '<tr data-href="' + esc(r.detail_url) + '">' +
+          del.check +
           '<td><div class="tbl-name"><span class="tbl-badge">' + esc(r.code) + '</span>' +
             '<span><a class="tbl-title" href="' + esc(r.detail_url) + '">' + esc(r.name) + "</a></span></div></td>" +
           '<td><span class="run-id">#' + esc(r.short_id) + "</span></td>" +
@@ -127,13 +149,14 @@
           '<td class="num">' + esc(r.rows) + "</td>" +
           '<td class="num nowrap">' + esc(r.size_label) + "</td>" +
           '<td class="num nowrap">' + esc(r.duration_label) + "</td>" +
-          '<td class="td-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.log_url) + '">Open log</a></td>' +
+          '<td class="td-actions run-actions"><a class="btn btn-ghost btn-sm" href="' + esc(r.log_url) + '">Open log</a>' + del.action + '</td>' +
         "</tr>"
       );
     }
 
     var recentAll = [];
     var recentPage = 1;
+    var recentSelected = {};
     var RECENT_SIZE = 5;
 
     function renderRecent() {
@@ -143,8 +166,9 @@
       var runs = recentAll || [];
       var total = runs.length;
       if (!total) {
-        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="11">No runs yet — launch a scraper from its Lab.</td></tr>';
+        body.innerHTML = '<tr class="tbl-empty-row"><td class="tbl-empty" colspan="' + (canDeleteRuns ? 12 : 11) + '">No runs yet — launch a scraper from its Lab.</td></tr>';
         if (pager) pager.hidden = true;
+        updateRecentSelection();
         return;
       }
       var pages = Math.max(1, Math.ceil(total / RECENT_SIZE));
@@ -152,6 +176,7 @@
       if (recentPage < 1) recentPage = 1;
       var start = (recentPage - 1) * RECENT_SIZE;
       body.innerHTML = runs.slice(start, start + RECENT_SIZE).map(rowHtml).join("");
+      updateRecentSelection();
       if (pager) {
         pager.hidden = pages <= 1;
         var info = pager.querySelector("[data-recent-info]");
@@ -167,6 +192,29 @@
       recentAll = runs || [];
       renderRecent();
     }
+
+    {% if user.is_superuser %}
+    function updateRecentSelection() {
+      var selAll = root.querySelector("#overviewRecentSelAll");
+      var btn = root.querySelector("#overviewBulkDelBtn");
+      var countEl = root.querySelector("#overviewSelCount");
+      var boxes = Array.prototype.slice.call(root.querySelectorAll(".overview-run-check"));
+      boxes.forEach(function (b) {
+        if (b.checked) recentSelected[b.value] = true;
+        else delete recentSelected[b.value];
+      });
+      var checked = boxes.filter(function (b) { return b.checked; }).length;
+      if (countEl) countEl.textContent = checked;
+      if (btn) btn.disabled = checked === 0;
+      if (selAll) {
+        selAll.disabled = boxes.length === 0;
+        selAll.checked = boxes.length > 0 && checked === boxes.length;
+        selAll.indeterminate = checked > 0 && checked < boxes.length;
+      }
+    }
+    {% else %}
+    function updateRecentSelection() {}
+    {% endif %}
 
     function queuedRowHtml(r) {
       var params = r.params_url
@@ -275,6 +323,18 @@
         .finally(schedule);
     }
     function schedule() { setTimeout(tick, 3000); }
+
+    {% if user.is_superuser %}
+    root.addEventListener("change", function (e) {
+      if (e.target && e.target.id === "overviewRecentSelAll") {
+        var boxes = Array.prototype.slice.call(root.querySelectorAll(".overview-run-check"));
+        boxes.forEach(function (b) { b.checked = e.target.checked; });
+      }
+      if (e.target && (e.target.id === "overviewRecentSelAll" || e.target.classList.contains("overview-run-check"))) {
+        updateRecentSelection();
+      }
+    });
+    {% endif %}
 
     var recentPager = root.querySelector("#recentPager");
     if (recentPager) {

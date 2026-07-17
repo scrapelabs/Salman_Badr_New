@@ -14,6 +14,7 @@ CONFIG = _ts_tournament.TSTournamentConfig(
     country_code="IRE",
     sanction_body="Ireland",
     claude_gender_fallback=True,
+    exclude_name_terms=("handicap",),
 )
 
 

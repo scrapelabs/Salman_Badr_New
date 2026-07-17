@@ -43,7 +43,13 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Length
-from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseForbidden,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -100,6 +106,7 @@ LOGIN_IP_FAILURE_LIMIT = 20
 LOGIN_FAILURE_WINDOW_SECONDS = 15 * 60
 OVERVIEW_RECENT_RUN_LIMIT = 25
 OVERVIEW_NOTIFICATION_PAGE_SIZE = 5
+RUN_DELETE_BLOCKED_STATUSES = (Run.Status.RUNNING, Run.Status.QUEUED)
 RUN_BLOB_FIELDS = ("log_text", "csv_data", "requests_csv", "errors_csv")
 RUN_POLL_FIELDS = (
     "uuid",
@@ -113,40 +120,6 @@ RUN_POLL_FIELDS = (
     "progress_total",
     "output_size_bytes",
 )
-
-# Curated IANA timezones offered in the in-app scheduler's dropdown. The chosen
-# value is validated against this set on save (anything else falls back to UTC),
-# which also keeps an attacker from stuffing an arbitrary string into the field.
-SCHEDULE_TIMEZONES = [
-    "UTC",
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Phoenix",
-    "America/Toronto",
-    "America/Mexico_City",
-    "America/Sao_Paulo",
-    "Europe/London",
-    "Europe/Paris",
-    "Europe/Berlin",
-    "Europe/Madrid",
-    "Europe/Rome",
-    "Europe/Athens",
-    "Europe/Moscow",
-    "Europe/Istanbul",
-    "Africa/Johannesburg",
-    "Asia/Dubai",
-    "Asia/Kolkata",
-    "Asia/Bangkok",
-    "Asia/Singapore",
-    "Asia/Hong_Kong",
-    "Asia/Shanghai",
-    "Asia/Tokyo",
-    "Asia/Seoul",
-    "Australia/Sydney",
-    "Pacific/Auckland",
-]
 
 # Date-range run inputs (date_range / date_range_or_url scrapers).
 DEFAULT_RANGE_DAYS = 30   # webhook window when a scheduled call omits dates
@@ -403,8 +376,10 @@ def _run_window_label(run):
     return f"{start} → {end}"
 
 
-def _run_brief(run):
-    return {
+def _run_brief(run, *, can_delete=False):
+    deletable = can_delete and run.status not in RUN_DELETE_BLOCKED_STATUSES
+    data = {
+        "uuid": str(run.uuid),
         "slug": run.scraper.slug,
         "code": run.scraper.code,
         "name": run.scraper.name,
@@ -420,9 +395,14 @@ def _run_brief(run):
         "rows": run.row_count,
         "size_label": run.size_label,
         "duration_label": run.duration_label,
+        "is_running": run.is_running,
+        "can_delete": deletable,
         "log_url": reverse("run_log", args=[run.scraper.slug, run.uuid]),
         "detail_url": f"{reverse('scraper_detail', args=[run.scraper.slug])}?tab=batch",
     }
+    if deletable:
+        data["delete_url"] = reverse("overview_run_delete", args=[run.uuid])
+    return data
 
 
 def _queued_jobs(limit=5):
@@ -869,7 +849,9 @@ def overview_view(request):
         running_scrapers=running_scrapers,
         queued_jobs=_queued_jobs(),
         recent_runs=recent,
-        recent_runs_data=[_run_brief(r) for r in recent],
+        recent_runs_data=[
+            _run_brief(r, can_delete=request.user.is_superuser) for r in recent
+        ],
         live_stats_url=reverse("live_stats"),
         notification_history_url=reverse("overview_notifications"),
     )
@@ -945,7 +927,10 @@ def live_stats_view(request):
                     mode=Scraper.Mode.MAINTENANCE
                 ).count(),
                 "queued_jobs": [_queued_brief(r) for r in _queued_jobs()],
-                "recent_runs": [_run_brief(r) for r in _recent_runs()],
+                "recent_runs": [
+                    _run_brief(r, can_delete=request.user.is_superuser)
+                    for r in _recent_runs()
+                ],
             },
             "scrapers": scr_map,
         }
@@ -1204,11 +1189,10 @@ def scraper_detail_view(request, slug):
                 day_of_month = sched.day_of_month
             day_of_month = max(1, min(day_of_month, 31))
 
-            tz_name = (
-                request.POST.get("timezone") or sched.timezone or "UTC"
-            ).strip()
-            if tz_name not in SCHEDULE_TIMEZONES:
-                tz_name = "UTC"
+            # One clock everywhere: schedule form values are always UTC. Ignore
+            # a forged timezone POST value rather than reintroducing local-time
+            # cron semantics through a direct request.
+            tz_name = ScraperSchedule.TIMEZONE
 
             sched.enabled = enabled
             sched.frequency = frequency
@@ -1489,12 +1473,11 @@ def scraper_detail_view(request, slug):
         ctx["freq_choices"] = ScraperSchedule.Frequency.choices
         ctx["weekday_choices"] = ScraperSchedule.WEEKDAYS
         ctx["dom_choices"] = list(range(1, 32))
-        ctx["tz_choices"] = SCHEDULE_TIMEZONES
         ctx["show_itf_lookback"] = s.slug in ScraperSchedule.ITF_SCHEDULE_SLUGS
         ctx["itf_lookback_choices"] = ScraperSchedule.ITF_LOOKBACK_CHOICES
         ctx["schedule_time_value"] = sched.time_of_day.strftime("%H:%M")
-        ctx["next_run_local"] = (
-            sched.next_run_at.astimezone(scheduling.get_zone(sched.timezone))
+        ctx["next_run_utc"] = (
+            sched.next_run_at.astimezone(scheduling.UTC)
             if (sched.enabled and sched.next_run_at)
             else None
         )
@@ -2917,48 +2900,66 @@ def college_matches_export_view(request, slug):
 @require_http_methods(["POST"])
 def run_delete_view(request, slug, run_uuid):
     """Delete a single run from Calls history (its log lines + CSVs go with it)."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Only administrators can delete runs.")
+
     run = _get_run(slug, run_uuid)
     back = f"{reverse('scraper_detail', args=[slug])}?tab=calls"
     page = (request.POST.get("page") or "").strip()
     if page.isdigit():
         back = f"{back}&page={page}"
 
-    if run.is_running:
-        messages.error(request, "Can't delete a run while it's still in progress.")
+    if run.status in RUN_DELETE_BLOCKED_STATUSES:
+        messages.error(request, "Can't delete a run while it's running or queued.")
         return redirect(back)
 
     short = run.short_id
-    run.delete()
-    messages.success(request, f"Run #{short} and its files were deleted.")
+    _total, deleted_by_model = (
+        Run.objects.filter(pk=run.pk)
+        .exclude(status__in=RUN_DELETE_BLOCKED_STATUSES)
+        .delete()
+    )
+    if deleted_by_model.get("accounts.Run", 0):
+        messages.success(request, f"Run #{short} and its files were deleted.")
+    else:
+        messages.error(request, "Can't delete a run while it's running or queued.")
     return redirect(back)
 
 
-@login_required
-@require_http_methods(["POST"])
-def runs_bulk_delete_view(request, slug):
-    """Bulk-delete the selected runs (their log lines + CSVs go with them)."""
-    s = get_object_or_404(Scraper, slug=slug)
-    back = f"{reverse('scraper_detail', args=[slug])}?tab=calls"
-    page = (request.POST.get("page") or "").strip()
-    if page.isdigit():
-        back = f"{back}&page={page}"
-
+def _posted_run_uuids(request):
     valid = []
     for raw in request.POST.getlist("run_uuids"):
         try:
             valid.append(uuid.UUID(str(raw)))
         except (ValueError, TypeError, AttributeError):
             continue
+    return valid
+
+
+@login_required
+@require_http_methods(["POST"])
+def runs_bulk_delete_view(request, slug):
+    """Bulk-delete the selected runs (their log lines + CSVs go with them)."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Only administrators can delete runs.")
+
+    s = get_object_or_404(Scraper, slug=slug)
+    back = f"{reverse('scraper_detail', args=[slug])}?tab=calls"
+    page = (request.POST.get("page") or "").strip()
+    if page.isdigit():
+        back = f"{back}&page={page}"
+
+    valid = _posted_run_uuids(request)
 
     if not valid:
         messages.error(request, "Select at least one run to delete.")
         return redirect(back)
 
     qs = Run.objects.filter(scraper=s, uuid__in=valid).exclude(
-        status=Run.Status.RUNNING
+        status__in=RUN_DELETE_BLOCKED_STATUSES
     )
-    deleted = qs.count()
-    qs.delete()
+    _total, deleted_by_model = qs.delete()
+    deleted = deleted_by_model.get("accounts.Run", 0)
     if deleted:
         messages.success(
             request,
@@ -2966,9 +2967,63 @@ def runs_bulk_delete_view(request, slug):
         )
     else:
         messages.error(
-            request, "Nothing was deleted — the selected runs may be in progress."
+            request, "Nothing was deleted — the selected runs may be running or queued."
         )
     return redirect(back)
+
+
+@login_required
+@require_http_methods(["POST"])
+def overview_run_delete_view(request, run_uuid):
+    """Delete one run from the Overview Recently active table."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Only administrators can delete runs.")
+
+    run = get_object_or_404(Run, uuid=run_uuid)
+    if run.status in RUN_DELETE_BLOCKED_STATUSES:
+        messages.error(request, "Can't delete a run while it's running or queued.")
+        return redirect("overview")
+
+    short = run.short_id
+    _total, deleted_by_model = (
+        Run.objects.filter(pk=run.pk)
+        .exclude(status__in=RUN_DELETE_BLOCKED_STATUSES)
+        .delete()
+    )
+    if deleted_by_model.get("accounts.Run", 0):
+        messages.success(request, f"Run #{short} and its files were deleted.")
+    else:
+        messages.error(request, "Can't delete a run while it's running or queued.")
+    return redirect("overview")
+
+
+@login_required
+@require_http_methods(["POST"])
+def overview_runs_bulk_delete_view(request):
+    """Bulk-delete selected runs across scrapers from Overview."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Only administrators can delete runs.")
+
+    valid = _posted_run_uuids(request)
+    if not valid:
+        messages.error(request, "Select at least one run to delete.")
+        return redirect("overview")
+
+    qs = Run.objects.filter(uuid__in=valid).exclude(
+        status__in=RUN_DELETE_BLOCKED_STATUSES
+    )
+    _total, deleted_by_model = qs.delete()
+    deleted = deleted_by_model.get("accounts.Run", 0)
+    if deleted:
+        messages.success(
+            request,
+            f"Deleted {deleted} run{'' if deleted == 1 else 's'} and their files.",
+        )
+    else:
+        messages.error(
+            request, "Nothing was deleted — the selected runs may be running or queued."
+        )
+    return redirect("overview")
 
 
 def _placeholder(active_nav, kicker, title, sub, empty_title, empty_sub, superuser_only=False):

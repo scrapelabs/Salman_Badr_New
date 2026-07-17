@@ -344,9 +344,26 @@ class SportRadarTests(SimpleTestCase):
                 FakeResponse({"info": {"date_of_birth": "2001-06-02"}}),
             ]
         )
+        summary = singles_summary()
+        summary["sport_event_status"]["period_scores"] = [
+            {
+                "number": 1,
+                "home_score": 6,
+                "away_score": 7,
+                "home_tiebreak_score": 3,
+                "away_tiebreak_score": 7,
+            },
+            {
+                "number": 2,
+                "home_score": 6,
+                "away_score": 7,
+                "home_tiebreak_score": 5,
+                "away_tiebreak_score": 7,
+            },
+        ]
 
         row = sportradar._row_from_summary(
-            singles_summary(), client=client, api_key="SECRET", dob_cache={}
+            summary, client=client, api_key="SECRET", dob_cache={}
         )
 
         self.assertEqual(row["match_id"], "")
@@ -354,8 +371,8 @@ class SportRadarTests(SimpleTestCase):
         self.assertEqual(row["draw_name"], "2026 Newport Beach Men 11, 13-16 Playoff")
         self.assertEqual(row["draw_team_type"], "Singles")
         self.assertEqual(row["tournament_name"], "UTR PTT Newport Beach Men 11")
-        self.assertEqual(row["date"], "2026-05-17T00:15:00+00:00")
-        self.assertEqual(row["score"], "6-1, 6-2;")
+        self.assertEqual(row["date"], "05/17/2026")
+        self.assertEqual(row["score"], "7-6(3), 7-6(5);")
         self.assertEqual(row["winner_1_name"], "Alvarez, Marco")
         self.assertEqual(row["winner_1_gender"], "M")
         self.assertEqual(row["winner_1_dob"], "05/01/2000")
@@ -371,6 +388,29 @@ class SportRadarTests(SimpleTestCase):
         self.assertEqual(row["tournament_country"], "United States")
         self.assertEqual(row["tournament_start_date"], "05/11/2026")
         self.assertEqual(row["tournament_end_date"], "05/17/2026")
+
+    def test_tiebreak_uses_each_set_losers_points_in_match_winner_order(self):
+        status = {
+            "period_scores": [
+                {
+                    "number": 1,
+                    "home_score": 6,
+                    "away_score": 7,
+                    "home_tiebreak_score": 4,
+                    "away_tiebreak_score": 7,
+                },
+                {
+                    "number": 2,
+                    "home_score": 7,
+                    "away_score": 6,
+                    "home_tiebreak_score": 7,
+                    "away_tiebreak_score": 0,
+                },
+            ]
+        }
+
+        self.assertEqual(sportradar._score(status, "home"), "6-7(4), 7-6(0);")
+        self.assertEqual(sportradar._score(status, "away"), "7-6(4), 6-7(0);")
 
     def test_enriched_row_uses_parent_tournament_and_child_draw_suffix(self):
         summary = singles_summary()

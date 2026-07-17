@@ -10,12 +10,14 @@ is one-way (``views`` never imports this module), so there is no import cycle.
 """
 
 import re
+import uuid as uuid_lib
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -422,6 +424,47 @@ def ticket_delete(request, uuid):
     ticket.delete()
     messages.success(request, f"Ticket “{title}” was deleted.")
     return redirect("qa_board")
+
+
+@login_required
+@require_POST
+def tickets_bulk_delete(request):
+    """Delete selected Done tickets, with server-side admin/status guards."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Only administrators can delete tickets.")
+
+    back = reverse("qa_board")
+    scraper_slug = (request.POST.get("scraper") or "").strip()
+    if scraper_slug and Scraper.objects.filter(slug=scraper_slug).exists():
+        back = f"{back}?{urlencode({'scraper': scraper_slug})}"
+
+    ticket_uuids = []
+    for raw in request.POST.getlist("ticket_uuids"):
+        try:
+            ticket_uuids.append(uuid_lib.UUID(str(raw)))
+        except (ValueError, TypeError, AttributeError):
+            continue
+
+    if not ticket_uuids:
+        messages.error(request, "Select at least one Done ticket to delete.")
+        return redirect(back)
+
+    _total, deleted_by_model = Ticket.objects.filter(
+        uuid__in=ticket_uuids,
+        status=Ticket.Status.DONE,
+    ).delete()
+    deleted = deleted_by_model.get("accounts.Ticket", 0)
+    if deleted:
+        messages.success(
+            request,
+            f"Deleted {deleted} Done ticket{'' if deleted == 1 else 's'}.",
+        )
+    else:
+        messages.error(
+            request,
+            "Nothing was deleted. The selected tickets may no longer be Done.",
+        )
+    return redirect(back)
 
 
 @login_required

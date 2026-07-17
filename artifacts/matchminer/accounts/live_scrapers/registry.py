@@ -298,21 +298,22 @@ SPECS = {
         slug="belgium_results",
         input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.belgium_results:run",
-        allowed_hosts=("www.tennisenpadelvlaanderen.be", "tennisenpadelvlaanderen.be"),
+        allowed_hosts=(
+            "www.tennisenpadelvlaanderen.be",
+            "tennisenpadelvlaanderen.be",
+            "tennis.tppwb.be",
+        ),
         model_upload_label="Captcha solver model (.keras)",
         model_filename="captcha_model.keras",
     ),
     # --- US high-school feed APIs (date-range; own hard-coded hosts) -------
-    # Vendor feed APIs keyed by a feed api_key (overridable via settings).
+    # Vendor feed APIs. MaxPreps uses a server-side feed key only; New Jersey
+    # still exposes a per-run key field.
     # No URL input / host allowlist — each calls only its own host.
     "maxpreps": ScraperSpec(
         slug="maxpreps",
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.maxpreps:run",
-        feed_api_key=True,
-        # Non-secret feed key baked into the source URL; mirrors
-        # maxpreps.MAXPREPS_API_KEY so the form can prefill it.
-        feed_api_key_default="50B280F4-5F20-4191-8AEC-726AA3AD800C",
         rank_type=True,
     ),
     "new_jersey_high_school": ScraperSpec(
@@ -323,8 +324,17 @@ SPECS = {
         feed_api_key_default="4f59cee1-3db0-4128-84ba-bd7995dadd95",
         feed_gender=True,
     ),
+    "louisiana_high_school": ScraperSpec(
+        slug="louisiana_high_school",
+        input_kind=INPUT_DATE_RANGE,
+        runner_path="accounts.live_scrapers.louisiana_high_school:run",
+        feed_gender=True,
+        secret_label="LHSAA API key",
+        secret_env_var="LHSAA_API_KEY",
+        default_range_days=90,
+    ),
     # --- SportRadar Tennis daily summaries API ---------------------------
-    # Scheduled daily at 2am America/New_York. Blank scheduled runs scrape
+    # Scheduled daily in UTC. Blank scheduled runs scrape
     # yesterday through today (default_range_days=1) and filter to the requested
     # category/tour ids in the runner.
     "sportradar": ScraperSpec(
@@ -349,8 +359,8 @@ SPECS = {
     # --- player-ranking snapshots (singles + doubles in one run) ----------
     # Not match results: a ranking date yields a 9-column ranking table. Each
     # only calls its own hard-coded host, so no URL input / host allowlist is
-    # needed. atptour sits behind Cloudflare — without a residential proxy that
-    # clears it, the run fails honestly (like the Stadion scrapers).
+    # needed. atptour sits behind Cloudflare and uses Patchright through its
+    # assigned proxy, so it participates in system-wide browser exclusivity.
     #
     # wtatennis takes a single snapshot date; atptour takes a DATE RANGE and
     # collects every weekly ranking (published each Monday) that falls inside
@@ -366,6 +376,7 @@ SPECS = {
         input_kind=INPUT_DATE_RANGE,
         runner_path="accounts.live_scrapers.atptour:run",
         rank_type=True,
+        uses_browser=True,
     ),
     # padelfip: FIP world padel rankings (www.padelfip.com WordPress API).
     # A rank-snapshot scraper like wtatennis; only calls its own host.

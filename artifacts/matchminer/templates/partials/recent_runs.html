@@ -1,10 +1,24 @@
 {% comment %}Overview "recently active" table — running runs first, then the latest
 finished runs. `recent_runs` is a list of Run objects each with a `.run_state` attr.
 The tbody is refreshed live by the overview poller.{% endcomment %}
+{% if user.is_superuser %}
+<form id="overviewBulkDeleteForm" method="post" action="{% url 'overview_runs_bulk_delete' %}"
+      data-confirm="Delete the selected run(s)? Their log and CSV files will be permanently removed."
+      data-confirm-title="Delete runs?"
+      data-confirm-ok="Delete"
+      data-confirm-tone="danger">
+  {% csrf_token %}
+</form>
+<div class="calls-toolbar recent-runs-toolbar">
+  <span class="calls-sel-count"><strong id="overviewSelCount">0</strong> selected</span>
+  <button type="submit" form="overviewBulkDeleteForm" class="btn btn-danger btn-sm" id="overviewBulkDelBtn" disabled>Delete selected</button>
+</div>
+{% endif %}
 <div class="tablewrap">
   <table class="tbl runs-tbl" id="recentRunsTable">
     <thead>
       <tr>
+        {% if user.is_superuser %}<th class="th-check"><input type="checkbox" id="overviewRecentSelAll" aria-label="Select all deletable recent runs" /></th>{% endif %}
         <th>Scraper</th>
         <th>Run</th>
         <th>Started</th>
@@ -21,6 +35,9 @@ The tbody is refreshed live by the overview poller.{% endcomment %}
     <tbody id="recentRunsBody">
       {% for r in recent_runs|slice:":5" %}
       <tr data-href="{% url 'scraper_detail' r.scraper.slug %}?tab=batch">
+        {% if user.is_superuser %}
+        <td class="td-check">{% if r.status != 'running' and r.status != 'queued' %}<input type="checkbox" class="overview-run-check" name="run_uuids" value="{{ r.uuid }}" form="overviewBulkDeleteForm" aria-label="Select run #{{ r.short_id }}" />{% endif %}</td>
+        {% endif %}
         <td>
           <div class="tbl-name">
             <span class="tbl-badge">{{ r.scraper.code }}</span>
@@ -44,12 +61,18 @@ The tbody is refreshed live by the overview poller.{% endcomment %}
         <td class="num">{{ r.row_count }}</td>
         <td class="num nowrap">{{ r.size_label }}</td>
         <td class="num nowrap">{{ r.duration_label }}</td>
-        <td class="td-actions">
+        <td class="td-actions run-actions">
           <a class="btn btn-ghost btn-sm" href="{% url 'run_log' r.scraper.slug r.uuid %}">Open log</a>
+          {% if user.is_superuser and r.status != 'running' and r.status != 'queued' %}
+          <form class="run-del-form" method="post" action="{% url 'overview_run_delete' r.uuid %}" data-confirm="Delete run #{{ r.short_id }}? Its log and CSV files will be permanently removed." data-confirm-title="Delete run?" data-confirm-ok="Delete" data-confirm-tone="danger">
+            {% csrf_token %}
+            <button type="submit" class="run-act run-act-danger" title="Delete this run and its files">Delete</button>
+          </form>
+          {% endif %}
         </td>
       </tr>
       {% empty %}
-      <tr class="tbl-empty-row"><td class="tbl-empty" colspan="11">No runs yet — launch a scraper from its Lab.</td></tr>
+      <tr class="tbl-empty-row"><td class="tbl-empty" colspan="{% if user.is_superuser %}12{% else %}11{% endif %}">No runs yet — launch a scraper from its Lab.</td></tr>
       {% endfor %}
     </tbody>
   </table>

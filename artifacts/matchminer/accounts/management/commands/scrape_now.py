@@ -59,6 +59,11 @@ class Command(BaseCommand):
             help="A single tournament URL (for URL-input scrapers)",
         )
         parser.add_argument(
+            "--gender",
+            default="",
+            help="Feed gender for boys/girls feed scrapers (boys, girls, or both)",
+        )
+        parser.add_argument(
             "--out",
             dest="out",
             default="",
@@ -99,6 +104,7 @@ class Command(BaseCommand):
             "date_from": opts["date_from"],
             "date_to": opts["date_to"],
             "tournament_url": opts["tournament_url"],
+            "gender": opts["gender"],
         }
         # webhook=True => blank inputs become sensible defaults (current year /
         # all months / trailing date window) instead of erroring.
