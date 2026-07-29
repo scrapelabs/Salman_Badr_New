@@ -127,10 +127,12 @@ _CHALLENGE_MARKERS = (
     "captcha-delivery",
     "datadome",
     "are you a human",
+    "request unsuccessful",
+    "incapsula incident",
+    "incident id:",
 )
-# Only sniff the body for a challenge when the status hints at a block — normal
-# 200 HTML must not trip a false positive.
-_CHALLENGE_STATUSES = frozenset({202, 403, 405, 429, 503})
+# Incapsula commonly serves its distinctive block page with HTTP 200.
+_CHALLENGE_STATUSES = frozenset({200, 202, 403, 405, 429, 503})
 
 
 def build_proxies(scraper, log, *, impersonate=DEFAULT_IMPERSONATE):

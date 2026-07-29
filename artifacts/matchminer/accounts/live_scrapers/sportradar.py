@@ -159,9 +159,12 @@ def _country_value(*values):
 def _draw_suffix(parent_name, child_name):
     parent = (parent_name or "").strip()
     child = (child_name or "").strip()
-    if not parent or not child.startswith(parent):
+    if not parent:
         return ""
-    return child[len(parent):].lstrip(" \t,-:").strip()
+    parent_at = child.find(parent)
+    if parent_at < 0:
+        return ""
+    return child[parent_at + len(parent):].lstrip(" \t,-:").strip()
 
 
 def _team_type(competition_type):

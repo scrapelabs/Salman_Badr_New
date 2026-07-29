@@ -442,6 +442,33 @@ class SportRadarTests(SimpleTestCase):
         self.assertEqual(row["draw_gender"], "Male")
         self.assertEqual(row["loser_1_country"], "")
 
+    def test_draw_suffix_handles_tour_prefix_before_parent_name(self):
+        summary = singles_summary()
+        summary["sport_event"]["sport_event_context"]["competition"].update(
+            {"type": "doubles", "gender": "men"}
+        )
+        competition_metadata = {
+            "parent": {
+                "id": "sr:competition:washington",
+                "name": "Washington, USA ",
+            },
+            "child": {
+                "id": "sr:competition:washington-doubles",
+                "name": "ATP Washington, USA Men Doubles",
+                "type": "doubles",
+                "gender": "men",
+            },
+        }
+
+        row = sportradar._row_from_summary(
+            summary,
+            competition_metadata=competition_metadata,
+        )
+
+        self.assertEqual(row["tournament_name"], "Washington, USA")
+        self.assertEqual(row["draw_name"], "Men Doubles")
+        self.assertEqual(row["draw_team_type"], "Doubles")
+
     def test_country_value_skips_neutral_before_real_fallback(self):
         self.assertEqual(
             sportradar._country_value(" Neutral ", "", "RUS"),

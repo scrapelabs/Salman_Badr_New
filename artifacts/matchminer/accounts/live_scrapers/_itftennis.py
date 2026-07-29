@@ -462,6 +462,133 @@ def _extract_records(data):
     return out
 
 
+def _extract_team_ties(data):
+    """Return each nation tie once with its round-robin group or KO round."""
+    ties = []
+    seen = set()
+
+    def collect(items, round_desc):
+        for tie in items or []:
+            if not isinstance(tie, dict):
+                continue
+            tie_id = tie.get("tieId")
+            if not tie_id or tie_id in seen:
+                continue
+            seen.add(tie_id)
+            ties.append((tie, round_desc or ""))
+
+    for group in (data.get("rrGroups") or []):
+        round_desc = group.get("groupName") or ""
+        collect(group.get("ties"), round_desc)
+        for key in ("teams", "nationTeams"):
+            for team in (group.get(key) or []):
+                collect(team.get("ties"), round_desc)
+
+    for group in (data.get("koGroups") or []):
+        for round_data in (group.get("rounds") or []):
+            collect(round_data.get("ties"), round_data.get("roundDesc") or "")
+
+    return ties
+
+
+def _extract_tie_records(data, round_desc):
+    """Convert a ``GetTieMatches`` response into singles/doubles records."""
+    matches = data if isinstance(data, list) else (data.get("matches") or [])
+    records = []
+    for match in matches:
+        if not isinstance(match, dict) or not match.get("matchId"):
+            continue
+        rec = _record_from_match(match, round_desc)
+        team_sizes = [
+            len([player for player in (team.get("players") or []) if player])
+            for team in (match.get("teams") or [])
+            if isinstance(team, dict)
+        ]
+        rec["draw_team_type"] = (
+            "Doubles" if team_sizes and max(team_sizes) > 1 else "Singles"
+        )
+        records.append(rec)
+    return records
+
+
+def _load_order_of_play(get_json, tournament_id):
+    """Fetch every published order-of-play match for one tournament."""
+    days = get_json(
+        f"{API_ROOT}/tennis/api/TournamentApi/GetOrderOfPlayDays",
+        params={"tournamentKey": tournament_id.lower()},
+        headers=_API_HEADERS,
+    )
+    if not days:
+        return None
+    matches = []
+    for day in days:
+        day_id = day.get("orderOfPlayDayId") if isinstance(day, dict) else None
+        if not day_id:
+            continue
+        courts = get_json(
+            f"{API_ROOT}/tennis/api/TournamentApi/GetOrderOfPlay",
+            params={"orderOfPlayDayId": str(day_id)},
+            headers=_API_HEADERS,
+        )
+        if courts is None:
+            return None
+        for court in courts:
+            if isinstance(court, dict):
+                matches.extend(court.get("matches") or [])
+    return matches
+
+
+def _order_of_play_records(
+    matches, ties, event_code, age_desc, player_desc
+):
+    """Match scheduled rubbers to draw-sheet ties and retain their round."""
+    tie_rounds = {}
+    for tie, round_desc in ties:
+        pair = frozenset(
+            code
+            for code in (
+                tie.get("side1NationCode"),
+                tie.get("side2NationCode"),
+            )
+            if code
+        )
+        if len(pair) == 2:
+            tie_rounds[pair] = round_desc
+
+    def normalized(value):
+        return " ".join((value or "").split()).casefold()
+
+    records = []
+    for match in matches:
+        if not isinstance(match, dict):
+            continue
+        if event_code and match.get("eventClassificationCode") != event_code:
+            continue
+        if age_desc and match.get("ageCategory") and normalized(
+            match.get("ageCategory")
+        ) != normalized(age_desc):
+            continue
+        if player_desc and match.get("eventDesc") and normalized(
+            match.get("eventDesc")
+        ) != normalized(player_desc):
+            continue
+        pair = frozenset(
+            team.get("tieNationCode")
+            for team in (match.get("teams") or [])
+            if isinstance(team, dict) and team.get("tieNationCode")
+        )
+        if pair not in tie_rounds:
+            continue
+        round_desc = (
+            tie_rounds[pair]
+            or match.get("roundGroupDesc")
+            or match.get("eventClassificationDesc")
+            or ""
+        )
+        records.extend(_extract_tie_records([match], round_desc))
+    return records
+
+
 # ======================================================================
 # date of birth (player XML), cached per run
 # ======================================================================
@@ -523,6 +650,80 @@ def _extract_dob(resp):
     except Exception:  # noqa: BLE001 - bad body can't kill the run
         pass
     return ""
+
+
+class _DirectApiClient:
+    """Use direct HTTP for ITF APIs, then the cleared tournament browser."""
+
+    def __init__(self, log, tele, tournament_url, browser):
+        self.log = log
+        self.tournament_url = tournament_url
+        self.browser = browser
+        self.http_blocked = False
+        self.optional_http_blocked = False
+        self.api_delay = max(
+            0.0, getattr(settings, "SCRAPER_ITF_API_DELAY_MS", 350) / 1000.0
+        )
+        self.last_api_at = 0.0
+        self.http = ScraperClient(
+            log=log, tele=tele, proxies=None, allowed_hosts=(_HOST,)
+        )
+
+    def __enter__(self):
+        self.http.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        self.http.__exit__(*exc)
+
+    def _browser_call(self, method, url, **kwargs):
+        try:
+            result = getattr(self.browser, method)(url, **kwargs)
+            if result is not None:
+                return result
+            self.log("INFO", "   ITF API challenged - refreshing clearance")
+            self.browser.relaunch()
+            self.browser.get_selector(self.tournament_url)
+            return getattr(self.browser, method)(url, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - caller retains its normal fallback
+            self.log(
+                "WARN",
+                redact_secrets(
+                    f"   Direct API browser failed: "
+                    f"{exc.__class__.__name__}: {exc}"
+                ),
+            )
+            return None
+
+    def _pace(self):
+        wait = self.api_delay - (time.monotonic() - self.last_api_at)
+        if wait > 0:
+            time.sleep(wait)
+        self.last_api_at = time.monotonic()
+
+    def get_json(self, url, **kwargs):
+        self._pace()
+        if not self.http_blocked:
+            data = self.http.get_json(url, **kwargs)
+            if data is not None:
+                return data
+            self.http_blocked = True
+            self.log("INFO", "   Direct ITF API challenged - using browser clearance")
+        return self._browser_call("get_json", url, **kwargs)
+
+    def get(self, url, **kwargs):
+        if self.optional_http_blocked:
+            return None
+        kwargs.setdefault("tries", 1)
+        response = self.http.get(url, **kwargs)
+        if response is not None:
+            return response
+        self.optional_http_blocked = True
+        self.log("INFO", "   ITF player details challenged - skipping remaining DOBs")
+        return None
+
+    def disable_optional(self):
+        self.optional_http_blocked = True
 
 
 class _DobResolver:
@@ -617,7 +818,9 @@ class _DobResolver:
 # ======================================================================
 # per-tournament crawl
 # ======================================================================
-def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
+def _scrape_tournament(
+    client, cfg, tournament, emit, log, dob_cache, dob_lock, api_client=None
+):
     """Scrape one tournament: page → filters → drawsheets → rows via ``emit``."""
     tournament_url = tournament.get("tournament_url", "")
     tournament_id = tournament.get("tournament_id", "")
@@ -642,6 +845,14 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
 
     if not (name and start_date and end_date):
         return 0
+
+    api = api_client or client
+
+    def get_json(url, **kwargs):
+        data = api.get_json(url, **kwargs)
+        if not data and api is not client:
+            return client.get_json(url, **kwargs)
+        return data
 
     filters = client.get_json(
         f"{API_ROOT}/tennis/api/TournamentApi/GetEventFilters"
@@ -671,13 +882,18 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
     }
 
     dob_resolver = _DobResolver(
-        client, tournament_url, log, dob_cache, dob_lock,
+        api, tournament_url, log, dob_cache, dob_lock,
         delay=getattr(settings, "SCRAPER_ITF_DOB_DELAY_MS", 250) / 1000.0,
-        max_rotations=getattr(settings, "SCRAPER_ITF_DOB_MAX_ROTATIONS", 2),
+        max_rotations=(
+            0 if api is not client
+            else getattr(settings, "SCRAPER_ITF_DOB_MAX_ROTATIONS", 2)
+        ),
     )
 
     emitted = 0
     code_list, desc_map = _parse_filters(filters)
+    order_of_play = None
+    order_of_play_loaded = False
     for json_data in code_list:
         draw_team_type = desc_map.get("matchTypeCode", {}).get(
             json_data.get("matchTypeCode"), ""
@@ -714,11 +930,62 @@ def _scrape_tournament(client, cfg, tournament, emit, log, dob_cache, dob_lock):
         if not drawsheet:
             continue
 
-        for rec in _extract_records(drawsheet):
+        records = _extract_records(drawsheet)
+        team_ties = _extract_team_ties(drawsheet)
+        if team_ties:
+            if not order_of_play_loaded:
+                order_of_play = _load_order_of_play(get_json, tournament_id)
+                order_of_play_loaded = True
+            if order_of_play is not None:
+                if hasattr(api, "disable_optional"):
+                    api.disable_optional()
+                records.extend(
+                    _order_of_play_records(
+                        order_of_play,
+                        team_ties,
+                        json_data.get("eventClassificationCode", ""),
+                        desc_map.get("ageCategoryCode", {}).get(
+                            json_data.get("ageCategoryCode"), ""
+                        ),
+                        desc_map.get("playerTypeCode", {}).get(
+                            json_data.get("playerTypeCode"), ""
+                        ),
+                    )
+                )
+            else:
+                for tie, round_desc in team_ties:
+                    tie_id = tie.get("tieId")
+                    side1_country = tie.get("side1NationCode") or ""
+                    tie_outcome = (
+                        tie.get("resultStatusDesc")
+                        or tie.get("playStatusDesc")
+                        or ""
+                    ).lower()
+                    if not (tie_id and side1_country) or tie_outcome not in (
+                        "completed",
+                        "retired",
+                        "played and completed",
+                    ):
+                        continue
+                    tie_matches = get_json(
+                        f"{API_ROOT}/tennis/api/TournamentApi/GetTieMatches",
+                        params={
+                            "tieId": str(tie_id),
+                            "side1CountryCode": side1_country,
+                        },
+                        headers=_API_HEADERS,
+                    )
+                    if tie_matches:
+                        records.extend(
+                            _extract_tie_records(tie_matches, round_desc)
+                        )
+
+        for rec in records:
             if (rec.get("outcome", "") or "").lower() not in ("completed", "retired"):
                 continue
             row = _build_row(
-                dob_resolver, cfg, tctx, draw_name, draw_team_type, draw_gender,
+                dob_resolver, cfg, tctx, draw_name,
+                rec.get("draw_team_type") or draw_team_type, draw_gender,
                 player_gender, rec,
             )
             if emit(row):
@@ -826,7 +1093,7 @@ def _window(run_obj):
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-def _client_summary(scraper, rotate):
+def _client_summary(scraper, rotate, *, direct=False):
     """One-line browser-client description for the phase-2 header.
 
     The per-tournament browsers launch silently (``announce=False``) so this is
@@ -848,7 +1115,7 @@ def _client_summary(scraper, rotate):
         if (not rotate and profile_root)
         else "ephemeral profile"
     )
-    proxy = scraper.proxy
+    proxy = None if direct else scraper.proxy
     if browser_proxy(proxy):
         kind = proxy.get_kind_display() if hasattr(proxy, "get_kind_display") else "?"
         conn = f"via {kind} proxy '{getattr(proxy, 'name', '?')}'"
@@ -929,9 +1196,15 @@ def run(cfg, run_obj, log):
 
     def crawl_one(browser, tournament):
         try:
-            _scrape_tournament(
-                browser, cfg, tournament, emit, log, dob_cache, dob_lock
-            )
+            # The configured browser handles protected page/draw requests; the
+            # direct API session handles low-volume order-of-play/player calls.
+            with _DirectApiClient(
+                log, tele, tournament.get("tournament_url", ""), browser
+            ) as api_client:
+                _scrape_tournament(
+                    browser, cfg, tournament, emit, log, dob_cache, dob_lock,
+                    api_client=api_client,
+                )
         except Exception as exc:  # noqa: BLE001 - a bad tournament can't kill the run
             tele.record_error(
                 redact_secrets(
@@ -958,8 +1231,8 @@ def run(cfg, run_obj, log):
     # here (its page is the challenged resource). The Playwright sync API is
     # single-thread bound, but in per-request rotation mode each tournament
     # already gets its *own* fresh browser, so the per-tournament loop fans out
-    # across ``Scraper.threads`` worker threads \u2014 one independent browser
-    # (own fingerprint + IP) per thread, up to ``workers`` Chromium instances
+    # across ``Scraper.threads`` worker threads, one independent browser
+    # session per thread, up to ``workers`` Chromium instances
     # launched concurrently. The whole concurrent phase opts out of Django's
     # async-safety guard once (allow_async_unsafe), because that env var is
     # process-global and a per-browser set/restore would race across threads.
@@ -972,10 +1245,8 @@ def run(cfg, run_obj, log):
         rotate = getattr(settings, "SCRAPER_BROWSER_ROTATE_PER_REQUEST", True)
 
         def make_browser():
-            # In rotation mode every tournament gets a brand-new identity, so use
-            # a throwaway ephemeral profile (a persistent dir would carry the very
-            # cookie/fingerprint we are deliberately shedding) and rotate the
-            # proxy IP. Off => one persistent session reused for the whole run.
+            # In rotation mode every tournament gets a fresh browser clearance
+            # and proxy session. Off => one persistent session.
             # manage_async_unsafe=False: the whole phase-2 block owns the
             # process-global DJANGO_ALLOW_ASYNC_UNSAFE via allow_async_unsafe(),
             # so each (possibly concurrent) client must not touch it itself.
@@ -1042,7 +1313,7 @@ def run(cfg, run_obj, log):
             # process-global; see allow_async_unsafe).
             with allow_async_unsafe():
                 if rotate:
-                    # Each tournament = a fresh browser (new fingerprint + IP), so
+                    # Each tournament gets a fresh browser fingerprint and IP, so
                     # the Incapsula challenge is re-solved per tournament and no
                     # single identity accumulates the signal that re-triggers the
                     # captcha "after a few records". Because every tournament is
@@ -1068,7 +1339,7 @@ def run(cfg, run_obj, log):
                             log(
                                 "INFO",
                                 f"\U0001f9f5 per-request rotation: up to {workers} "
-                                f"browsers in parallel \u2014 a fresh browser + IP "
+                                f"browsers in parallel - a fresh browser + IP "
                                 f"per tournament",
                             )
                             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1076,8 +1347,7 @@ def run(cfg, run_obj, log):
                         else:
                             log(
                                 "INFO",
-                                "\U0001f504 per-request rotation: a fresh browser + "
-                                "IP per tournament",
+                                "Per-request rotation: a fresh browser + IP per tournament",
                             )
                             for tournament in tournaments:
                                 crawl_isolated(tournament)
