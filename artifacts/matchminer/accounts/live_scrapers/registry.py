@@ -169,6 +169,13 @@ SPECS = {
         allowed_hosts=("svtf.tournamentsoftware.com",),
         bi_weekly=True,
     ),
+    "new_zealand_tournament": ScraperSpec(
+        slug="new_zealand_tournament",
+        input_kind=INPUT_DATE_RANGE_OR_URL,
+        runner_path="accounts.live_scrapers.new_zealand_tournament:run",
+        allowed_hosts=("tnz.tournamentsoftware.com",),
+        default_range_days=14,
+    ),
     "hong_kong_tournament": ScraperSpec(
         slug="hong_kong_tournament",
         input_kind=INPUT_DATE_RANGE_OR_URL,
@@ -306,6 +313,11 @@ SPECS = {
         model_upload_label="Captcha solver model (.keras)",
         model_filename="captcha_model.keras",
     ),
+    "belgium_results_2": ScraperSpec(
+        slug="belgium_results_2",
+        input_kind=INPUT_DATE_RANGE,
+        runner_path="accounts.live_scrapers.belgium_results_2:run",
+    ),
     # --- US high-school feed APIs (date-range; own hard-coded hosts) -------
     # Vendor feed APIs. MaxPreps uses a server-side feed key only; New Jersey
     # still exposes a per-run key field.
@@ -362,9 +374,8 @@ SPECS = {
     # needed. atptour sits behind Cloudflare and uses Patchright through its
     # assigned proxy, so it participates in system-wide browser exclusivity.
     #
-    # wtatennis takes a single snapshot date; atptour takes a DATE RANGE and
-    # collects every weekly ranking (published each Monday) that falls inside
-    # it — e.g. 6/08 → 6/22 yields the 6/08, 6/15 and 6/22 snapshots in one run.
+    # Both WTA and ATP take one ranking-snapshot date. The ATP runner still
+    # understands historical range runs already persisted before this contract.
     "wtatennis": ScraperSpec(
         slug="wtatennis",
         input_kind=INPUT_RANK_SNAPSHOT,
@@ -373,7 +384,7 @@ SPECS = {
     ),
     "atptour": ScraperSpec(
         slug="atptour",
-        input_kind=INPUT_DATE_RANGE,
+        input_kind=INPUT_RANK_SNAPSHOT,
         runner_path="accounts.live_scrapers.atptour:run",
         rank_type=True,
         uses_browser=True,
@@ -396,6 +407,7 @@ SPECS = {
         runner_path="accounts.live_scrapers.australia_tennis:run",
         secret_label="Azure Blob SAS URL",
         secret_env_var="AUSTRALIA_TENNIS_SAS_URL",
+        default_range_days=1,
     ),
     # --- Polish Tennis (PZT) results — portal.pzt.pl ASP.NET HTML ---------
     # Date-range OR a single tournament URL; the seed URL is validated against

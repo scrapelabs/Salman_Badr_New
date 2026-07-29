@@ -255,6 +255,12 @@
       if (quill.getText().trim() === "" && html.indexOf("<img") === -1 && html.indexOf("rt-mention") === -1) html = "";
       target.value = html;
     }
+    el.__quill = quill;
+    el.__setHtml = function (html) {
+      quill.setText("", "silent");
+      if (html) quill.clipboard.dangerouslyPasteHTML(html, "silent");
+      sync();
+    };
     quill.on("text-change", sync);
     sync();
     var form = el.closest("form");

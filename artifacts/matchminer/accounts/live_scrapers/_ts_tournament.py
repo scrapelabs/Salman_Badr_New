@@ -79,6 +79,9 @@ class TSTournamentConfig:
     country: str
     country_code: str
     sanction_body: str
+    # Fixed-country sources normally use ``country`` as their import source.
+    # Set this when the source label differs from the ID-type country label.
+    import_source: str = ""
     lcid: str = "2057"
     # --- dynamic-country mode --------------------------------------------
     # Some hosts (GLTA, Tennis Europe, COSAT, ITF Juniors) aggregate
@@ -369,6 +372,25 @@ def _discover_one(client, cfg, tournament_url, log):
         text = _field(d1, "normalize-space(.)")
         if "|" in text:
             city, country = _split_location(text)
+
+    # Modern overview pages expose locale-independent tournament boundaries in
+    # their timeline even when the visible calendar label omits the year.
+    start_iso = _field(
+        sel,
+        '(//li[contains(concat(" ", normalize-space(@class), " "), " is-started ")]'
+        '//time)[1]/@datetime',
+    )
+    end_iso = _field(
+        sel,
+        '(//li[contains(concat(" ", normalize-space(@class), " "), " is-finished ")]'
+        '//time)[1]/@datetime',
+    )
+    start_date = _to_mdy(start_iso.partition("T")[0], ("%Y-%m-%d",)) or start_date
+    end_date = (
+        _to_mdy(end_iso.partition("T")[0], ("%Y-%m-%d",))
+        or end_date
+        or start_date
+    )
 
     if not (tournament_id and name):
         log("WARN", "\u26a0\ufe0f Supplied URL did not resolve to a tournament")
@@ -938,16 +960,18 @@ def _profile_href_from_url(url):
     return f"/player-profile/{guid}" if guid else ""
 
 
-def _parse_player(client, cfg, name, url, dob_map=None):
+def _parse_player(
+    client, cfg, name, url, dob_map=None, player_enrichment=None
+):
     """Resolve a player's ``(name, third_party_id, dob, gender, country)``.
 
-    Gender is left empty here and filled in by :func:`_build_row` — from the
-    draw name by default, or (when ``cfg.claude_gender`` is set) inferred from
-    the player's name via Claude. The name is cleaned of seedings then reordered
-    to ``"Lastname, Firstname"`` via :func:`._names.last_first`. ``country`` is
-    the player's nationality (from the profile flag) for dynamic-country sites,
-    else ``""`` — fixed-country sites fill the per-player country from the
-    federation constant in :func:`_build_row`.
+    Gender comes from an exact-ID enrichment registry when supplied; otherwise
+    it is filled in by :func:`_build_row` from the draw name or Claude. The name
+    is cleaned of seedings then reordered to ``"Lastname, Firstname"`` via
+    :func:`._names.last_first`. ``country`` is the player's nationality (from
+    the profile flag) for dynamic-country sites, else ``""`` — fixed-country
+    sites fill the per-player country from the federation constant in
+    :func:`_build_row`.
     """
     name = last_first(name)
     if not (name and url):
@@ -993,8 +1017,11 @@ def _parse_player(client, cfg, name, url, dob_map=None):
         )
         third_party_id = _RE_PARENS.sub("", third_party_id).strip()
 
-    dob = ""
-    if profile_href and cfg.biography_dob:
+    enrichment = (player_enrichment or {}).get(third_party_id, {})
+    dob = enrichment.get("dob", "")
+    gender = enrichment.get("gender", "")
+
+    if not dob and profile_href and cfg.biography_dob:
         # Biography-tab DOB mode: the "Year of birth" on
         # ``/player-profile/<GUID>/biography`` (→ ``1/1/YYYY``), present for
         # ranked and unranked players alike. Cached per run by profile GUID
@@ -1018,7 +1045,7 @@ def _parse_player(client, cfg, name, url, dob_map=None):
                 # permanently blanking their DOB from one transient failure.
                 if guid:
                     cache[guid] = dob
-    elif profile_href and cfg.ranking_dob:
+    elif not dob and profile_href and cfg.ranking_dob:
         # Ranking-tab DOB mode: join this player to the pre-built ranking
         # registry by profile GUID (the ``/player-profile/<guid>`` tail) and
         # take the ``1/1/YOB`` recorded there — the source's registry join,
@@ -1029,7 +1056,7 @@ def _parse_player(client, cfg, name, url, dob_map=None):
             profile_sel = client.get_selector(urljoin(cfg.base + "/", profile_href))
             if profile_sel is not None:
                 country = _nat(profile_sel)
-    elif profile_href:
+    elif not dob and profile_href:
         profile_url = urljoin(cfg.base + "/", profile_href)
         profile_sel = client.get_selector(profile_url)
         if profile_sel is not None:
@@ -1042,7 +1069,7 @@ def _parse_player(client, cfg, name, url, dob_map=None):
             bio_sel = client.get_selector(profile_url.rstrip("/") + "/biography")
             if bio_sel is not None:
                 dob = _parse_birth_year(bio_sel)
-    return name, third_party_id, dob, "", country
+    return name, third_party_id, dob, gender, country
 
 
 def _build_row(client, cfg, ctx, match_data):
@@ -1053,10 +1080,39 @@ def _build_row(client, cfg, ctx, match_data):
     l2 = match_data.get("loser_2", {})
 
     dob_map = ctx.get("dob_map")
-    w1_name, w1_id, w1_dob, w1_g, w1_c = _parse_player(client, cfg, w1.get("name", ""), w1.get("profile_url", ""), dob_map)
-    w2_name, w2_id, w2_dob, w2_g, w2_c = _parse_player(client, cfg, w2.get("name", ""), w2.get("profile_url", ""), dob_map)
-    l1_name, l1_id, l1_dob, l1_g, l1_c = _parse_player(client, cfg, l1.get("name", ""), l1.get("profile_url", ""), dob_map)
-    l2_name, l2_id, l2_dob, l2_g, l2_c = _parse_player(client, cfg, l2.get("name", ""), l2.get("profile_url", ""), dob_map)
+    player_enrichment = ctx.get("player_enrichment")
+    w1_name, w1_id, w1_dob, w1_g, w1_c = _parse_player(
+        client,
+        cfg,
+        w1.get("name", ""),
+        w1.get("profile_url", ""),
+        dob_map,
+        player_enrichment,
+    )
+    w2_name, w2_id, w2_dob, w2_g, w2_c = _parse_player(
+        client,
+        cfg,
+        w2.get("name", ""),
+        w2.get("profile_url", ""),
+        dob_map,
+        player_enrichment,
+    )
+    l1_name, l1_id, l1_dob, l1_g, l1_c = _parse_player(
+        client,
+        cfg,
+        l1.get("name", ""),
+        l1.get("profile_url", ""),
+        dob_map,
+        player_enrichment,
+    )
+    l2_name, l2_id, l2_dob, l2_g, l2_c = _parse_player(
+        client,
+        cfg,
+        l2.get("name", ""),
+        l2.get("profile_url", ""),
+        dob_map,
+        player_enrichment,
+    )
 
     draw_name = ctx.get("draw_name", "")
     gcode = draw_gender_code(draw_name)
@@ -1069,10 +1125,10 @@ def _build_row(client, cfg, ctx, match_data):
     if cfg.claude_gender and claude_keys:
         # The draw name here doesn't reliably carry a gender word, so infer each
         # player's gender from their name via Claude (cached per distinct name).
-        w1_g = resolve_gender(client, claude_keys, w1_name) if w1_name else ""
-        w2_g = resolve_gender(client, claude_keys, w2_name) if w2_name else ""
-        l1_g = resolve_gender(client, claude_keys, l1_name) if l1_name else ""
-        l2_g = resolve_gender(client, claude_keys, l2_name) if l2_name else ""
+        w1_g = w1_g or (resolve_gender(client, claude_keys, w1_name) if w1_name else "")
+        w2_g = w2_g or (resolve_gender(client, claude_keys, w2_name) if w2_name else "")
+        l1_g = l1_g or (resolve_gender(client, claude_keys, l1_name) if l1_name else "")
+        l2_g = l2_g or (resolve_gender(client, claude_keys, l2_name) if l2_name else "")
         # Draw-level gender: an explicit draw-name gender wins; a genuinely mixed
         # draw is labelled Mixed; otherwise fall back to the winner's inference.
         if gcode:
@@ -1084,10 +1140,10 @@ def _build_row(client, cfg, ctx, match_data):
     else:
         # Default: gender is carried by the draw name (e.g. "Boys Singles" /
         # "Juniorke pojedinačno"); every player in the match inherits it.
-        w1_g = gcode if w1_name else ""
-        w2_g = gcode if w2_name else ""
-        l1_g = gcode if l1_name else ""
-        l2_g = gcode if l2_name else ""
+        w1_g = (w1_g or gcode) if w1_name else ""
+        w2_g = (w2_g or gcode) if w2_name else ""
+        l1_g = (l1_g or gcode) if l1_name else ""
+        l2_g = (l2_g or gcode) if l2_name else ""
         if gcode:
             draw_gender = "Male" if gcode == "M" else "Female"
         elif mixed_draw:
@@ -1097,10 +1153,10 @@ def _build_row(client, cfg, ctx, match_data):
         if cfg.claude_gender_fallback and claude_keys and not gcode:
             # Ireland has club/box/group draws where only player names can supply
             # gender. Mixed draws get player genders plus a Mixed draw label.
-            w1_g = resolve_gender(client, claude_keys, w1_name) if w1_name else ""
-            w2_g = resolve_gender(client, claude_keys, w2_name) if w2_name else ""
-            l1_g = resolve_gender(client, claude_keys, l1_name) if l1_name else ""
-            l2_g = resolve_gender(client, claude_keys, l2_name) if l2_name else ""
+            w1_g = w1_g or (resolve_gender(client, claude_keys, w1_name) if w1_name else "")
+            w2_g = w2_g or (resolve_gender(client, claude_keys, w2_name) if w2_name else "")
+            l1_g = l1_g or (resolve_gender(client, claude_keys, l1_name) if l1_name else "")
+            l2_g = l2_g or (resolve_gender(client, claude_keys, l2_name) if l2_name else "")
             known = {g for g in (w1_g, w2_g, l1_g, l2_g) if g}
             if not mixed_draw and len(known) == 1:
                 draw_gender = "Male" if "M" in known else "Female"
@@ -1133,7 +1189,7 @@ def _build_row(client, cfg, ctx, match_data):
         t_country = cfg.country_code
         t_country_code = cfg.country_code
         id_type = cfg.country
-        import_source = cfg.country
+        import_source = cfg.import_source or cfg.country
         sanction = cfg.sanction_body
         w1_country = cfg.country_code if w1_name else ""
         w2_country = cfg.country_code if w2_name else ""
@@ -1597,7 +1653,7 @@ def _tournament_overlaps_window(tournament, start_date, end_date):
     return tournament_start <= end and tournament_end >= start
 
 
-def run(cfg, run_obj, log):
+def run(cfg, run_obj, log, *, player_enrichment_loader=None):
     """Execute one tournamentsoftware individual-tournament scrape.
 
     Returns the standard 5-tuple. Work is parallelised the way the Croatia
@@ -1622,6 +1678,18 @@ def run(cfg, run_obj, log):
         start_date, end_date = _window(run_obj)
         log("INFO", f"\U0001f3be {cfg.label} starting \u2014 {start_date} \u2192 {end_date}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
+
+    player_enrichment = {}
+    if player_enrichment_loader is not None:
+        log("INFO", "Loading player DOB/gender registry")
+        try:
+            player_enrichment = player_enrichment_loader(log, tele) or {}
+        except Exception as exc:  # noqa: BLE001 - curated loader errors fail honestly
+            msg = f"{cfg.label} player registry unavailable: {exc}"
+            tele.record_error(msg)
+            log("ERROR", msg)
+            return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+
     proxies = build_proxies(scraper, log)
     claude_keys = (
         resolve_claude_keys(scraper)
@@ -1815,6 +1883,8 @@ def run(cfg, run_obj, log):
             ctx = {**ctx, "claude_keys": claude_keys}
         if cfg.ranking_dob or cfg.biography_dob:
             ctx = {**ctx, "dob_map": dob_map}
+        if player_enrichment:
+            ctx = {**ctx, "player_enrichment": player_enrichment}
         try:
             rows = _parse_player_matches(client_for(), cfg, ctx, player_url)
             for row in rows:
@@ -1857,6 +1927,8 @@ def run(cfg, run_obj, log):
             ctx = {**ctx, "claude_keys": claude_keys}
         if cfg.ranking_dob or cfg.biography_dob:
             ctx = {**ctx, "dob_map": dob_map}
+        if player_enrichment:
+            ctx = {**ctx, "player_enrichment": player_enrichment}
         try:
             rows = _parse_team_match_page(client_for(), cfg, ctx, match_url)
             for row in rows:

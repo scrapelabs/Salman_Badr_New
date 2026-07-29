@@ -3236,12 +3236,25 @@ body.mm-modal-open { overflow: hidden; }
 .qa-comments-count { font: 600 9.6px "JetBrains Mono", monospace; color: var(--app-text-3); background: var(--app-surface-2); border: 1px solid var(--app-border); border-radius: 7px; padding: 2px 7px; margin-left: 4px; }
 .qa-comment { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--app-border); }
 .qa-comment-main { flex: 1; min-width: 0; }
-.qa-comment-head { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+.qa-comment-head { display: flex; align-items: center; gap: 9px; min-height: 28px; margin-bottom: 4px; }
 .qa-comment-author { font: 700 11px "Plus Jakarta Sans", sans-serif; color: var(--app-text); }
 .qa-comment-ago { font: 500 8.4px "JetBrains Mono", monospace; color: var(--app-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
+.qa-comment-tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.qa-comment-icon-form { display: inline-flex; margin: 0; }
+.qa-comment-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px;
+  background: transparent; color: var(--app-text-3); cursor: pointer;
+  transition: color .14s ease, background .14s ease;
+}
+.qa-comment-icon svg { width: 13px; height: 13px; }
+.qa-comment-icon:hover { color: var(--app-accent); background: var(--app-accent-bg); }
+.qa-comment-icon--delete:hover { color: var(--app-maint); background: var(--app-maint-bg); }
+.qa-comment-icon:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 1px; }
 .qa-comment-empty { padding: 18px 0; color: var(--app-text-3); font-size: 10.8px; }
 .qa-comment-form { margin-top: 18px; }
 .qa-comment-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.qa-comment-edit-form .rt-quill .ql-editor { min-height: 130px; }
 
 /* detail sidebar */
 .qa-side-panel { margin-bottom: 16px; }
@@ -3705,6 +3718,7 @@ body {
   }
   .bell-btn,
   .qa-modal-x { min-width: 44px; }
+  .qa-comment-icon { min-width: 44px; min-height: 44px; }
   .th-check,
   .td-check { min-width: 44px; }
   .th-check input,

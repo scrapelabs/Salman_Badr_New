@@ -38,7 +38,7 @@ from django.db.models import F
 from django.utils import timezone
 from parsel import Selector
 
-from accounts.models import Proxy, Run
+from accounts.models import Run
 
 from ._http import ScraperClient, build_proxies
 from .telemetry import Telemetry, redact_secrets, sanitize_cell
@@ -677,6 +677,34 @@ def _empty_panel_reason(sel):
     return ""
 
 
+def _games_are_unplayed(sel):
+    games = sel.xpath('//div[@class="game"]')
+    if not games:
+        return False
+    for game in games:
+        set_scores = [
+            re.sub(r"\s+", " ", value).strip()
+            for value in game.xpath(
+                './/div[contains(@class,"score")]//div[contains(@class,"set")]//text()'
+            ).getall()
+        ]
+        if any(set_scores):
+            return False
+        rows = game.xpath('./ul[@class="list-group"]/li[@class="list-group-item"]')
+        if any(_MatchParser._row_has_winner_marker(row) for row in rows):
+            return False
+        result_text = " ".join(
+            game.xpath(".//div[@class='game-bottom']//text()").getall()
+        )
+        if (
+            _MatchParser._RE_WINNER_TOKEN_ONLY.search(result_text)
+            or _MatchParser._RE_WO.search(result_text)
+            or _MatchParser._RE_RETIRED.search(result_text)
+        ):
+            return False
+    return True
+
+
 def _parse_category(client, tournament_url, sel, log=None, empty_reasons=None):
     """Walk every category / parameter / round panel; return match rows."""
     out = []
@@ -696,6 +724,8 @@ def _parse_category(client, tournament_url, sel, log=None, empty_reasons=None):
         return out
 
     headers = {"Referer": tournament_url}
+    game_panels = 0
+    unplayed_panels = 0
 
     for id_categoria in id_categorias:
         for id_parametro in id_parametros:
@@ -738,11 +768,24 @@ def _parse_category(client, tournament_url, sel, log=None, empty_reasons=None):
                         data2.pop("id_categoria_ant", None)
                     resp2 = client.post(PAINEL_URL, data=data2, headers=headers)
                     if resp2 is not None and 200 <= resp2.status_code < 300:
-                        out.extend(
-                            _parse_games(tournament_url, Selector(text=resp2.text))
-                        )
+                        round_sel = Selector(text=resp2.text)
+                        if round_sel.xpath('//div[@class="game"]'):
+                            game_panels += 1
+                            if _games_are_unplayed(round_sel):
+                                unplayed_panels += 1
+                        out.extend(_parse_games(tournament_url, round_sel))
             else:
+                if psel.xpath('//div[@class="game"]'):
+                    game_panels += 1
+                    if _games_are_unplayed(psel):
+                        unplayed_panels += 1
                 out.extend(_parse_games(tournament_url, psel))
+    if not out and game_panels and game_panels == unplayed_panels:
+        reason = "matches are scheduled but not played yet"
+        if empty_reasons is not None:
+            empty_reasons.append(reason)
+        if log:
+            log("INFO", f"   {tournament_url}: {reason}")
     return out
 
 
@@ -782,25 +825,7 @@ def run(run_obj, log):
         f"month={month or 'all'}",
     )
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
-    # This origin intermittently rejects the rotating datacenter IP on one
-    # request after accepting it on another. The server's stable direct route is
-    # accepted, so keep one direct route for discovery and every tournament
-    # request. Other scrapers continue to honour their configured routing.
-    selected_proxy = scraper.proxy
-    if (
-        selected_proxy
-        and selected_proxy.is_active
-        and (selected_proxy.address or "").strip()
-        and selected_proxy.kind == Proxy.Kind.DATACENTER
-    ):
-        proxies = None
-        log(
-            "INFO",
-            "\U0001f6e3 Uruguay routing: bypassing the blocked rotating proxy; "
-            "using direct connection",
-        )
-    else:
-        proxies = build_proxies(scraper, log)
+    proxies = build_proxies(scraper, log)
 
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 discovering tournaments \u2500\u2500\u2500\u2500")
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
@@ -887,7 +912,14 @@ def run(run_obj, log):
         tournaments
         and tele.error_count == 0
         and len(empty_reasons) == total
-        and all(reason == "games are not calculated yet" for reason in empty_reasons)
+        and all(
+            reason
+            in {
+                "games are not calculated yet",
+                "matches are scheduled but not played yet",
+            }
+            for reason in empty_reasons
+        )
     ):
         log(
             "INFO",

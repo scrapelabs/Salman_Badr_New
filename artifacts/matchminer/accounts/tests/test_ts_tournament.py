@@ -47,6 +47,51 @@ class FakeScraperClient(FakeSelectorClient):
 
 
 class TSTournamentDateWindowTests(SimpleTestCase):
+    def test_direct_url_discovery_reads_iso_tournament_dates(self):
+        cfg = _ts_tournament.TSTournamentConfig(
+            label="Sweden Tournament",
+            base="https://svtf.tournamentsoftware.com",
+            country="Sweden",
+            country_code="SWE",
+            sanction_body="Sweden",
+        )
+        supplied_url = f"{cfg.base}/tournament/TOURNAMENT-ID"
+        html = """
+        <div class="page-head"><div class="media__content">
+          <h2 class="media__title"><span class="nav-link">
+            <span class="nav-link__value">Elite Hotels Next Gen Cup 2026</span>
+          </span></h2>
+          <small class="media__subheading"><span class="nav-link">
+            <span class="nav-link__value">
+              <svg><use href="/Content/icons/calendar.svg#icon"></use></svg>
+              2 Jul to 5 Jul
+            </span>
+          </span></small>
+        </div></div>
+        <ul class="page-nav"><li class="page-nav__item">
+          <a class="page-nav__link" href="/tournament/tournament-id">Overview</a>
+        </li></ul>
+        <ul>
+          <li class="is-completed list__item is-started">
+            <time datetime="2026-07-02T00:00:00.0000000+02:00"></time>
+          </li>
+          <li class="is-danger is-current list__item is-finished">
+            <time datetime="2026-07-05T23:59:00.0000000+02:00"></time>
+          </li>
+        </ul>
+        """
+
+        tournaments = _ts_tournament._discover_one(
+            FakeSelectorClient({supplied_url: html}),
+            cfg,
+            supplied_url,
+            lambda *_args: None,
+        )
+
+        self.assertEqual(len(tournaments), 1)
+        self.assertEqual(tournaments[0]["tournament_start_date"], "07/02/2026")
+        self.assertEqual(tournaments[0]["tournament_end_date"], "07/05/2026")
+
     def test_date_in_window_keeps_rows_inside_requested_window(self):
         self.assertTrue(
             _ts_tournament._date_in_window(

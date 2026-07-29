@@ -1,12 +1,14 @@
+import csv
 from datetime import date
+import io
 from types import SimpleNamespace
 import threading
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 from parsel import Selector
 
-from accounts.live_scrapers import atptour, registry
+from accounts.live_scrapers import _browser, atptour, registry
 
 
 RANKINGS_HTML = """
@@ -58,6 +60,7 @@ class FakeBrowserClient:
         self.owner_thread = None
         self.selector_calls = []
         self.json_calls = []
+        self.json_call_kwargs = []
         self.relaunch_count = 0
         self.closed = False
         self.is_discovery = kwargs.get("announce", True)
@@ -89,6 +92,7 @@ class FakeBrowserClient:
     def get_json(self, url, **kwargs):
         self._assert_owner()
         self.json_calls.append(url)
+        self.json_call_kwargs.append(kwargs)
         player_id = url.rstrip("/").split("/")[-1]
         if player_id in type(self).failed_hero_ids:
             return None
@@ -167,6 +171,8 @@ class AtpTourBrowserTests(SimpleTestCase):
         self.assertEqual(status, atptour.Run.Status.SUCCESS)
         self.assertIn("a001", items_csv)
         self.assertIn("b002", items_csv)
+        header = next(csv.reader(io.StringIO(items_csv)))
+        self.assertEqual(header[2], "Id")
         self.assertEqual(len(FakeBrowserClient.instances), 3)
         self.assertEqual(
             [client.kwargs["announce"] for client in FakeBrowserClient.instances],
@@ -180,11 +186,19 @@ class AtpTourBrowserTests(SimpleTestCase):
             self.assertIsNone(client.kwargs["user_data_dir"])
             self.assertFalse(client.kwargs["rotate_proxy_session"])
             self.assertFalse(client.kwargs["manage_async_unsafe"])
+            self.assertEqual(client.kwargs["api_tries"], 10)
             self.assertTrue(client.closed)
 
         workers = FakeBrowserClient.instances[1:]
         self.assertTrue(all(client.selector_calls for client in workers))
         self.assertEqual(sum(len(client.json_calls) for client in workers), 2)
+        self.assertTrue(
+            all(
+                kwargs["tries"] == 10
+                for client in workers
+                for kwargs in client.json_call_kwargs
+            )
+        )
 
     def test_transient_ranking_challenge_relaunches_without_partial_status(self):
         FakeBrowserClient.first_discovery_navigation_fails = True
@@ -210,7 +224,7 @@ class AtpTourBrowserTests(SimpleTestCase):
         self.assertEqual(row_count, 0)
         self.assertEqual(status, atptour.Run.Status.FAILED)
 
-    def test_final_profile_failure_returns_partial_status(self):
+    def test_final_profile_failure_still_returns_success_with_output(self):
         FakeBrowserClient.failed_hero_ids = {"b002"}
 
         items_csv, _requests_csv, _errors_csv, row_count, status = self._run()
@@ -218,4 +232,45 @@ class AtpTourBrowserTests(SimpleTestCase):
         self.assertIn("a001", items_csv)
         self.assertNotIn("b002", items_csv)
         self.assertEqual(row_count, 1)
-        self.assertEqual(status, atptour.Run.Status.PARTIAL)
+        self.assertEqual(status, atptour.Run.Status.SUCCESS)
+
+
+class BrowserJsonRetryTests(SimpleTestCase):
+    def make_client(self, responses):
+        client = object.__new__(_browser.BrowserClient)
+        client.api_tries = 4
+        client.log = Mock()
+        client.tele = Mock()
+        client._api = Mock(side_effect=responses)
+        return client
+
+    def test_explicit_json_retries_cover_http_and_invalid_json_failures(self):
+        client = self.make_client(
+            [
+                _browser._ApiResponse(503, b"", ""),
+                _browser._ApiResponse(200, b"not-json", "not-json"),
+                _browser._ApiResponse(200, b'{"ok": true}', '{"ok": true}'),
+            ]
+        )
+
+        with patch.object(_browser.time, "sleep") as sleep:
+            result = client.get_json("https://www.atptour.com/api/player", tries=10)
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(client._api.call_count, 3)
+        self.assertTrue(
+            all(call.kwargs["tries"] == 1 for call in client._api.call_args_list)
+        )
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_explicit_json_retry_budget_is_exactly_ten(self):
+        client = self.make_client(
+            [_browser._ApiResponse(503, b"", "") for _ in range(10)]
+        )
+
+        with patch.object(_browser.time, "sleep"):
+            result = client.get_json("https://www.atptour.com/api/player", tries=10)
+
+        self.assertIsNone(result)
+        self.assertEqual(client._api.call_count, 10)
+        client.tele.record_error.assert_called_once()

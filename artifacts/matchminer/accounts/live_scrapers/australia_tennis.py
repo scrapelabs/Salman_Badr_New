@@ -9,10 +9,10 @@ folder. Each blob is named ``YYYYMMDD_HHMMSSmmm.json`` — the leading
 
 Flow (over the Azure Blob REST API, no ``azure-storage-blob`` dependency):
 
-1. **List** — ``GET <container>?restype=container&comp=list&prefix=tennis_australia/``
-   returns an ``<EnumerationResults>`` XML document of ``<Blob>`` entries; the
-   ``<NextMarker>`` is followed for pagination. Each blob's ``<Name>`` (and
-   ``<Properties><Last-Modified>``) is read.
+1. **List** — issue one Azure prefix query per date in the requested window
+   (for example ``prefix=tennis_australia/20260725``), following each
+   ``<NextMarker>`` for pagination. This avoids scanning millions of historical
+   blobs to collect one or two days of result files.
 2. **Filter** — keep only ``.json`` blobs whose filename date (``YYYYMMDD``)
    falls inside the run window ``[date_from, date_to]`` (inclusive), exactly the
    field the source's ``file_date__range`` filter uses.
@@ -50,7 +50,7 @@ import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 from django.conf import settings
@@ -64,6 +64,7 @@ from .telemetry import Telemetry, redact_secrets, sanitize_cell
 
 # The Azure "folder" the result submissions live under.
 PREFIX = "tennis_australia/"
+LIST_PROGRESS_EVERY_PAGES = 10
 
 # Items CSV columns — the shared MatchMiner items schema (same as Czech/Presto),
 # so downloaded files stay uniform across scrapers.
@@ -496,44 +497,64 @@ def _file_date(blob_name):
         return None
 
 
-def _list_blobs(client, container_url, sas_pairs, log):
-    """List every blob under ``PREFIX``, following ``NextMarker`` pagination.
+def _list_blobs(client, container_url, sas_pairs, start_d, end_d, log):
+    """List blobs for each date prefix, following ``NextMarker`` pagination.
 
     Returns ``[{"blob_name", "last_modified"}]``. The SAS query is passed as
     params so the recorded request URL never contains the signature.
     """
     blobs = []
-    marker = ""
     pages = 0
-    while True:
-        params = [
-            ("restype", "container"),
-            ("comp", "list"),
-            ("prefix", PREFIX),
-        ]
-        if marker:
-            params.append(("marker", marker))
-        params.extend(sas_pairs)
+    current_d = start_d
+    while current_d <= end_d:
+        marker = ""
+        date_pages = 0
+        date_start_count = len(blobs)
+        date_prefix = f"{PREFIX}{current_d:%Y%m%d}"
+        while True:
+            params = [
+                ("restype", "container"),
+                ("comp", "list"),
+                ("prefix", date_prefix),
+            ]
+            if marker:
+                params.append(("marker", marker))
+            params.extend(sas_pairs)
 
-        resp = client.get(container_url, params=params)
-        if resp is None or not (200 <= resp.status_code < 300):
-            break
+            resp = client.get(container_url, params=params)
+            if resp is None or not (200 <= resp.status_code < 300):
+                break
 
-        sel = Selector(text=resp.text, type="xml")
-        sel.remove_namespaces()
-        for blob in sel.xpath("//Blob"):
-            name = (blob.xpath("./Name/text()").get() or "").strip()
-            if not name:
-                continue
-            last_mod = (
-                blob.xpath("./Properties/*[name()='Last-Modified']/text()").get() or ""
-            ).strip()
-            blobs.append({"blob_name": name, "last_modified": last_mod})
+            sel = Selector(text=resp.text, type="xml")
+            sel.remove_namespaces()
+            for blob in sel.xpath("//Blob"):
+                name = (blob.xpath("./Name/text()").get() or "").strip()
+                if not name:
+                    continue
+                last_mod = (
+                    blob.xpath("./Properties/*[name()='Last-Modified']/text()").get()
+                    or ""
+                ).strip()
+                blobs.append({"blob_name": name, "last_modified": last_mod})
 
-        pages += 1
-        marker = (sel.xpath("//NextMarker/text()").get() or "").strip()
-        if not marker:
-            break
+            pages += 1
+            date_pages += 1
+            marker = (sel.xpath("//NextMarker/text()").get() or "").strip()
+            if marker and date_pages % LIST_PROGRESS_EVERY_PAGES == 0:
+                log(
+                    "INFO",
+                    f"   {current_d}: {len(blobs) - date_start_count} blob(s) "
+                    f"across {date_pages} listing page(s) so far",
+                )
+            if not marker:
+                break
+
+        log(
+            "INFO",
+            f"   {current_d}: {len(blobs) - date_start_count} blob(s) "
+            f"across {date_pages} listing page(s)",
+        )
+        current_d += timedelta(days=1)
 
     log("INFO", f"\U0001f5c2\ufe0f {len(blobs)} blob(s) across {pages} listing page(s)")
     return blobs
@@ -613,7 +634,9 @@ def run(run_obj, log):
     # ---- phase 1 · discovery ------------------------------------------
     log("INFO", "\u2500\u2500\u2500\u2500 phase 1 \u00b7 listing result blobs \u2500\u2500\u2500\u2500")
     with ScraperClient(log=log, tele=tele, proxies=proxies) as discovery:
-        all_blobs = _list_blobs(discovery, container_url, sas_pairs, log)
+        all_blobs = _list_blobs(
+            discovery, container_url, sas_pairs, start_d, end_d, log
+        )
 
     # ---- filter by filename date (the field the source filters on) ----
     in_window = []

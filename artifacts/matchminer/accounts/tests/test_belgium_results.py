@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from types import SimpleNamespace
 from unittest import mock
 
@@ -13,6 +14,11 @@ TPPWB_URL = (
     "?idTournoi=362070&idCategory=1028406&drawType=P"
     "&roundIndex=4&rowIndex=7"
 )
+TICKET_DRAW_URL = (
+    "https://tennis.tppwb.be/MyAFT/Competitions/TournamentDraw"
+    "?idTournoi=362072&idCategory=1028448&drawType=F"
+    "&roundIndex=2&rowIndex=1"
+)
 
 TPPWB_PAGE = """
 <h4>362070 [6000-CITADELLE] - Du 11/06/2026 au 21/06/2026 -
@@ -20,6 +26,7 @@ TPPWB_PAGE = """
 </h4>
 <select id="drawCategory">
   <option value="1028406|F,Q,P" selected>Messieurs 1 (BC2*) (95-115)</option>
+  <option value="1028448|F">Messieurs 2 (B0-B-15)</option>
 </select>
 """
 
@@ -78,14 +85,18 @@ class _DrawClient:
             "drawData": json.dumps([[COMPLETED_GAME, unplayed, virtual], [[COMPLETED_GAME[0]]]]),
             "roundNames": json.dumps(["1ER TOUR PQ", "PRE-QUALIFICATION"]),
         }
+        self.payloads = [self.payload]
+        self.gets = []
         self.posts = []
 
     def get(self, url, **kwargs):
+        self.gets.append((url, kwargs))
         return _Response(text=TPPWB_PAGE)
 
     def post(self, url, **kwargs):
         self.posts.append((url, kwargs))
-        return _Response(payload=self.payload)
+        index = min(len(self.posts) - 1, len(self.payloads) - 1)
+        return _Response(payload=self.payloads[index])
 
 
 class _RunClient:
@@ -126,15 +137,24 @@ class BelgiumTPPWBTests(SimpleTestCase):
         )
 
         self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            client.gets[0][0],
+            "https://tennis.tppwb.be/MyAFT/Competitions/TournamentDraw"
+            "?idTournoi=362070&idCategory=1028406&drawType=P",
+        )
         self.assertEqual(client.posts[0][0], belgium_results.TPPWB_DRAW_ENDPOINT)
+        self.assertEqual(
+            client.posts[0][1]["headers"]["Referer"],
+            client.gets[0][0],
+        )
         self.assertEqual(
             client.posts[0][1]["data"],
             {
                 "idTournoi": "362070",
                 "idCategory": "1028406",
                 "drawType": "P",
-                "selectedRoundIndex": "4",
-                "selectedRowIndex": "7",
+                "selectedRoundIndex": "",
+                "selectedRowIndex": "",
             },
         )
 
@@ -154,6 +174,75 @@ class BelgiumTPPWBTests(SimpleTestCase):
         self.assertEqual(row["tournament_end_date"], "6/21/2026")
         self.assertEqual(row["tournament_sanction_body"], "Tennis Wallonie-Bruxelles")
         self.assertEqual(row["tournament_url"], TPPWB_URL)
+
+    def test_ticket_draw_url_ignores_stale_browser_selection(self):
+        self.assertEqual(
+            belgium_results._tppwb_draw_params(TICKET_DRAW_URL),
+            {
+                "idTournoi": "362072",
+                "idCategory": "1028448",
+                "drawType": "F",
+                "selectedRoundIndex": "",
+                "selectedRowIndex": "",
+            },
+        )
+
+    def test_tppwb_blank_draw_refreshes_once(self):
+        client = _DrawClient()
+        client.payloads = [
+            {"drawData": json.dumps([]), "roundNames": json.dumps([])},
+            client.payload,
+        ]
+        logs = []
+
+        rows = belgium_results._scrape_tppwb_draw(
+            client,
+            TICKET_DRAW_URL,
+            lambda level, message: logs.append((level, message)),
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(client.gets), 2)
+        self.assertEqual(len(client.posts), 2)
+        self.assertTrue(any("refreshing once" in message for _level, message in logs))
+
+    def test_tppwb_mixed_malformed_draw_refreshes_once(self):
+        client = _DrawClient()
+        client.payloads = [
+            {
+                "drawData": json.dumps([[COMPLETED_GAME], {"unexpected": True}]),
+                "roundNames": json.dumps(["1ER TOUR", "FINALE"]),
+            },
+            client.payload,
+        ]
+
+        rows = belgium_results._scrape_tppwb_draw(
+            client,
+            TICKET_DRAW_URL,
+            lambda *_args: None,
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(client.gets), 2)
+        self.assertEqual(len(client.posts), 2)
+
+    def test_tppwb_repeated_malformed_draw_fails_honestly(self):
+        client = _DrawClient()
+        malformed = {
+            "drawData": json.dumps([[COMPLETED_GAME], {"unexpected": True}]),
+            "roundNames": json.dumps(["1ER TOUR", "FINALE"]),
+        }
+        client.payloads = [malformed, malformed]
+
+        with self.assertRaisesRegex(ValueError, "malformed round"):
+            belgium_results._scrape_tppwb_draw(
+                client,
+                TICKET_DRAW_URL,
+                lambda *_args: None,
+            )
+
+        self.assertEqual(len(client.gets), 2)
+        self.assertEqual(len(client.posts), 2)
 
     def test_tppwb_score_maps_walkover_and_abandonment(self):
         walkover = ({"score": "--", "resultType": "WO"}, {"score": "--", "resultType": "WO"})
@@ -219,3 +308,76 @@ class BelgiumTPPWBTests(SimpleTestCase):
         scrape.assert_called_once()
         materialize.assert_not_called()
         solver.assert_not_called()
+
+    def test_date_range_run_remains_tennis_vlaanderen_only(self):
+        run_obj = SimpleNamespace(
+            pk=123,
+            scraper=SimpleNamespace(worker_count=1, proxy=None),
+            params={},
+            date_from=date(2026, 6, 19),
+            date_to=date(2026, 7, 16),
+        )
+        flemish_row = {"match_id": "flemish"}
+
+        with mock.patch.object(
+            belgium_results, "build_proxies", return_value=None
+        ), mock.patch.object(
+            belgium_results, "ScraperClient", _RunClient
+        ), mock.patch.object(
+            belgium_results, "materialize_uploaded_model"
+        ), mock.patch.object(
+            belgium_results, "CaptchaSolver"
+        ), mock.patch.object(
+            belgium_results,
+            "_discover_tournaments",
+            return_value=[
+                {
+                    "tournament_url": (
+                        "https://www.tennisenpadelvlaanderen.be/tournament"
+                    )
+                }
+            ],
+        ), mock.patch.object(
+            belgium_results, "_scrape_tournament", return_value=[flemish_row]
+        ) as scrape_flemish, mock.patch.object(
+            belgium_results, "_scrape_tppwb_draw"
+        ) as scrape_tppwb, mock.patch.object(
+            belgium_results.Run.objects, "filter"
+        ):
+            _csv, _requests, _errors, row_count, status = belgium_results.run(
+                run_obj,
+                lambda *_args: None,
+            )
+
+        self.assertEqual(row_count, 1)
+        self.assertEqual(status, belgium_results.Run.Status.SUCCESS)
+        scrape_flemish.assert_called_once()
+        scrape_tppwb.assert_not_called()
+
+    def test_empty_direct_tppwb_draw_fails_without_partial_status(self):
+        run_obj = SimpleNamespace(
+            pk=123,
+            scraper=SimpleNamespace(worker_count=1, proxy=None),
+            params={"tournament_url": TICKET_DRAW_URL},
+            date_from=None,
+            date_to=None,
+        )
+
+        with mock.patch.object(
+            belgium_results, "build_proxies", return_value=None
+        ), mock.patch.object(
+            belgium_results, "ScraperClient", _RunClient
+        ), mock.patch.object(
+            belgium_results,
+            "_scrape_tppwb_draw",
+            return_value=[],
+        ), mock.patch.object(
+            belgium_results.Run.objects, "filter"
+        ):
+            _csv, _requests, _errors, row_count, status = belgium_results.run(
+                run_obj,
+                lambda *_args: None,
+            )
+
+        self.assertEqual(row_count, 0)
+        self.assertEqual(status, belgium_results.Run.Status.FAILED)

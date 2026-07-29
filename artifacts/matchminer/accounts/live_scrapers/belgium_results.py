@@ -45,7 +45,7 @@ import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 from django.db.models import F
 from django.utils import timezone
@@ -337,24 +337,14 @@ def _tppwb_draw_params(tournament_url):
     if draw_type not in {"F", "Q", "P"}:
         raise ValueError("TPPWB drawType must be F, Q, or P")
 
-    selected = {}
-    for query_name, post_name in (
-        ("roundIndex", "selectedRoundIndex"),
-        ("rowIndex", "selectedRowIndex"),
-    ):
-        values = query.get(query_name) or []
-        if len(values) > 1:
-            raise ValueError(f"TPPWB draw URL has duplicate {query_name} values")
-        value = values[0].strip() if values else ""
-        if value and not value.isdigit():
-            raise ValueError(f"TPPWB {query_name} must be numeric")
-        selected[post_name] = value
-
     return {
         "idTournoi": tournament_id,
         "idCategory": category_id,
         "drawType": draw_type,
-        **selected,
+        # These URL values only select a cell in the browser. Sending stale
+        # selection state can make the upstream return a blank/incomplete draw.
+        "selectedRoundIndex": "",
+        "selectedRowIndex": "",
     }
 
 
@@ -534,47 +524,86 @@ def _tppwb_match_row(game, metadata, round_name, tournament_url):
 
 def _scrape_tppwb_draw(client, tournament_url, log):
     params = _tppwb_draw_params(tournament_url)
-    page_response = client.get(tournament_url, headers=_HEADERS)
-    if page_response is None or not (200 <= page_response.status_code < 300):
-        raise RuntimeError("TPPWB tournament page could not be fetched")
-    metadata = _tppwb_metadata(Selector(text=page_response.text), params["idCategory"])
-
-    response = client.post(
-        TPPWB_DRAW_ENDPOINT,
-        data=params,
-        headers={
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": tournament_url,
-        },
+    request_url = _tppwb_draw_url(
+        params["idTournoi"],
+        params["idCategory"],
+        params["drawType"],
     )
-    if response is None or not (200 <= response.status_code < 300):
-        raise RuntimeError("TPPWB draw data could not be fetched")
-
-    outer = response.json()
-    if not isinstance(outer, dict):
-        raise ValueError("TPPWB draw response was not an object")
-    draw_data = outer.get("drawData") or []
-    round_names = outer.get("roundNames") or []
-    if isinstance(draw_data, str):
-        draw_data = json.loads(draw_data)
-    if isinstance(round_names, str):
-        round_names = json.loads(round_names)
-    if not isinstance(draw_data, list) or not isinstance(round_names, list):
-        raise ValueError("TPPWB draw response had an unexpected shape")
-
     rows = []
-    for round_index, games in enumerate(draw_data):
-        if not isinstance(games, list):
+    for attempt in range(2):
+        try:
+            page_response = client.get(request_url, headers=_HEADERS)
+            if page_response is None or not (200 <= page_response.status_code < 300):
+                raise RuntimeError("TPPWB tournament page could not be fetched")
+            metadata = _tppwb_metadata(
+                Selector(text=page_response.text),
+                params["idCategory"],
+            )
+
+            response = client.post(
+                TPPWB_DRAW_ENDPOINT,
+                data=params,
+                headers={
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": request_url,
+                },
+            )
+            if response is None or not (200 <= response.status_code < 300):
+                raise RuntimeError("TPPWB draw data could not be fetched")
+
+            outer = response.json()
+            if not isinstance(outer, dict):
+                raise ValueError("TPPWB draw response was not an object")
+            draw_data = outer.get("drawData") or []
+            round_names = outer.get("roundNames") or []
+            if isinstance(draw_data, str):
+                draw_data = json.loads(draw_data)
+            if isinstance(round_names, str):
+                round_names = json.loads(round_names)
+            if not isinstance(draw_data, list) or not isinstance(round_names, list):
+                raise ValueError("TPPWB draw response had an unexpected shape")
+            if any(not isinstance(games, list) for games in draw_data):
+                raise ValueError("TPPWB draw response contained a malformed round")
+
+            rows = []
+            for round_index, games in enumerate(draw_data):
+                round_name = (
+                    str(round_names[round_index] or "")
+                    if round_index < len(round_names)
+                    else ""
+                )
+                for game in games:
+                    row = _tppwb_match_row(
+                        game,
+                        metadata,
+                        round_name,
+                        tournament_url,
+                    )
+                    if row:
+                        rows.append(row)
+        except (TypeError, ValueError) as exc:
+            if attempt:
+                raise
+            log("WARN", f"TPPWB draw was blank or malformed; refreshing once: {exc}")
             continue
-        round_name = str(round_names[round_index] or "") if round_index < len(round_names) else ""
-        for game in games:
-            row = _tppwb_match_row(game, metadata, round_name, tournament_url)
-            if row:
-                rows.append(row)
+        if rows or attempt:
+            break
+        log("WARN", "TPPWB draw returned no played matches; refreshing once")
     log("INFO", f"TPPWB draw returned {len(rows)} played match(es)")
     return rows
+
+
+def _tppwb_draw_url(tournament_id, category_id, draw_type):
+    query = urlencode(
+        {
+            "idTournoi": tournament_id,
+            "idCategory": category_id,
+            "drawType": draw_type,
+        }
+    )
+    return f"{TPPWB_BASE}{TPPWB_DRAW_PATH}?{query}"
 
 
 # ---------------------------------------------------------------------------

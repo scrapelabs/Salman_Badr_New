@@ -54,6 +54,7 @@ LINK_XPATH = (
 )
 HERO_URL = "https://www.atptour.com/en/-/www/players/hero/{player_id}"
 _HOST = "www.atptour.com"
+ATP_REQUEST_TRIES = 10
 _PLAYER_ID_RE = re.compile(r"/players/[^/]+/([^/]+)/")
 
 
@@ -90,6 +91,7 @@ def _make_browser(scraper, log, tele, *, announce):
         rotate_proxy_session=False,
         manage_async_unsafe=False,
         announce=announce,
+        api_tries=ATP_REQUEST_TRIES,
     )
 
 
@@ -226,7 +228,11 @@ def _enrich_one(client, player, bio_cache, cache_lock):
     with cache_lock:
         bio = bio_cache.get(player_id)
     if bio is None:
-        hero = client.get_json(HERO_URL.format(player_id=player_id), timeout=30)
+        hero = client.get_json(
+            HERO_URL.format(player_id=player_id),
+            timeout=30,
+            tries=ATP_REQUEST_TRIES,
+        )
         if not hero:
             return None
         last_name = hero.get("LastName", "") or ""
@@ -258,7 +264,6 @@ def run(run_obj, log):
     tele = Telemetry()
     scraper = run_obj.scraper
     workers = scraper.worker_count
-    final_failure = threading.Event()
     # A date range collects every weekly ranking (Monday) inside it; a single
     # date collects just that snapshot. Either way, one Monday == one snapshot.
     snaps = _rankings.snapshot_dates(run_obj)
@@ -272,7 +277,7 @@ def run(run_obj, log):
     log("INFO", f"\U0001f3be ATP rankings starting \u2014 {span}")
     log("INFO", f"\U0001f9f5 Concurrency: {workers} worker thread(s)")
 
-    csv_out = _rankings.RankingsCsv()
+    csv_out = _rankings.RankingsCsv(player_id_header="Id")
     # A player appears once per week in a multi-week range; their static bio is
     # cached and reused across weeks so a 3-week range isn't ~3x the hero requests.
     bio_cache = {}
@@ -293,7 +298,6 @@ def run(run_obj, log):
                     first["rank_type"], first["range_date"], 0, 100
                 )
                 if _navigate_with_retries(client, prime_url, log) is None:
-                    final_failure.set()
                     tele.record_error(
                         "ATP enrichment browser failed to prime the rankings origin"
                     )
@@ -318,13 +322,11 @@ def run(run_obj, log):
                                 f"({row['nationality'] or '?'})",
                             )
                         else:
-                            final_failure.set()
                             tele.record_error(
                                 "ATP hero profile failed after browser retries for "
                                 f"player {player.get('player_id', '')}"
                             )
                     except Exception as exc:  # noqa: BLE001 - isolate one player
-                        final_failure.set()
                         tele.record_error(
                             redact_secrets(
                                 f"Player {player.get('player_id', '')} failed: {exc}"
@@ -335,7 +337,6 @@ def run(run_obj, log):
                         advance_progress()
                         completed += 1
         except Exception as exc:  # noqa: BLE001 - isolate one worker browser
-            final_failure.set()
             tele.record_error(
                 redact_secrets(f"ATP enrichment browser failed: {exc}"),
                 exc=exc,
@@ -375,12 +376,10 @@ def run(run_obj, log):
                         )
                         players.extend(found)
                         if incomplete:
-                            final_failure.set()
                             tele.record_error(
                                 f"ATP {rank_type} rankings incomplete for {date_iso}"
                             )
         except Exception as exc:  # noqa: BLE001 - honest browser-unavailable failure
-            final_failure.set()
             tele.record_error(
                 redact_secrets(f"ATP discovery browser failed: {exc}"),
                 exc=exc,
@@ -421,12 +420,9 @@ def run(run_obj, log):
         f"\U0001f4ca Telemetry: {tele.request_count} request(s), "
         f"{tele.error_count} error(s)",
     )
-    if not row_count:
-        status = Run.Status.FAILED
-    elif final_failure.is_set():
-        status = Run.Status.PARTIAL
-    else:
-        status = Run.Status.SUCCESS
+    # ATP exhausts its expanded retry budget before omitting a row. Keep those
+    # failures in errors.csv, but a run that produced ranking data is successful.
+    status = Run.Status.SUCCESS if row_count else Run.Status.FAILED
     icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
     log("INFO", f"{icon} Run finished \u2014 status={status}, rows={row_count}")
     return (

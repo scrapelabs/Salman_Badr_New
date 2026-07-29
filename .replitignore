@@ -21,4 +21,5 @@ scrape_output/
 
 # Uploaded source dumps, logs, screenshots, and spreadsheets are not needed in
 # deploy images and may contain sensitive source data or credentials.
+member-key-details*.csv
 attached_assets/

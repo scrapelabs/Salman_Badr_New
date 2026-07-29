@@ -120,10 +120,14 @@ class RankingsCsv:
     negligible cost for the same guard.
     """
 
-    def __init__(self):
+    def __init__(self, *, player_id_header="Player Id"):
         self._buf = io.StringIO()
         self._writer = csv.writer(self._buf, lineterminator="\n")
-        self._writer.writerow(HEADER)
+        header = [
+            player_id_header if column == "player_id" else label
+            for column, label in zip(COLUMNS, HEADER)
+        ]
+        self._writer.writerow(header)
         self._lock = threading.Lock()
         self.row_count = 0
 

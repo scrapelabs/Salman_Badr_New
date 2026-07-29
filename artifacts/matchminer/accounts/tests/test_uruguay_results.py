@@ -29,7 +29,7 @@ class UruguayResultsTests(TestCase):
         self.assertEqual(empty_reasons, ["games are not calculated yet"])
         self.assertTrue(any("games are not calculated yet" in msg for _level, msg in logs))
 
-    def test_unready_tournaments_are_healthy_empty_run(self):
+    def test_scheduled_tournaments_are_healthy_empty_run(self):
         scraper = Scraper.objects.create(
             slug="uruguay_results_test",
             code="URG",
@@ -59,7 +59,7 @@ class UruguayResultsTests(TestCase):
 
         def fake_scrape(_client, _tournament_url, log=None, empty_reasons=None):
             if empty_reasons is not None:
-                empty_reasons.append("games are not calculated yet")
+                empty_reasons.append("matches are scheduled but not played yet")
             return []
 
         with patch.object(uruguay_results, "build_proxies", return_value={}), patch.object(
@@ -81,7 +81,7 @@ class UruguayResultsTests(TestCase):
         self.assertEqual(errors_csv, "")
         self.assertTrue(any("healthy empty run" in msg for _level, msg in logs))
 
-    def test_configured_proxy_is_bypassed_for_stable_direct_route(self):
+    def test_configured_proxy_is_used_for_all_requests(self):
         proxy = Proxy.objects.create(
             name="Blocked rotating proxy",
             kind=Proxy.Kind.DATACENTER,
@@ -111,8 +111,12 @@ class UruguayResultsTests(TestCase):
             empty_reasons.append("games are not calculated yet")
             return []
 
+        proxy_map = {
+            "http": "http://proxy.example",
+            "https": "http://proxy.example",
+        }
         with patch.object(
-            uruguay_results, "build_proxies"
+            uruguay_results, "build_proxies", return_value=proxy_map
         ) as build_proxies, patch.object(
             uruguay_results, "ScraperClient"
         ) as client_cls, patch.object(
@@ -127,14 +131,53 @@ class UruguayResultsTests(TestCase):
                 )
             )
 
-        build_proxies.assert_not_called()
+        build_proxies.assert_called_once()
+        self.assertIs(build_proxies.call_args.args[0], scraper)
         self.assertEqual(status, Run.Status.SUCCESS)
         self.assertEqual(row_count, 0)
         self.assertEqual(errors_csv, "")
         self.assertEqual(
             [call.kwargs["proxies"] for call in client_cls.call_args_list],
-            [None, None],
+            [proxy_map, proxy_map],
         )
-        self.assertTrue(
-            any("using direct connection" in msg for _level, msg in logs)
+
+    def test_scheduled_games_are_reported_as_healthy_empty(self):
+        html = """
+        <html><body>
+          <select id="id_categoria"><option value="1">Singles</option></select>
+          <select id="id_parametro"><option value="2">Main</option></select>
+          <select id="id_periodo"><option selected="selected" value="3">All</option></select>
+          <input name="id_torneio" value="889">
+          <div class="game">
+            <ul class="list-group">
+              <li class="list-group-item">
+                <div class="score pull-right"><div class="set"></div></div>
+              </li>
+              <li class="list-group-item">
+                <div class="score pull-right"><div class="set"></div></div>
+              </li>
+            </ul>
+          </div>
+        </body></html>
+        """
+
+        class Response:
+            status_code = 200
+
+            def __init__(self):
+                self.text = html
+
+        class Client:
+            def post(self, *_args, **_kwargs):
+                return Response()
+
+        reasons = []
+        rows = uruguay_results._parse_category(
+            Client(),
+            "https://uruguay.tenisintegrado.com/torneio_painel_info/index/889",
+            Selector(text=html),
+            empty_reasons=reasons,
         )
+
+        self.assertEqual(rows, [])
+        self.assertEqual(reasons, ["matches are scheduled but not played yet"])

@@ -539,6 +539,64 @@ def comment_add(request, uuid):
     return redirect(reverse("qa_ticket", args=[ticket.uuid]) + "#comments")
 
 
+def _can_manage_comment(user, comment):
+    return user.is_superuser or comment.author_id == user.pk
+
+
+@login_required
+@require_POST
+def comment_edit(request, uuid, comment_id):
+    comment = get_object_or_404(
+        TicketComment.objects.select_related("ticket"),
+        pk=comment_id,
+        ticket__uuid=uuid,
+    )
+    if not _can_manage_comment(request.user, comment):
+        return HttpResponseForbidden("You can only edit your own comments.")
+
+    back = reverse("qa_ticket", args=[comment.ticket.uuid]) + f"#comment-{comment.pk}"
+    cleaned = clean_html(request.POST.get("body_html") or "")
+    if is_blank_html(cleaned):
+        messages.error(request, "A comment cannot be empty.")
+        return redirect(back)
+
+    old_mention_pks = {u.pk for u in _mentioned_users(comment.body_html)}
+    comment.body_html = cleaned
+    comment.save(update_fields=["body_html"])
+
+    new_mentions = [
+        u
+        for u in _mentioned_users(cleaned, exclude=request.user)
+        if u.pk not in old_mention_pks
+    ]
+    if new_mentions:
+        _notify_mentions(
+            request.user,
+            comment.ticket,
+            new_mentions,
+            f"{request.user.username} mentioned you in a comment on “{comment.ticket.title[:80]}”",
+        )
+    messages.success(request, "Comment updated.")
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def comment_delete(request, uuid, comment_id):
+    comment = get_object_or_404(
+        TicketComment.objects.select_related("ticket"),
+        pk=comment_id,
+        ticket__uuid=uuid,
+    )
+    if not _can_manage_comment(request.user, comment):
+        return HttpResponseForbidden("You can only delete your own comments.")
+
+    ticket_uuid = comment.ticket.uuid
+    comment.delete()
+    messages.success(request, "Comment deleted.")
+    return redirect(reverse("qa_ticket", args=[ticket_uuid]) + "#comments")
+
+
 @login_required
 def mention_users(request):
     """Active accounts for the @mention autocomplete (username + display label)."""

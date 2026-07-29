@@ -721,6 +721,27 @@ class SAKey(models.Model):
         return f"{self.tournament_key} ({self.status})"
 
 
+class NewZealandMember(models.Model):
+    """TNZ member DOB/gender keyed only by the exact National ID string."""
+
+    class Gender(models.TextChoices):
+        MALE = "M", "Male"
+        FEMALE = "F", "Female"
+        OTHER = "O", "Other"
+
+    national_id = models.CharField(max_length=255, unique=True)
+    dob = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=1, choices=Gender.choices, blank=True, default=""
+    )
+
+    class Meta:
+        ordering = ["national_id"]
+
+    def __str__(self):
+        return self.national_id
+
+
 class ScraperSchedule(models.Model):
     """Per-scraper recurring-run configuration for the in-app scheduler.
 

@@ -77,14 +77,34 @@
         <h2 class="section-title">Comments <span class="qa-comments-count">{{ comments|length }}</span></h2>
 
         {% for c in comments %}
-        <div class="qa-comment">
+        <div class="qa-comment" id="comment-{{ c.pk }}">
           <span class="qa-avatar">{{ c.author.username|first|upper|default:"?" }}</span>
           <div class="qa-comment-main">
             <div class="qa-comment-head">
               <span class="qa-comment-author">{{ c.author.username|default:"Unknown" }}</span>
               <span class="qa-comment-ago">{{ c.created_at|timesince }} ago</span>
+              {% if request.user.is_superuser or c.author_id == request.user.id %}
+              <div class="qa-comment-tools">
+                <button type="button" class="qa-comment-icon" data-comment-edit
+                        data-action="{% url 'qa_comment_edit' ticket.uuid c.pk %}"
+                        data-source="commentBody{{ c.pk }}" title="Edit comment" aria-label="Edit comment">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <form method="post" action="{% url 'qa_comment_delete' ticket.uuid c.pk %}" class="qa-comment-icon-form"
+                      data-confirm="Delete this comment permanently? This can’t be undone."
+                      data-confirm-title="Delete comment?" data-confirm-ok="Delete comment" data-confirm-tone="danger">
+                  {% csrf_token %}
+                  <button type="submit" class="qa-comment-icon qa-comment-icon--delete" title="Delete comment" aria-label="Delete comment">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                  </button>
+                </form>
+              </div>
+              {% endif %}
             </div>
             <div class="ql-snow"><div class="ql-editor qa-rte-view">{{ c.body_html|safe }}</div></div>
+            {% if request.user.is_superuser or c.author_id == request.user.id %}
+            <textarea id="commentBody{{ c.pk }}" hidden>{{ c.body_html }}</textarea>
+            {% endif %}
           </div>
         </div>
         {% empty %}
@@ -156,6 +176,34 @@
   </div>
 </div>
 
+<div class="qa-modal" id="editCommentModal" hidden>
+  <div class="qa-modal-backdrop" data-comment-close></div>
+  <div class="qa-modal-card" role="dialog" aria-modal="true" aria-labelledby="editCommentTitle">
+    <div class="qa-modal-head">
+      <h2 class="qa-modal-title" id="editCommentTitle">Edit comment</h2>
+      <button class="qa-modal-x" type="button" data-comment-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="" id="editCommentForm" class="qa-comment-edit-form">
+      {% csrf_token %}
+      <div class="qa-modal-body">
+        <div class="rt-quill" id="commentEditEditor"
+             data-target="#commentEditBody"
+             data-upload-url="{% url 'qa_attachment_upload' %}"
+             data-csrf="{{ csrf_token }}"
+             data-mention-url="{% url 'qa_mention_users' %}"
+             data-placeholder="Update your comment…"></div>
+        <textarea id="commentEditBody" name="body_html" hidden></textarea>
+      </div>
+      <div class="qa-modal-foot">
+        <button type="button" class="btn btn-ghost" data-comment-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save comment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="qa-modal qa-modal--wide" id="editTicketModal" hidden>
   <div class="qa-modal-backdrop" data-close></div>
   <div class="qa-modal-card" role="dialog" aria-modal="true" aria-label="Edit QA ticket">
@@ -214,6 +262,40 @@
 </div>
 
 <script>
+  (function () {
+    var modal = document.getElementById("editCommentModal");
+    var form = document.getElementById("editCommentForm");
+    var editor = document.getElementById("commentEditEditor");
+    var body = document.getElementById("commentEditBody");
+    if (!modal || !form || !editor || !body) return;
+    var trigger = null;
+    function open(button) {
+      var source = document.getElementById(button.getAttribute("data-source"));
+      trigger = button;
+      form.action = button.getAttribute("data-action") || "";
+      body.value = source ? source.value : "";
+      if (editor.__setHtml) editor.__setHtml(body.value);
+      modal.removeAttribute("hidden");
+      document.body.classList.add("qa-modal-open");
+      if (editor.__quill) editor.__quill.focus();
+    }
+    function close() {
+      modal.setAttribute("hidden", "");
+      document.body.classList.remove("qa-modal-open");
+      if (trigger) trigger.focus();
+      trigger = null;
+    }
+    document.querySelectorAll("[data-comment-edit]").forEach(function (button) {
+      button.addEventListener("click", function () { open(button); });
+    });
+    modal.querySelectorAll("[data-comment-close]").forEach(function (el) {
+      el.addEventListener("click", close);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hasAttribute("hidden")) close();
+    });
+  })();
+
   (function () {
     var modal = document.getElementById("editTicketModal");
     var openBtn = document.getElementById("editTicketBtn");

@@ -49,7 +49,6 @@ IMPORT_SOURCE = "Tennis South Africa"
 SANCTION_BODY = "Tennis South Africa"
 BALL_TYPE = "Yellow"
 EVENT_TYPE = "Tournament"
-ID_TYPE = "South Africa"
 
 DRAW_TEAM_TYPE_MAP = {
     "tennis": "Singles",
@@ -206,7 +205,7 @@ def _row_for(result, key):
     row = [
         str(result.get("result_id") or ""),          # Match ID
         BALL_TYPE,                                    # Ball Type
-        ID_TYPE,                                      # ID Type
+        COUNTRY,                                      # ID Type
         "",                                           # Draw Bracket Value
         draw.get("name") or "",                       # Draw Name
         DRAW_TEAM_TYPE_MAP.get(discipline, discipline), # Draw Team Type

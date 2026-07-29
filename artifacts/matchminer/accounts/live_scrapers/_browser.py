@@ -690,12 +690,13 @@ class BrowserClient:
         status = int(result.get("status") or 0)
         return status, text.encode("utf-8", "ignore"), text
 
-    def _api(self, url, *, params=None, headers=None):
+    def _api(self, url, *, params=None, headers=None, tries=None):
         """Fetch a JSON/XML API endpoint via an in-page fetch (inherits clearance)."""
         if not self._safe(url):
             return None
+        attempts = self.api_tries if tries is None else max(1, int(tries))
         last_exc = None
-        for attempt in range(1, self.api_tries + 1):
+        for attempt in range(1, attempts + 1):
             start = time.time()
             try:
                 status, body, text = self._fetch(url, params=params, headers=headers)
@@ -707,7 +708,7 @@ class BrowserClient:
                     self.log(
                         "WARN",
                         f"\U0001f6e1\ufe0f GET {url} \u2192 anti-bot challenge "
-                        f"(HTTP {status}, retry {attempt}/{self.api_tries})",
+                        f"(HTTP {status}, retry {attempt}/{attempts})",
                     )
                     last_exc = RuntimeError(f"anti-bot challenge (HTTP {status})")
                 else:
@@ -737,11 +738,11 @@ class BrowserClient:
                     redact_secrets(
                         f"\u26a0\ufe0f GET {url} \u2192 "
                         f"{exc.__class__.__name__}: {exc} "
-                        f"(retry {attempt}/{self.api_tries})"
+                        f"(retry {attempt}/{attempts})"
                     ),
                 )
                 last_exc = exc
-            if attempt < self.api_tries:
+            if attempt < attempts:
                 time.sleep(0.8 * attempt)
         self.tele.record_error(
             redact_secrets(f"Request failed for {url}: {last_exc}"),
@@ -751,16 +752,51 @@ class BrowserClient:
 
     def get(self, url, **kwargs):
         return self._api(
-            url, params=kwargs.get("params"), headers=kwargs.get("headers")
+            url,
+            params=kwargs.get("params"),
+            headers=kwargs.get("headers"),
+            tries=kwargs.get("tries"),
         )
 
     def get_json(self, url, **kwargs):
-        resp = self._api(
-            url, params=kwargs.get("params"), headers=kwargs.get("headers")
+        explicit_tries = kwargs.get("tries")
+        params = kwargs.get("params")
+        headers = kwargs.get("headers")
+        if explicit_tries is None:
+            resp = self._api(url, params=params, headers=headers)
+            if resp is not None and 200 <= resp.status_code < 300:
+                try:
+                    return resp.json()
+                except Exception:  # noqa: BLE001 - body wasn't JSON
+                    return None
+            return None
+
+        attempts = max(1, int(explicit_tries))
+        last_reason = "no response"
+        for attempt in range(1, attempts + 1):
+            # One transport attempt per outer iteration lets this loop also
+            # retry ordinary HTTP failures and malformed JSON responses.
+            resp = self._api(url, params=params, headers=headers, tries=1)
+            if resp is not None and 200 <= resp.status_code < 300:
+                try:
+                    return resp.json()
+                except Exception:  # noqa: BLE001 - retry malformed JSON
+                    last_reason = "invalid JSON response"
+            elif resp is not None:
+                last_reason = f"HTTP {resp.status_code}"
+            if attempt < attempts:
+                self.log(
+                    "WARN",
+                    redact_secrets(
+                        f"\u26a0\ufe0f JSON GET {url} failed ({last_reason}); "
+                        f"retry {attempt}/{attempts}"
+                    ),
+                )
+                time.sleep(0.8 * attempt)
+        self.tele.record_error(
+            redact_secrets(
+                f"JSON request failed for {url} after {attempts} attempts: "
+                f"{last_reason}"
+            )
         )
-        if resp is not None and 200 <= resp.status_code < 300:
-            try:
-                return resp.json()
-            except Exception:  # noqa: BLE001 - body wasn't JSON
-                return None
         return None

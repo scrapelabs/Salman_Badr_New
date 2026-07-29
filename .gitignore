@@ -68,6 +68,7 @@ scrape_output/
 
 # Uploaded source dumps/logs/spreadsheets often contain credentials or private
 # scrape data. Keep only the intentional static design mockups tracked.
+/member-key-details*.csv
 attached_assets/*
 !attached_assets/
 !attached_assets/dailypermit_*.html
