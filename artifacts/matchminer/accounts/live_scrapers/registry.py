@@ -315,8 +315,9 @@ SPECS = {
     ),
     "belgium_results_2": ScraperSpec(
         slug="belgium_results_2",
-        input_kind=INPUT_DATE_RANGE,
+        input_kind=INPUT_DATE_RANGE_OR_URL,
         runner_path="accounts.live_scrapers.belgium_results_2:run",
+        allowed_hosts=("tennis.tppwb.be",),
     ),
     # --- US high-school feed APIs (date-range; own hard-coded hosts) -------
     # Vendor feed APIs. MaxPreps uses a server-side feed key only; New Jersey

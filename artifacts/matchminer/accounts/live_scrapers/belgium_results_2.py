@@ -185,8 +185,9 @@ _DETAIL_DATES_RE = re.compile(
     r"(\d{1,2}/\d{1,2}/\d{4})\s+au\s+(\d{1,2}/\d{1,2}/\d{4})",
     re.IGNORECASE,
 )
+_DETAIL_DATE_RE = re.compile(r"\d{1,2}/\d{1,2}/\d{4}")
 _TOURNAMENT_ID_PATTERNS = (
-    re.compile(r"TournamentDetails/(\d+)", re.IGNORECASE),
+    re.compile(r"TournamentDetails?/(\d+)", re.IGNORECASE),
     re.compile(r"TournamentCategories/(\d+)", re.IGNORECASE),
     re.compile(r"[?&]IdTournoi=(\d+)", re.IGNORECASE),
 )
@@ -215,6 +216,25 @@ def _to_mdy(value):
         return ""
     day, month, year = (int(part) for part in match.groups())
     return f"{month}/{day}/{year}"
+
+
+def _official_dates(value):
+    date_match = _DETAIL_DATES_RE.search(value or "")
+    if date_match:
+        return _to_mdy(date_match.group(1)), _to_mdy(date_match.group(2))
+    dates = _DETAIL_DATE_RE.findall(value or "")
+    if not dates:
+        return "", ""
+    start = _to_mdy(dates[0])
+    return start, _to_mdy(dates[1]) if len(dates) > 1 else start
+
+
+def _tournament_id(value):
+    for pattern in _TOURNAMENT_ID_PATTERNS:
+        match = pattern.search(value or "")
+        if match:
+            return match.group(1)
+    return ""
 
 
 def _response_text(client, response, context):
@@ -260,12 +280,7 @@ def _search_once(client, start_date, end_date, regions=REGIONS):
         source = " ".join(
             card.xpath(".//@data-url | .//@href").getall() + [card.get()]
         )
-        tournament_id = ""
-        for pattern in _TOURNAMENT_ID_PATTERNS:
-            match = pattern.search(source)
-            if match:
-                tournament_id = match.group(1)
-                break
+        tournament_id = _tournament_id(source)
         if tournament_id and tournament_id not in seen:
             seen.add(tournament_id)
             ids.append(tournament_id)
@@ -336,8 +351,13 @@ def _tournament_metadata(client, tournament_id):
     )
     name = _join_text(spans[0]) if spans else ""
     period = _join_text(spans[1]) if len(spans) > 1 else ""
-    date_match = _DETAIL_DATES_RE.search(period)
-    if not name or not date_match:
+    start_date, end_date = _official_dates(period)
+    if not (start_date and end_date):
+        detail = selector.xpath(
+            '(//div[contains(@class, "tournament-detail-club")]/div[1])[1]'
+        )
+        start_date, end_date = _official_dates(_join_text(detail))
+    if not name or not (start_date and end_date):
         client.tele.record_error(
             f"TPPWB tournament detail {tournament_id} lacked name or official dates"
         )
@@ -347,8 +367,8 @@ def _tournament_metadata(client, tournament_id):
         "tournament_id": tournament_id,
         "tournament_name": name,
         "tournament_url": tournament_url,
-        "tournament_start_date": _to_mdy(date_match.group(1)),
-        "tournament_end_date": _to_mdy(date_match.group(2)),
+        "tournament_start_date": start_date,
+        "tournament_end_date": end_date,
     }
 
 
@@ -768,36 +788,50 @@ def _dedup_key(row):
 def run(run_obj, log):
     tele = Telemetry()
     scraper = run_obj.scraper
+    params = getattr(run_obj, "params", {}) or {}
+    tournament_url = (params.get("tournament_url") or "").strip()
     start_date = run_obj.date_from
     end_date = run_obj.date_to
-    if not (start_date and end_date):
+    tournament_id = _tournament_id(tournament_url) if tournament_url else ""
+    if tournament_url and not tournament_id:
+        message = "The Belgium tournament URL does not contain a valid tournament ID."
+        tele.record_error(message)
+        log("ERROR", message)
+        return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
+    if not tournament_url and not (start_date and end_date):
         message = "Belgium Results 2 needs a date range (date_from / date_to)."
         tele.record_error(message)
         log("ERROR", message)
         return "", tele.requests_csv(), tele.errors_csv(), 0, Run.Status.FAILED
-    if start_date > end_date:
+    if not tournament_url and start_date > end_date:
         start_date, end_date = end_date, start_date
 
-    log(
-        "INFO",
-        f"Belgium Results 2 starting - {_date_param(start_date)} to "
-        f"{_date_param(end_date)}",
-    )
+    if tournament_url:
+        log("INFO", f"Belgium Results 2 starting - tournament {tournament_id}")
+    else:
+        log(
+            "INFO",
+            f"Belgium Results 2 starting - {_date_param(start_date)} to "
+            f"{_date_param(end_date)}",
+        )
     log("INFO", f"Concurrency: {scraper.worker_count} worker thread(s)")
     proxies = build_proxies(scraper, log)
 
-    with ScraperClient(
-        log=log,
-        tele=tele,
-        proxies=proxies,
-        allowed_hosts=ALLOWED_HOSTS,
-    ) as discovery:
-        tournament_ids = _discover_tournaments(
-            discovery,
-            start_date,
-            end_date,
-            log,
-        )
+    if tournament_url:
+        tournament_ids = [tournament_id]
+    else:
+        with ScraperClient(
+            log=log,
+            tele=tele,
+            proxies=proxies,
+            allowed_hosts=ALLOWED_HOSTS,
+        ) as discovery:
+            tournament_ids = _discover_tournaments(
+                discovery,
+                start_date,
+                end_date,
+                log,
+            )
 
     Run.objects.filter(pk=run_obj.pk).update(
         progress_total=len(tournament_ids),

@@ -823,7 +823,13 @@ def _scrape_tournament(client, tournament_url, claude_keys=None):
     )
     if sel is None:
         return []
-    return _parse_category(client, tournament_url, sel, claude_keys=claude_keys)
+    rows = _parse_category(client, tournament_url, sel, claude_keys=claude_keys)
+    if not rows:
+        title = _field(
+            sel, 'normalize-space(//div[@class="tournament-title"])'
+        ) or tournament_id
+        client.log("INFO", f"{title}: no completed matches published")
+    return rows
 
 
 def _dedup_key(row):
@@ -961,8 +967,16 @@ def run(run_obj, log):
         f"\U0001f4ca Telemetry: {tele.request_count} request(s), "
         f"{tele.error_count} error(s)",
     )
-    status = Run.Status.SUCCESS if row_count else Run.Status.FAILED
+    if tele.error_count:
+        status = Run.Status.PARTIAL if row_count else Run.Status.FAILED
+    else:
+        status = Run.Status.SUCCESS
+        if not row_count:
+            log(
+                "INFO",
+                "No completed matches are currently published for this window",
+            )
     icon = "\U0001f3c1" if status == Run.Status.SUCCESS else "\U0001f6d1"
     log("INFO", f"{icon} Run finished \u2014 status={status}, rows={row_count}")
-    items_csv = buf.getvalue() if row_count else ""
+    items_csv = buf.getvalue() if row_count or not tele.error_count else ""
     return items_csv, tele.requests_csv(), tele.errors_csv(), row_count, status

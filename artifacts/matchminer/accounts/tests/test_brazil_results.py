@@ -1,8 +1,14 @@
+import csv
+import io
+from types import SimpleNamespace
+from unittest import mock
+
 from parsel import Selector
 
 from django.test import SimpleTestCase
 
 from accounts.live_scrapers import brazil_results
+from accounts.models import Run
 
 
 BRAZIL_DOUBLES_PANEL = """
@@ -110,3 +116,49 @@ class BrazilResultsDoublesTests(SimpleTestCase):
                 for url, _data in client.posts
             )
         )
+
+    def test_clean_window_without_published_matches_is_success(self):
+        class RunClient:
+            def __init__(self, **_kwargs):
+                self.log = lambda *_args: None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.close()
+
+            def close(self):
+                pass
+
+        run_obj = SimpleNamespace(
+            pk=1,
+            scraper=SimpleNamespace(worker_count=1, proxy=None),
+            params={"year": 2026, "month": 8},
+            date_from=None,
+        )
+        logs = []
+
+        with mock.patch.object(
+            brazil_results, "resolve_claude_keys", return_value=["key"]
+        ), mock.patch.object(
+            brazil_results, "build_proxies", return_value=None
+        ), mock.patch.object(
+            brazil_results, "ScraperClient", RunClient
+        ), mock.patch.object(
+            brazil_results, "_discover_tournaments", return_value=["tournament"]
+        ), mock.patch.object(
+            brazil_results, "_scrape_tournament", return_value=[]
+        ), mock.patch.object(
+            brazil_results.Run.objects, "filter"
+        ):
+            items, _requests, errors, count, status = brazil_results.run(
+                run_obj,
+                lambda level, message: logs.append((level, message)),
+            )
+
+        self.assertEqual(status, Run.Status.SUCCESS)
+        self.assertEqual(count, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(next(csv.reader(io.StringIO(items))), brazil_results.HEADER)
+        self.assertTrue(any("No completed matches" in message for _, message in logs))

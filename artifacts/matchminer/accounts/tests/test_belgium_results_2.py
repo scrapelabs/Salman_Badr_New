@@ -80,17 +80,17 @@ class BelgiumResults2Tests(SimpleTestCase):
             ],
         )
 
-    def test_registry_uses_date_range_without_browser_or_model(self):
+    def test_registry_accepts_date_range_or_tournament_url(self):
         spec = registry.get_spec("belgium_results_2")
 
-        self.assertEqual(spec.input_kind, registry.INPUT_DATE_RANGE)
+        self.assertEqual(spec.input_kind, registry.INPUT_DATE_RANGE_OR_URL)
         self.assertEqual(
             spec.runner_path,
             "accounts.live_scrapers.belgium_results_2:run",
         )
         self.assertIs(spec.load_runner(), belgium_results_2.run)
         self.assertFalse(spec.uses_browser)
-        self.assertEqual(spec.allowed_hosts, ())
+        self.assertEqual(spec.allowed_hosts, ("tennis.tppwb.be",))
         self.assertEqual(spec.model_upload_label, "")
         self.assertEqual(spec.model_filename, "")
 
@@ -104,6 +104,14 @@ class BelgiumResults2Tests(SimpleTestCase):
             inputs.params,
             {"date_from": "2026-05-28", "date_to": "2026-06-07"},
         )
+
+        tournament_url = (
+            "https://tennis.tppwb.be/MyAFT/Competitions/TournamentDetail/361658"
+        )
+        url_inputs = validate_run_params(spec, {"tournament_url": tournament_url})
+        self.assertIsNone(url_inputs.date_from)
+        self.assertIsNone(url_inputs.date_to)
+        self.assertEqual(url_inputs.params, {"tournament_url": tournament_url})
 
     def test_search_posts_exact_date_range_and_extracts_ids(self):
         html = """
@@ -199,6 +207,29 @@ class BelgiumResults2Tests(SimpleTestCase):
         )
         category_request = client.requests[1]
         self.assertEqual(category_request[2]["params"], {"idTournoi": "362068"})
+
+    def test_one_day_tournament_uses_same_start_and_end_date(self):
+        tournament_id = "362999"
+        detail_url = belgium_results_2.DETAIL_URL.format(
+            tournament_id=tournament_id
+        )
+        client = _Client(
+            gets={
+                detail_url: _Response(
+                    text="""
+                    <div class="tournament-detail-club"><div>
+                      <span>One Day Open</span>
+                      <span>Tournoi le 28/05/2026</span>
+                    </div></div>
+                    """
+                )
+            }
+        )
+
+        metadata = belgium_results_2._tournament_metadata(client, tournament_id)
+
+        self.assertEqual(metadata["tournament_start_date"], "5/28/2026")
+        self.assertEqual(metadata["tournament_end_date"], "5/28/2026")
 
     def test_draw_payload_is_double_decoded(self):
         draw_data = [[[{"name": "Winner"}, {"name": "Loser"}]]]
@@ -546,6 +577,43 @@ class BelgiumResults2Tests(SimpleTestCase):
             )
         )
 
+    def test_run_scrapes_single_tournament_url_without_discovery(self):
+        tournament_url = (
+            "https://tennis.tppwb.be/MyAFT/Competitions/TournamentDetail/361658"
+        )
+        row = {column: "" for column in belgium_results_2.COLUMNS}
+        row["match_id"] = "match-1"
+        run_obj = SimpleNamespace(
+            pk=124,
+            scraper=SimpleNamespace(worker_count=1, proxy=None),
+            params={"tournament_url": tournament_url},
+            date_from=None,
+            date_to=None,
+        )
+        client = mock.Mock()
+
+        with mock.patch.object(
+            belgium_results_2, "ScraperClient", return_value=client
+        ), mock.patch.object(
+            belgium_results_2, "build_proxies", return_value=None
+        ), mock.patch.object(
+            belgium_results_2, "_discover_tournaments"
+        ) as discover, mock.patch.object(
+            belgium_results_2, "_scrape_tournament", return_value=[row]
+        ) as scrape, mock.patch.object(
+            belgium_results_2.Run.objects, "filter"
+        ):
+            _items, _requests, _errors, count, status = belgium_results_2.run(
+                run_obj,
+                lambda *_args: None,
+            )
+
+        self.assertEqual(status, belgium_results_2.Run.Status.SUCCESS)
+        self.assertEqual(count, 1)
+        discover.assert_not_called()
+        self.assertEqual(scrape.call_args.args[1], "361658")
+        client.close.assert_called_once()
+
 
 class BelgiumResults2DashboardTests(TestCase):
     def setUp(self):
@@ -574,7 +642,7 @@ class BelgiumResults2DashboardTests(TestCase):
         )
         self.assertContains(response, "Belgium Results 2")
 
-    def test_detail_uses_date_range_form_without_url_or_model_upload(self):
+    def test_detail_uses_date_range_or_url_form_without_model_upload(self):
         response = self.client.get(
             reverse("scraper_detail", args=[self.scraper.slug])
         )
@@ -582,7 +650,7 @@ class BelgiumResults2DashboardTests(TestCase):
         self.assertContains(response, 'name="date_from"')
         self.assertContains(response, 'name="date_to"')
         page = Selector(text=response.content.decode())
-        self.assertFalse(page.css('form.rt-start [name="tournament_url"]'))
+        self.assertTrue(page.css('form.rt-start [name="tournament_url"]'))
 
         settings_response = self.client.get(
             reverse("scraper_detail", args=[self.scraper.slug]) + "?tab=settings"
